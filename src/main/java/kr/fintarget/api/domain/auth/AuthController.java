@@ -6,12 +6,15 @@ import kr.fintarget.api.domain.auth.dto.KakaoLoginRequest;
 import kr.fintarget.api.domain.auth.dto.NaverLoginRequest;
 import kr.fintarget.api.domain.user.entity.User;
 import kr.fintarget.api.domain.user.repository.UserRepository;
+import kr.fintarget.api.security.BlacklistedToken;
+import kr.fintarget.api.security.BlacklistedTokenRepository;
 import kr.fintarget.api.security.JwtUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
+
 @RestController
 @RequestMapping("/auth")
 @RequiredArgsConstructor
@@ -19,6 +22,7 @@ public class AuthController {
     private final JwtUtil jwtUtil;
     private final UserRepository userRepository;
     private final KakaoOAuthClient kakaoOAuthClient;
+    private final BlacklistedTokenRepository blacklistedTokenRepository;
 
     private ResponseEntity<ApiResponse<AuthResponse>> socialLogin(String providerId, String provider) {
         boolean isNewUser = !userRepository.findByProviderAndProviderId(provider, providerId).isPresent();
@@ -72,7 +76,29 @@ public class AuthController {
     }
 
     @PostMapping("/logout")
-    public ResponseEntity<ApiResponse<?>> logout() {
+    public ResponseEntity<ApiResponse<?>> logout(
+            @RequestHeader(value = "Authorization", required = false) String authHeader,
+            @RequestBody(required = false) Map<String, String> body) {
+
+        if (authHeader != null && authHeader.startsWith("Bearer ")) {
+            blacklistToken(authHeader.substring(7));
+        }
+
+        if (body != null && body.get("refreshToken") != null) {
+            blacklistToken(body.get("refreshToken"));
+        }
+
         return ResponseEntity.ok(ApiResponse.ok(null));
+    }
+
+    private void blacklistToken(String token) {
+        try {
+            String jti = jwtUtil.getJti(token);
+            if (jti == null) return;
+            if (!blacklistedTokenRepository.existsById(jti)) {
+                blacklistedTokenRepository.save(new BlacklistedToken(jti, jwtUtil.getExpirationTime(token)));
+            }
+        } catch (Exception ignored) {
+        }
     }
 }

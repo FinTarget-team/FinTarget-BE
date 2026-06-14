@@ -9,4 +9,5 @@ import java.util.UUID;
 public interface ExpenseRepository extends JpaRepository<Expense, UUID> {
     List<Expense> findByUserId(UUID userId);
     List<Expense> findByUserIdAndSpentAtBetween(UUID userId, LocalDate start, LocalDate end);
+    void deleteByUserId(UUID userId);
 }

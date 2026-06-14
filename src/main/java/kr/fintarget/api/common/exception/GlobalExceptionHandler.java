@@ -9,6 +9,10 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResponse<?>> handleIllegalArgument(IllegalArgumentException e) {
         return ResponseEntity.badRequest().body(ApiResponse.error(400, e.getMessage()));
     }
+    @ExceptionHandler(IllegalStateException.class)
+    public ResponseEntity<ApiResponse<?>> handleIllegalState(IllegalStateException e) {
+        return ResponseEntity.status(409).body(ApiResponse.error(409, e.getMessage()));
+    }
     @ExceptionHandler(SecurityException.class)
     public ResponseEntity<ApiResponse<?>> handleSecurity(SecurityException e) {
         return ResponseEntity.status(401).body(ApiResponse.error(401, e.getMessage()));

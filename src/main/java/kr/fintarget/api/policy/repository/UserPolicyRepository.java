@@ -9,4 +9,5 @@ import java.util.UUID;
 public interface UserPolicyRepository extends JpaRepository<UserPolicy, UUID> {
     List<UserPolicy> findByUserId(UUID userId);
     Optional<UserPolicy> findByUserIdAndPolicyPolicyId(UUID userId, UUID policyId);
+    void deleteByUserId(UUID userId);
 }
