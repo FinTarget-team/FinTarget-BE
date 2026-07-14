@@ -26,6 +26,10 @@ public class User {
     private String email;
     private String region;
 
+    private Integer age;
+    private Long income;
+    private String employmentType;
+
     @Column(nullable = false)
     private boolean onboardingCompleted = false;
 
@@ -45,5 +49,17 @@ public class User {
 
     public void completeOnboarding() {
         this.onboardingCompleted = true;
+    }
+
+    public void updateAge(Integer age) {
+        this.age = age;
+    }
+
+    public void updateIncome(Long income) {
+        this.income = income;
+    }
+
+    public void updateEmploymentType(String employmentType) {
+        this.employmentType = employmentType;
     }
 }

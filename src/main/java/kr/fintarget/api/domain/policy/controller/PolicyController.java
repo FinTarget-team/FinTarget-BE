@@ -20,13 +20,9 @@ public class PolicyController {
 
     @GetMapping
     public ResponseEntity<?> getMatchingPolicies(
-            @RequestParam(required = false) Integer age,
-            @RequestParam(required = false) Long income,
+            @AuthenticationPrincipal String userId,
             @RequestParam(required = false) String policyType) {
-        if (age == null || income == null) {
-            return ResponseEntity.badRequest().body("age와 income 파라미터는 필수입니다.");
-        }
-        return ResponseEntity.ok(policyService.getMatchingPolicies(age, income, policyType));
+        return ResponseEntity.ok(policyService.getMatchingPolicies(userId, policyType));
     }
 
     @GetMapping("/my")

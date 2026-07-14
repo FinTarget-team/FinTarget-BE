@@ -11,6 +11,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -20,6 +22,17 @@ public class OnboardingService {
     private final UserRepository userRepository;
     private final OnboardingAnswerRepository onboardingAnswerRepository;
     private static final int TOTAL_STEPS = 5;
+
+    private static final Map<String, Integer> AGE_CODE_MAP = Map.of(
+            "YOUTH", 25,
+            "MIDDLE", 40
+    );
+
+    private static final Map<String, Long> INCOME_CODE_MAP = Map.of(
+            "UNDER_2M", 1_500_000L,
+            "200_300", 2_500_000L,
+            "OVER_3M", 3_500_000L
+    );
 
     public OnboardingStepResponse getStep(int step) {
         return switch (step) {
@@ -80,6 +93,9 @@ public class OnboardingService {
 
         onboardingAnswerRepository.save(answer);
 
+        // step별 답변을 User 엔티티에 반영 (step1: age, step2: employmentType, step3: income)
+        applyAnswerToUser(userId, request.getStep(), request.getValue());
+
         // 마지막 단계면 완료 처리
         if (request.getStep() == TOTAL_STEPS) {
             User user = userRepository.findById(userId)
@@ -95,5 +111,20 @@ public class OnboardingService {
         }
 
         return getStep(request.getStep() + 1);
+    }
+
+    private void applyAnswerToUser(String userId, int step, String value) {
+        if (step != 1 && step != 2 && step != 3) return;
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("유저를 찾을 수 없습니다."));
+
+        switch (step) {
+            case 1 -> Optional.ofNullable(AGE_CODE_MAP.get(value)).ifPresent(user::updateAge);
+            case 2 -> user.updateEmploymentType(value);
+            case 3 -> Optional.ofNullable(INCOME_CODE_MAP.get(value)).ifPresent(user::updateIncome);
+        }
+
+        userRepository.save(user);
     }
 }
