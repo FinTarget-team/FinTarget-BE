@@ -7,6 +7,8 @@ import kr.fintarget.api.domain.policy.entity.Policy;
 import kr.fintarget.api.domain.policy.entity.UserPolicy;
 import kr.fintarget.api.domain.policy.repository.PolicyRepository;
 import kr.fintarget.api.domain.policy.repository.UserPolicyRepository;
+import kr.fintarget.api.domain.user.entity.User;
+import kr.fintarget.api.domain.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,10 +22,21 @@ public class PolicyService {
 
     private final PolicyRepository policyRepository;
     private final UserPolicyRepository userPolicyRepository;
+    private final UserRepository userRepository;
 
     @Transactional(readOnly = true)
-    public List<PolicyResponse> getMatchingPolicies(int age, Long income, String policyType) {
-        return policyRepository.findMatchingPolicies(age, income, policyType)
+    public List<PolicyResponse> getMatchingPolicies(String userId, String policyType) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
+
+        if (user.getAge() == null || user.getIncome() == null) {
+            return policyRepository.findAll()
+                    .stream()
+                    .map(PolicyResponse::from)
+                    .collect(Collectors.toList());
+        }
+
+        return policyRepository.findMatchingPolicies(user.getAge(), user.getIncome(), policyType)
                 .stream()
                 .map(PolicyResponse::from)
                 .collect(Collectors.toList());
