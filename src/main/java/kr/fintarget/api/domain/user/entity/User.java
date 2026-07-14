@@ -50,4 +50,16 @@ public class User {
     public void completeOnboarding() {
         this.onboardingCompleted = true;
     }
+
+    public void updateAge(Integer age) {
+        this.age = age;
+    }
+
+    public void updateIncome(Long income) {
+        this.income = income;
+    }
+
+    public void updateEmploymentType(String employmentType) {
+        this.employmentType = employmentType;
+    }
 }
