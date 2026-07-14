@@ -26,8 +26,8 @@ public class SimulationService {
 
     @Transactional
     public SimulationResponse runSimulation(UUID userId, SimulationRequest request) {
-        Goal goal = goalRepository.findById(request.goalId())
-            .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 목표입니다."));
+        Goal goal = goalRepository.findByGoalIdAndUserId(request.goalId(), userId)
+                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 목표입니다."));
 
         long remaining = goal.getTargetAmount() - goal.getCurrentAmount();
         long monthsNeeded = (long) Math.ceil((double) remaining / request.monthlySaving());
@@ -37,8 +37,8 @@ public class SimulationService {
         UserPolicy userPolicy = null;
 
         if (request.userPolicyId() != null) {
-            userPolicy = userPolicyRepository.findById(request.userPolicyId())
-                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 유저 정책입니다."));
+            userPolicy = userPolicyRepository.findByUserPolicyIdAndUserId(request.userPolicyId(), userId)
+                    .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 유저 정책입니다."));
 
             long monthlyBenefit = userPolicy.getPolicy().getBenefitAmount() / 12;
             long totalMonthlySaving = request.monthlySaving() + monthlyBenefit;

@@ -7,5 +7,6 @@ import java.util.UUID;
 
 public interface GoalRepository extends JpaRepository<Goal, UUID> {
     Optional<Goal> findByUserId(UUID userId);
+    Optional<Goal> findByGoalIdAndUserId(UUID goalId, UUID userId);
     void deleteByUserId(UUID userId);
 }
