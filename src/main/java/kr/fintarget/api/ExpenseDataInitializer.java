@@ -1,7 +1,7 @@
 package kr.fintarget.api;
 
-import kr.fintarget.api.expense.entity.Expense;
-import kr.fintarget.api.expense.repository.ExpenseRepository;
+import kr.fintarget.api.domain.expense.entity.Expense;
+import kr.fintarget.api.domain.expense.repository.ExpenseRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;

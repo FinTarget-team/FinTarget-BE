@@ -1,0 +1,69 @@
+package kr.fintarget.api.domain.policy.service;
+
+import kr.fintarget.api.domain.policy.dto.PolicyResponse;
+import kr.fintarget.api.domain.policy.dto.UserPolicyCreateRequest;
+import kr.fintarget.api.domain.policy.dto.UserPolicyResponse;
+import kr.fintarget.api.domain.policy.entity.Policy;
+import kr.fintarget.api.domain.policy.entity.UserPolicy;
+import kr.fintarget.api.domain.policy.repository.PolicyRepository;
+import kr.fintarget.api.domain.policy.repository.UserPolicyRepository;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import java.util.List;
+import java.util.UUID;
+import java.util.stream.Collectors;
+
+@Service
+@RequiredArgsConstructor
+public class PolicyService {
+
+    private final PolicyRepository policyRepository;
+    private final UserPolicyRepository userPolicyRepository;
+
+    @Transactional(readOnly = true)
+    public List<PolicyResponse> getMatchingPolicies(int age, Long income, String policyType) {
+        return policyRepository.findMatchingPolicies(age, income, policyType)
+                .stream()
+                .map(PolicyResponse::from)
+                .collect(Collectors.toList());
+    }
+
+    @Transactional
+    public UserPolicyResponse createUserPolicy(UUID userId, UserPolicyCreateRequest request) {
+        Policy policy = policyRepository.findById(request.policyId())
+                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 정책입니다."));
+
+        userPolicyRepository.findByUserIdAndPolicyPolicyId(userId, request.policyId())
+                .ifPresent(up -> { throw new IllegalStateException("이미 등록된 정책입니다."); });
+
+        UserPolicy userPolicy = new UserPolicy(
+                userId,
+                policy,
+                UserPolicy.UserPolicyStatus.valueOf(request.status())
+        );
+
+        return UserPolicyResponse.from(userPolicyRepository.save(userPolicy));
+    }
+
+    @Transactional(readOnly = true)
+    public List<UserPolicyResponse> getUserPolicies(UUID userId) {
+        return userPolicyRepository.findByUserId(userId)
+                .stream()
+                .map(UserPolicyResponse::from)
+                .collect(Collectors.toList());
+    }
+
+    @Transactional
+    public void deleteUserPolicy(UUID userId, UUID userPolicyId) {
+        UserPolicy userPolicy = userPolicyRepository.findById(userPolicyId)
+                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 정책입니다."));
+
+        if (!userPolicy.getUserId().equals(userId)) {
+            throw new IllegalStateException("본인의 정책만 삭제할 수 있습니다.");
+        }
+
+        userPolicyRepository.delete(userPolicy);
+    }
+}
+
