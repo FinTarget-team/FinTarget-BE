@@ -1,7 +1,7 @@
 package kr.fintarget.api;
 
-import kr.fintarget.api.policy.entity.Policy;
-import kr.fintarget.api.policy.repository.PolicyRepository;
+import kr.fintarget.api.domain.policy.entity.Policy;
+import kr.fintarget.api.domain.policy.repository.PolicyRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
