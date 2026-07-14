@@ -26,6 +26,10 @@ public class User {
     private String email;
     private String region;
 
+    private Integer age;
+    private Long income;
+    private String employmentType;
+
     @Column(nullable = false)
     private boolean onboardingCompleted = false;
 
