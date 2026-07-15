@@ -53,6 +53,16 @@ public class NudgeService {
         nudge.markAsRead();
     }
 
+    @Transactional
+    public void deleteNudge(String userId, String nudgeId) {
+        Nudge nudge = nudgeRepository.findById(nudgeId)
+                .orElseThrow(() -> new IllegalArgumentException("넛지를 찾을 수 없습니다."));
+        if (!nudge.getUserId().equals(userId)) {
+            throw new SecurityException("접근 권한이 없습니다.");
+        }
+        nudgeRepository.delete(nudge);
+    }
+
     /**
      * 목표 마감 D-30 이내면 하루 한 번 알림 생성
      */

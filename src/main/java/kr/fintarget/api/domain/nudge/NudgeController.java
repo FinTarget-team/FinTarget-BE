@@ -23,4 +23,11 @@ public class NudgeController {
         nudgeService.markAsRead(userId, nudgeId);
         return ResponseEntity.ok(ApiResponse.ok(null));
     }
+    @DeleteMapping("/{nudgeId}")
+    public ResponseEntity<ApiResponse<?>> deleteNudge(
+            @AuthenticationPrincipal String userId,
+            @PathVariable String nudgeId) {
+        nudgeService.deleteNudge(userId, nudgeId);
+        return ResponseEntity.ok(ApiResponse.ok(null));
+    }
 }
