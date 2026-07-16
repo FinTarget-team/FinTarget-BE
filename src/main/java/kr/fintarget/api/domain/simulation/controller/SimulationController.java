@@ -1,5 +1,5 @@
 package kr.fintarget.api.domain.simulation.controller;
-
+import jakarta.validation.Valid;
 import kr.fintarget.api.domain.simulation.dto.SimulationRequest;
 import kr.fintarget.api.domain.simulation.dto.SimulationResponse;
 import kr.fintarget.api.domain.simulation.service.SimulationService;
@@ -20,7 +20,7 @@ public class SimulationController {
     @PostMapping
     public ResponseEntity<SimulationResponse> runSimulation(
             @AuthenticationPrincipal String userId,
-            @RequestBody SimulationRequest request) {
+            @Valid @RequestBody SimulationRequest request) {
         return ResponseEntity.ok(
             simulationService.runSimulation(UUID.fromString(userId), request)
         );
