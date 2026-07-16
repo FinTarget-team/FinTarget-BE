@@ -16,7 +16,7 @@ public class BlacklistedTokenCleanupScheduler {
     /**
      * 매일 자정, 만료된 블랙리스트 토큰 삭제
      */
-    @Scheduled(cron = "0 0 0 * * *")
+    @Scheduled(cron = "0 0 0 * * *", zone = "Asia/Seoul")
     public void cleanupExpiredTokens() {
         List<BlacklistedToken> expiredTokens = blacklistedTokenRepository.findByExpiresAtBefore(LocalDateTime.now());
         blacklistedTokenRepository.deleteAll(expiredTokens);
