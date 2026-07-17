@@ -12,7 +12,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -84,6 +83,8 @@ public class OnboardingService {
 
     @Transactional
     public OnboardingStepResponse submitAnswer(String userId, OnboardingAnswerRequest request) {
+        validateAnswerRequest(request);
+
         // 답변 DB 저장
         OnboardingAnswer answer = new OnboardingAnswer(
                 UUID.fromString(userId),
@@ -113,6 +114,15 @@ public class OnboardingService {
         return getStep(request.getStep() + 1);
     }
 
+    private void validateAnswerRequest(OnboardingAnswerRequest request) {
+        if (request.getValue() == null || request.getValue().isBlank()) {
+            throw new IllegalArgumentException("답변 값을 입력해주세요");
+        }
+        if (request.getStep() < 1 || request.getStep() > TOTAL_STEPS) {
+            throw new IllegalArgumentException("유효하지 않은 온보딩 단계입니다");
+        }
+    }
+
     private void applyAnswerToUser(String userId, int step, String value) {
         if (step != 1 && step != 2 && step != 3) return;
 
@@ -120,11 +130,27 @@ public class OnboardingService {
                 .orElseThrow(() -> new IllegalArgumentException("유저를 찾을 수 없습니다."));
 
         switch (step) {
-            case 1 -> Optional.ofNullable(AGE_CODE_MAP.get(value)).ifPresent(user::updateAge);
+            case 1 -> user.updateAge(resolveAge(value));
             case 2 -> user.updateEmploymentType(value);
-            case 3 -> Optional.ofNullable(INCOME_CODE_MAP.get(value)).ifPresent(user::updateIncome);
+            case 3 -> user.updateIncome(resolveIncome(value));
         }
 
         userRepository.save(user);
+    }
+
+    private Integer resolveAge(String value) {
+        Integer age = AGE_CODE_MAP.get(value);
+        if (age == null) {
+            throw new IllegalArgumentException("유효하지 않은 나이 코드입니다");
+        }
+        return age;
+    }
+
+    private Long resolveIncome(String value) {
+        Long income = INCOME_CODE_MAP.get(value);
+        if (income == null) {
+            throw new IllegalArgumentException("유효하지 않은 소득 코드입니다");
+        }
+        return income;
     }
 }
