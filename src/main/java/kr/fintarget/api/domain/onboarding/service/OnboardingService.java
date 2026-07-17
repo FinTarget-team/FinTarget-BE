@@ -115,6 +115,9 @@ public class OnboardingService {
     }
 
     private void validateAnswerRequest(OnboardingAnswerRequest request) {
+        if (request == null) {
+            throw new IllegalArgumentException("요청 값이 없습니다");
+        }
         if (request.getValue() == null || request.getValue().isBlank()) {
             throw new IllegalArgumentException("답변 값을 입력해주세요");
         }
