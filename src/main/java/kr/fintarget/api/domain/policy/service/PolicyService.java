@@ -30,10 +30,7 @@ public class PolicyService {
                 .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
 
         if (user.getAge() == null || user.getIncome() == null) {
-            return policyRepository.findAll()
-                    .stream()
-                    .map(PolicyResponse::from)
-                    .collect(Collectors.toList());
+            return List.of();
         }
 
         return policyRepository.findMatchingPolicies(user.getAge(), user.getIncome(), policyType)
