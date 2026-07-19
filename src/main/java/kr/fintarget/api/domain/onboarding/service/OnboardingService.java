@@ -84,6 +84,7 @@ public class OnboardingService {
     @Transactional
     public OnboardingStepResponse submitAnswer(String userId, OnboardingAnswerRequest request) {
         validateAnswerRequest(request);
+        validatePreviousStepCompleted(userId, request.getStep());
 
         // 답변 DB 저장
         OnboardingAnswer answer = new OnboardingAnswer(
@@ -123,6 +124,16 @@ public class OnboardingService {
         }
         if (request.getStep() < 1 || request.getStep() > TOTAL_STEPS) {
             throw new IllegalArgumentException("유효하지 않은 온보딩 단계입니다");
+        }
+    }
+
+    private void validatePreviousStepCompleted(String userId, int step) {
+        if (step == 1) return;
+
+        boolean previousStepCompleted = onboardingAnswerRepository
+                .existsByUserIdAndStep(UUID.fromString(userId), step - 1);
+        if (!previousStepCompleted) {
+            throw new IllegalArgumentException("이전 온보딩 단계를 먼저 완료해주세요");
         }
     }
 
