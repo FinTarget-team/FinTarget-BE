@@ -9,4 +9,5 @@ import java.util.UUID;
 public interface OnboardingAnswerRepository extends JpaRepository<OnboardingAnswer, String> {
     List<OnboardingAnswer> findByUserIdOrderByStepAsc(UUID userId);
     void deleteByUserId(UUID userId);
+    boolean existsByUserIdAndStep(UUID userId, Integer step);
 }
