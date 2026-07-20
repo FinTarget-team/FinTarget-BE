@@ -1,5 +1,6 @@
 package kr.fintarget.api.domain.simulation.controller;
 import jakarta.validation.Valid;
+import kr.fintarget.api.common.ApiResponse;
 import kr.fintarget.api.domain.simulation.dto.SimulationRequest;
 import kr.fintarget.api.domain.simulation.dto.SimulationResponse;
 import kr.fintarget.api.domain.simulation.service.SimulationService;
@@ -18,28 +19,28 @@ public class SimulationController {
     private final SimulationService simulationService;
 
     @PostMapping
-    public ResponseEntity<SimulationResponse> runSimulation(
+    public ResponseEntity<ApiResponse<SimulationResponse>> runSimulation(
             @AuthenticationPrincipal String userId,
             @Valid @RequestBody SimulationRequest request) {
         return ResponseEntity.ok(
-            simulationService.runSimulation(UUID.fromString(userId), request)
+            ApiResponse.ok(simulationService.runSimulation(UUID.fromString(userId), request))
         );
     }
 
     @GetMapping
-    public ResponseEntity<List<SimulationResponse>> getSimulations(
+    public ResponseEntity<ApiResponse<List<SimulationResponse>>> getSimulations(
             @AuthenticationPrincipal String userId) {
         return ResponseEntity.ok(
-            simulationService.getSimulations(UUID.fromString(userId))
+            ApiResponse.ok(simulationService.getSimulations(UUID.fromString(userId)))
         );
     }
 
     @GetMapping("/goal/{goalId}")
-    public ResponseEntity<List<SimulationResponse>> getSimulationsByGoal(
+    public ResponseEntity<ApiResponse<List<SimulationResponse>>> getSimulationsByGoal(
             @AuthenticationPrincipal String userId,
             @PathVariable UUID goalId) {
         return ResponseEntity.ok(
-            simulationService.getSimulationsByGoal(UUID.fromString(userId), goalId)
+            ApiResponse.ok(simulationService.getSimulationsByGoal(UUID.fromString(userId), goalId))
         );
     }
 }
