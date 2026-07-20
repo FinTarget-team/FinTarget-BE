@@ -5,16 +5,19 @@ import kr.fintarget.api.domain.expense.entity.Expense;
 import kr.fintarget.api.domain.expense.repository.ExpenseRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -39,9 +42,8 @@ class ExpenseServiceTest {
         ExpenseSyncRequest duplicate = new ExpenseSyncRequest(10000L, "FOOD", "점심", SPENT_AT);
         expenseService.syncExpenses(USER_ID, List.of(duplicate));
 
-        ArgumentCaptor<List<Expense>> captor = ArgumentCaptor.forClass(List.class);
-        verify(expenseRepository).saveAll(captor.capture());
-        assertThat(captor.getValue()).isEmpty();
+        verify(expenseRepository, never()).insertIfNotExists(
+                any(), any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -52,9 +54,8 @@ class ExpenseServiceTest {
         ExpenseSyncRequest request = new ExpenseSyncRequest(10000L, "FOOD", "점심", SPENT_AT);
         expenseService.syncExpenses(USER_ID, List.of(request, request));
 
-        ArgumentCaptor<List<Expense>> captor = ArgumentCaptor.forClass(List.class);
-        verify(expenseRepository).saveAll(captor.capture());
-        assertThat(captor.getValue()).hasSize(1);
+        verify(expenseRepository, times(1)).insertIfNotExists(
+                any(), eq(USER_ID), eq("FOOD"), eq(10000L), eq("점심"), eq(SPENT_AT), any());
     }
 
     @Test
@@ -65,11 +66,8 @@ class ExpenseServiceTest {
         ExpenseSyncRequest request = new ExpenseSyncRequest(10000L, "FOOD", "점심", SPENT_AT);
         expenseService.syncExpenses(USER_ID, List.of(request));
 
-        ArgumentCaptor<List<Expense>> captor = ArgumentCaptor.forClass(List.class);
-        verify(expenseRepository).saveAll(captor.capture());
-        assertThat(captor.getValue()).hasSize(1);
-        assertThat(captor.getValue().get(0).getAmount()).isEqualTo(10000L);
-        assertThat(captor.getValue().get(0).getCategory()).isEqualTo("FOOD");
+        verify(expenseRepository).insertIfNotExists(
+                any(), eq(USER_ID), eq("FOOD"), eq(10000L), eq("점심"), eq(SPENT_AT), any(LocalDateTime.class));
     }
 
     @Test
@@ -81,8 +79,7 @@ class ExpenseServiceTest {
         ExpenseSyncRequest differentAmount = new ExpenseSyncRequest(20000L, "FOOD", "점심", SPENT_AT);
         expenseService.syncExpenses(USER_ID, List.of(differentAmount));
 
-        ArgumentCaptor<List<Expense>> captor = ArgumentCaptor.forClass(List.class);
-        verify(expenseRepository).saveAll(captor.capture());
-        assertThat(captor.getValue()).hasSize(1);
+        verify(expenseRepository).insertIfNotExists(
+                any(), eq(USER_ID), eq("FOOD"), eq(20000L), eq("점심"), eq(SPENT_AT), any());
     }
 }

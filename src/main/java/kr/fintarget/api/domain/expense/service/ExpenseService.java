@@ -8,7 +8,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
-import java.util.ArrayList;
+import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
@@ -36,20 +36,19 @@ public class ExpenseService {
             .map(ExpenseKey::from)
             .collect(Collectors.toCollection(HashSet::new));
 
-        List<Expense> newExpenses = new ArrayList<>();
         for (ExpenseSyncRequest request : requests) {
             if (seen.add(ExpenseKey.from(request))) {
-                newExpenses.add(new Expense(
+                expenseRepository.insertIfNotExists(
+                    UUID.randomUUID(),
                     userId,
-                    request.amount(),
                     request.category(),
+                    request.amount(),
                     request.description(),
-                    request.spentAt()
-                ));
+                    request.spentAt(),
+                    LocalDateTime.now()
+                );
             }
         }
-
-        expenseRepository.saveAll(newExpenses);
     }
 
     private record ExpenseKey(String category, Long amount, LocalDate spentAt, String description) {
