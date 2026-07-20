@@ -1,5 +1,6 @@
 package kr.fintarget.api.domain.policy.controller;
 
+import kr.fintarget.api.common.ApiResponse;
 import kr.fintarget.api.domain.policy.dto.PolicyResponse;
 import kr.fintarget.api.domain.policy.dto.UserPolicyCreateRequest;
 import kr.fintarget.api.domain.policy.dto.UserPolicyResponse;
@@ -19,32 +20,31 @@ public class PolicyController {
     private final PolicyService policyService;
 
     @GetMapping
-    public ResponseEntity<?> getMatchingPolicies(
+    public ResponseEntity<ApiResponse<List<PolicyResponse>>> getMatchingPolicies(
             @AuthenticationPrincipal String userId,
             @RequestParam(required = false) String policyType) {
-        return ResponseEntity.ok(policyService.getMatchingPolicies(userId, policyType));
+        return ResponseEntity.ok(ApiResponse.ok(policyService.getMatchingPolicies(userId, policyType)));
     }
 
     @GetMapping("/my")
-    public ResponseEntity<List<UserPolicyResponse>> getUserPolicies(
+    public ResponseEntity<ApiResponse<List<UserPolicyResponse>>> getUserPolicies(
             @AuthenticationPrincipal String userId) {
-        return ResponseEntity.ok(policyService.getUserPolicies(UUID.fromString(userId)));
+        return ResponseEntity.ok(ApiResponse.ok(policyService.getUserPolicies(UUID.fromString(userId))));
     }
 
     @PostMapping("/my")
-    public ResponseEntity<UserPolicyResponse> createUserPolicy(
+    public ResponseEntity<ApiResponse<UserPolicyResponse>> createUserPolicy(
             @AuthenticationPrincipal String userId,
             @RequestBody UserPolicyCreateRequest request) {
-        return ResponseEntity.ok(
-                policyService.createUserPolicy(UUID.fromString(userId), request)
-        );
+        UserPolicyResponse response = policyService.createUserPolicy(UUID.fromString(userId), request);
+        return ResponseEntity.status(201).body(ApiResponse.created(response));
     }
 
     @DeleteMapping("/my/{userPolicyId}")
-    public ResponseEntity<Void> deleteUserPolicy(
+    public ResponseEntity<ApiResponse<Void>> deleteUserPolicy(
             @AuthenticationPrincipal String userId,
             @PathVariable UUID userPolicyId) {
         policyService.deleteUserPolicy(UUID.fromString(userId), userPolicyId);
-        return ResponseEntity.noContent().build();
+        return ResponseEntity.ok(ApiResponse.ok(null));
     }
 }
