@@ -8,7 +8,11 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -20,17 +24,42 @@ public class ExpenseService {
 
     @Transactional
     public void syncExpenses(UUID userId, List<ExpenseSyncRequest> requests) {
-        List<Expense> expenses = requests.stream()
-            .map(request -> new Expense(
-                userId,
-                request.amount(),
-                request.category(),
-                request.description(),
-                request.spentAt()
-            ))
-            .collect(Collectors.toList());
+        if (requests.isEmpty()) {
+            return;
+        }
 
-        expenseRepository.saveAll(expenses);
+        LocalDate minDate = requests.stream().map(ExpenseSyncRequest::spentAt).min(Comparator.naturalOrder()).orElseThrow();
+        LocalDate maxDate = requests.stream().map(ExpenseSyncRequest::spentAt).max(Comparator.naturalOrder()).orElseThrow();
+
+        Set<ExpenseKey> seen = expenseRepository.findByUserIdAndSpentAtBetween(userId, minDate, maxDate)
+            .stream()
+            .map(ExpenseKey::from)
+            .collect(Collectors.toCollection(HashSet::new));
+
+        List<Expense> newExpenses = new ArrayList<>();
+        for (ExpenseSyncRequest request : requests) {
+            if (seen.add(ExpenseKey.from(request))) {
+                newExpenses.add(new Expense(
+                    userId,
+                    request.amount(),
+                    request.category(),
+                    request.description(),
+                    request.spentAt()
+                ));
+            }
+        }
+
+        expenseRepository.saveAll(newExpenses);
+    }
+
+    private record ExpenseKey(String category, Long amount, LocalDate spentAt, String description) {
+        static ExpenseKey from(Expense expense) {
+            return new ExpenseKey(expense.getCategory(), expense.getAmount(), expense.getSpentAt(), expense.getDescription());
+        }
+
+        static ExpenseKey from(ExpenseSyncRequest request) {
+            return new ExpenseKey(request.category(), request.amount(), request.spentAt(), request.description());
+        }
     }
 
     @Transactional(readOnly = true)
