@@ -9,7 +9,10 @@ import java.util.UUID;
 
 public interface PolicyRepository extends JpaRepository<Policy, UUID> {
 
-    @Query("SELECT p FROM Policy p WHERE p.minAge <= :age AND p.maxAge >= :age AND p.incomeLimit >= :income " +
-            "AND (:policyType IS NULL OR p.policyType = :policyType)")
+    @Query("SELECT p FROM Policy p WHERE " +
+            "(p.minAge IS NULL OR p.minAge <= :age) AND " +
+            "(p.maxAge IS NULL OR p.maxAge >= :age) AND " +
+            "(p.incomeLimit IS NULL OR p.incomeLimit >= :income) AND " +
+            "(:policyType IS NULL OR p.policyType = :policyType)")
     List<Policy> findMatchingPolicies(@Param("age") int age, @Param("income") Long income, @Param("policyType") String policyType);
 }
