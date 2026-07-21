@@ -19,6 +19,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -81,5 +82,25 @@ class ExpenseServiceTest {
 
         verify(expenseRepository).insertIfNotExists(
                 any(), eq(USER_ID), eq("FOOD"), eq(20000L), eq("점심"), eq(SPENT_AT), any());
+    }
+
+    @Test
+    void 빈_요청_목록이면_아무것도_하지_않는다() {
+        expenseService.syncExpenses(USER_ID, List.of());
+
+        verifyNoInteractions(expenseRepository);
+    }
+
+    @Test
+    void 설명이_null인_요청도_기존_null_설명_지출과_중복이면_스킵된다() {
+        Expense existing = new Expense(USER_ID, 10000L, "FOOD", null, SPENT_AT);
+        when(expenseRepository.findByUserIdAndSpentAtBetween(USER_ID, SPENT_AT, SPENT_AT))
+                .thenReturn(List.of(existing));
+
+        ExpenseSyncRequest duplicate = new ExpenseSyncRequest(10000L, "FOOD", null, SPENT_AT);
+        expenseService.syncExpenses(USER_ID, List.of(duplicate));
+
+        verify(expenseRepository, never()).insertIfNotExists(
+                any(), any(), any(), any(), any(), any(), any());
     }
 }
