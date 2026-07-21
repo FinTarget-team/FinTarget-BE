@@ -15,9 +15,9 @@ public interface ExpenseRepository extends JpaRepository<Expense, UUID> {
     List<Expense> findByUserIdAndSpentAtBetween(UUID userId, LocalDate start, LocalDate end);
     void deleteByUserId(UUID userId);
 
-    // Untargeted ON CONFLICT DO NOTHING: expense has only the one unique constraint
-    // (uk_expense_..._description) besides its PK, so this is unambiguous and also
-    // works against H2's more limited ON CONFLICT support in @DataJpaTest.
+    // 컬럼을 지정하지 않은 ON CONFLICT DO NOTHING: expense는 PK 외에 unique 제약이
+    // 하나뿐이라 이 형태로도 의미가 명확하고, @DataJpaTest에서 쓰는 H2의 제한적인
+    // ON CONFLICT 문법 지원과도 호환된다.
     @Modifying
     @Query(value = "INSERT INTO expense (expense_id, user_id, category, amount, description, spent_at, created_at) " +
             "VALUES (:expenseId, :userId, :category, :amount, :description, :spentAt, :createdAt) " +
