@@ -24,6 +24,8 @@ import java.util.stream.Collectors;
 public class SimulationService {
 
     private static final double DEFAULT_ANNUAL_INTEREST_RATE = 0.03;
+    // SimulationRequest의 @DecimalMax와 값이 동기화되어야 함
+    private static final double MAX_ANNUAL_INTEREST_RATE = 1.0;
     private static final double MONTHLY_SAVING_VOLATILITY = 0.20;
     private static final int MONTE_CARLO_ITERATIONS = 10_000;
 
@@ -36,6 +38,11 @@ public class SimulationService {
     public SimulationResponse runSimulation(UUID userId, SimulationRequest request) {
         Goal goal = goalRepository.findByGoalIdAndUserId(request.goalId(), userId)
                 .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 목표입니다."));
+
+        if (request.annualInterestRate() != null
+                && (!Double.isFinite(request.annualInterestRate()) || request.annualInterestRate() > MAX_ANNUAL_INTEREST_RATE)) {
+            throw new IllegalArgumentException("연이율은 0 이상 100%(1.0) 이하의 유한한 값이어야 합니다.");
+        }
 
         long remaining = goal.getTargetAmount() - goal.getCurrentAmount();
         double annualRate = request.annualInterestRate() != null ? request.annualInterestRate() : DEFAULT_ANNUAL_INTEREST_RATE;

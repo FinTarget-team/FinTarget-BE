@@ -20,6 +20,7 @@ import java.util.Random;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
@@ -132,5 +133,54 @@ class SimulationServiceTest {
         SimulationResponse response = simulationService.runSimulation(USER_ID, request);
 
         assertThat(response.policyCompletionDate()).isBeforeOrEqualTo(response.expectedCompletionDate());
+    }
+
+    @Test
+    void 연이율이_무한대이면_예외가_발생한다() {
+        Goal goal = new Goal(USER_ID, "목표", 1_200_000L, 0L, LocalDate.now().plusMonths(24));
+        when(goalRepository.findByGoalIdAndUserId(any(), eq(USER_ID)))
+                .thenReturn(Optional.of(goal));
+
+        SimulationRequest request = new SimulationRequest(UUID.randomUUID(), 100_000L, null, Double.POSITIVE_INFINITY);
+
+        assertThatThrownBy(() -> simulationService.runSimulation(USER_ID, request))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void 연이율이_NaN이면_예외가_발생한다() {
+        Goal goal = new Goal(USER_ID, "목표", 1_200_000L, 0L, LocalDate.now().plusMonths(24));
+        when(goalRepository.findByGoalIdAndUserId(any(), eq(USER_ID)))
+                .thenReturn(Optional.of(goal));
+
+        SimulationRequest request = new SimulationRequest(UUID.randomUUID(), 100_000L, null, Double.NaN);
+
+        assertThatThrownBy(() -> simulationService.runSimulation(USER_ID, request))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void 연이율이_상한을_초과하면_예외가_발생한다() {
+        Goal goal = new Goal(USER_ID, "목표", 1_200_000L, 0L, LocalDate.now().plusMonths(24));
+        when(goalRepository.findByGoalIdAndUserId(any(), eq(USER_ID)))
+                .thenReturn(Optional.of(goal));
+
+        SimulationRequest request = new SimulationRequest(UUID.randomUUID(), 100_000L, null, 2.0);
+
+        assertThatThrownBy(() -> simulationService.runSimulation(USER_ID, request))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void 연이율이_유효한_범위이면_정상_계산된다() {
+        Goal goal = new Goal(USER_ID, "목표", 1_200_000L, 0L, LocalDate.now().plusMonths(24));
+        when(goalRepository.findByGoalIdAndUserId(any(), eq(USER_ID)))
+                .thenReturn(Optional.of(goal));
+
+        SimulationRequest request = new SimulationRequest(UUID.randomUUID(), 100_000L, null, 0.05);
+
+        SimulationResponse response = simulationService.runSimulation(USER_ID, request);
+
+        assertThat(response.expectedCompletionDate()).isNotNull();
     }
 }
