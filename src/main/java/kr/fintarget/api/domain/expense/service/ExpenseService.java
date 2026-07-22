@@ -81,6 +81,10 @@ public class ExpenseService {
 
     @Transactional(readOnly = true)
     public ExpenseStatsResponse getExpenseStats(UUID userId, LocalDate start, LocalDate end) {
+        if (start.isAfter(end)) {
+            throw new IllegalArgumentException("시작일이 종료일보다 늦을 수 없습니다.");
+        }
+
         List<ExpenseCategoryStat> byCategory = expenseRepository.sumByCategory(userId, start, end);
         long totalAmount = byCategory.stream().mapToLong(ExpenseCategoryStat::amount).sum();
         return new ExpenseStatsResponse(totalAmount, byCategory);

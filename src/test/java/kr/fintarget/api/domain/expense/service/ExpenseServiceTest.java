@@ -17,6 +17,7 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
@@ -135,5 +136,16 @@ class ExpenseServiceTest {
 
         assertThat(response.totalAmount()).isEqualTo(0L);
         assertThat(response.byCategory()).isEmpty();
+    }
+
+    @Test
+    void 통계는_시작일이_종료일보다_늦으면_예외가_발생한다() {
+        LocalDate start = LocalDate.of(2026, 7, 31);
+        LocalDate end = LocalDate.of(2026, 7, 1);
+
+        assertThatThrownBy(() -> expenseService.getExpenseStats(USER_ID, start, end))
+                .isInstanceOf(IllegalArgumentException.class);
+
+        verifyNoInteractions(expenseRepository);
     }
 }
