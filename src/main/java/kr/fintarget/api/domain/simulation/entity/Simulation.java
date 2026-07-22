@@ -42,18 +42,31 @@ public class Simulation {
     @Column(name = "policy_completion_date")
     private LocalDate policyCompletionDate;
 
+    @Column(name = "optimistic_completion_date")
+    private LocalDate optimisticCompletionDate;
+
+    @Column(name = "pessimistic_completion_date")
+    private LocalDate pessimisticCompletionDate;
+
+    @Column(name = "success_probability")
+    private Double successProbability;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
 
     public Simulation(UUID userId, Goal goal, UserPolicy userPolicy,
                       Long monthlySaving, LocalDate expectedCompletionDate,
-                      LocalDate policyCompletionDate) {
+                      LocalDate policyCompletionDate, LocalDate optimisticCompletionDate,
+                      LocalDate pessimisticCompletionDate, Double successProbability) {
         this.userId = userId;
         this.goal = goal;
         this.userPolicy = userPolicy;
         this.monthlySaving = monthlySaving;
         this.expectedCompletionDate = expectedCompletionDate;
         this.policyCompletionDate = policyCompletionDate;
+        this.optimisticCompletionDate = optimisticCompletionDate;
+        this.pessimisticCompletionDate = pessimisticCompletionDate;
+        this.successProbability = successProbability;
     }
 }
