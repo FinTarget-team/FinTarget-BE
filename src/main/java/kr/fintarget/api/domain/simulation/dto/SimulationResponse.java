@@ -11,6 +11,9 @@ public record SimulationResponse(
     Long monthlySaving,
     LocalDate expectedCompletionDate,
     LocalDate policyCompletionDate,
+    LocalDate optimisticCompletionDate,
+    LocalDate pessimisticCompletionDate,
+    Double successProbability,
     LocalDateTime createdAt
 ) {
     public static SimulationResponse from(Simulation simulation) {
@@ -20,6 +23,9 @@ public record SimulationResponse(
             simulation.getMonthlySaving(),
             simulation.getExpectedCompletionDate(),
             simulation.getPolicyCompletionDate(),
+            simulation.getOptimisticCompletionDate(),
+            simulation.getPessimisticCompletionDate(),
+            simulation.getSuccessProbability(),
             simulation.getCreatedAt()
         );
     }
