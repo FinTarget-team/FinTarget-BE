@@ -124,7 +124,7 @@ class SimulationServiceTest {
                 .thenReturn(Optional.of(goal));
 
         UUID userPolicyId = UUID.randomUUID();
-        Policy policy = Policy.create("청년 저축 지원", "설명", null, null, null, 2_400_000L, "SAVINGS", "전국");
+        Policy policy = Policy.create("청년 저축 지원", "설명", null, null, null, 2_400_000L, "SAVINGS", "전국", null, null);
         UserPolicy userPolicy = new UserPolicy(USER_ID, policy, UserPolicy.UserPolicyStatus.APPLIED);
         when(userPolicyRepository.findByUserPolicyIdAndUserId(userPolicyId, USER_ID))
                 .thenReturn(Optional.of(userPolicy));

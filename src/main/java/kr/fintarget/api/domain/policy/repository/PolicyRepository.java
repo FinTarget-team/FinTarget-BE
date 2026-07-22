@@ -5,6 +5,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 public interface PolicyRepository extends JpaRepository<Policy, UUID> {
@@ -15,4 +16,6 @@ public interface PolicyRepository extends JpaRepository<Policy, UUID> {
             "(p.incomeLimit IS NULL OR p.incomeLimit >= :income) AND " +
             "(:policyType IS NULL OR p.policyType = :policyType)")
     List<Policy> findMatchingPolicies(@Param("age") int age, @Param("income") Long income, @Param("policyType") String policyType);
+
+    Optional<Policy> findByExternalId(String externalId);
 }

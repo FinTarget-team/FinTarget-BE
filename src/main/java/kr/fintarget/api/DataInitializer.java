@@ -43,6 +43,6 @@ public class DataInitializer implements ApplicationRunner {
 
     private Policy createPolicy(String name, String description, int minAge, int maxAge,
                                 Long incomeLimit, Long benefitAmount, String policyType, String region) {
-        return Policy.create(name, description, minAge, maxAge, incomeLimit, benefitAmount, policyType, region);
+        return Policy.create(name, description, minAge, maxAge, incomeLimit, benefitAmount, policyType, region, null, null);
     }
 }

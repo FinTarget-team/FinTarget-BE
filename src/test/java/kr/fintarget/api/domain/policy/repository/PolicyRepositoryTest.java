@@ -17,7 +17,7 @@ class PolicyRepositoryTest {
 
     @Test
     void 나이_소득_제한이_모두_없는_정책은_모든_사용자에게_매칭된다() {
-        policyRepository.save(Policy.create("전체 대상 정책", "설명", null, null, null, 100000L, "GENERAL", "전국"));
+        policyRepository.save(Policy.create("전체 대상 정책", "설명", null, null, null, 100000L, "GENERAL", "전국", null, null));
 
         List<Policy> result = policyRepository.findMatchingPolicies(25, 1_000_000L, null);
 
@@ -26,7 +26,7 @@ class PolicyRepositoryTest {
 
     @Test
     void 나이_상한이_없는_정책은_최소_나이_이상이면_매칭된다() {
-        policyRepository.save(Policy.create("청년 이상 정책", "설명", 19, null, 5_000_000L, 100000L, "GENERAL", "전국"));
+        policyRepository.save(Policy.create("청년 이상 정책", "설명", 19, null, 5_000_000L, 100000L, "GENERAL", "전국", null, null));
 
         assertThat(policyRepository.findMatchingPolicies(19, 1_000_000L, null))
                 .extracting(Policy::getName).contains("청년 이상 정책");
@@ -36,7 +36,7 @@ class PolicyRepositoryTest {
 
     @Test
     void 소득_제한이_있는_정책은_초과시_매칭되지_않는다() {
-        policyRepository.save(Policy.create("저소득 정책", "설명", 18, 65, 3_000_000L, 100000L, "GENERAL", "전국"));
+        policyRepository.save(Policy.create("저소득 정책", "설명", 18, 65, 3_000_000L, 100000L, "GENERAL", "전국", null, null));
 
         assertThat(policyRepository.findMatchingPolicies(25, 3_000_000L, null))
                 .extracting(Policy::getName).contains("저소득 정책");
@@ -46,8 +46,8 @@ class PolicyRepositoryTest {
 
     @Test
     void policyType이_지정되면_해당_타입만_매칭된다() {
-        policyRepository.save(Policy.create("주거정책", "설명", null, null, null, 100000L, "HOUSING", "전국"));
-        policyRepository.save(Policy.create("취업정책", "설명", null, null, null, 100000L, "EMPLOYMENT", "전국"));
+        policyRepository.save(Policy.create("주거정책", "설명", null, null, null, 100000L, "HOUSING", "전국", null, null));
+        policyRepository.save(Policy.create("취업정책", "설명", null, null, null, 100000L, "EMPLOYMENT", "전국", null, null));
 
         List<Policy> result = policyRepository.findMatchingPolicies(25, 1_000_000L, "HOUSING");
 
