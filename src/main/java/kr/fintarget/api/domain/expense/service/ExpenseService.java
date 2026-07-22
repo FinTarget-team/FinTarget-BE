@@ -1,6 +1,8 @@
 package kr.fintarget.api.domain.expense.service;
 
+import kr.fintarget.api.domain.expense.dto.ExpenseCategoryStat;
 import kr.fintarget.api.domain.expense.dto.ExpenseResponse;
+import kr.fintarget.api.domain.expense.dto.ExpenseStatsResponse;
 import kr.fintarget.api.domain.expense.dto.ExpenseSyncRequest;
 import kr.fintarget.api.domain.expense.entity.Expense;
 import kr.fintarget.api.domain.expense.repository.ExpenseRepository;
@@ -75,5 +77,12 @@ public class ExpenseService {
             .stream()
             .map(ExpenseResponse::from)
             .collect(Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
+    public ExpenseStatsResponse getExpenseStats(UUID userId, LocalDate start, LocalDate end) {
+        List<ExpenseCategoryStat> byCategory = expenseRepository.sumByCategory(userId, start, end);
+        long totalAmount = byCategory.stream().mapToLong(ExpenseCategoryStat::amount).sum();
+        return new ExpenseStatsResponse(totalAmount, byCategory);
     }
 }

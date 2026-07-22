@@ -1,5 +1,7 @@
 package kr.fintarget.api.domain.expense.service;
 
+import kr.fintarget.api.domain.expense.dto.ExpenseCategoryStat;
+import kr.fintarget.api.domain.expense.dto.ExpenseStatsResponse;
 import kr.fintarget.api.domain.expense.dto.ExpenseSyncRequest;
 import kr.fintarget.api.domain.expense.entity.Expense;
 import kr.fintarget.api.domain.expense.repository.ExpenseRepository;
@@ -14,6 +16,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
@@ -102,5 +105,35 @@ class ExpenseServiceTest {
 
         verify(expenseRepository, never()).insertIfNotExists(
                 any(), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void 통계는_카테고리별_합계와_총액을_계산한다() {
+        LocalDate start = LocalDate.of(2026, 7, 1);
+        LocalDate end = LocalDate.of(2026, 7, 31);
+        when(expenseRepository.sumByCategory(USER_ID, start, end)).thenReturn(List.of(
+                new ExpenseCategoryStat("FOOD", 15000L),
+                new ExpenseCategoryStat("TRANSPORT", 30000L)
+        ));
+
+        ExpenseStatsResponse response = expenseService.getExpenseStats(USER_ID, start, end);
+
+        assertThat(response.totalAmount()).isEqualTo(45000L);
+        assertThat(response.byCategory()).containsExactlyInAnyOrder(
+                new ExpenseCategoryStat("FOOD", 15000L),
+                new ExpenseCategoryStat("TRANSPORT", 30000L)
+        );
+    }
+
+    @Test
+    void 통계는_지출이_없으면_총액_0과_빈_목록을_반환한다() {
+        LocalDate start = LocalDate.of(2026, 7, 1);
+        LocalDate end = LocalDate.of(2026, 7, 31);
+        when(expenseRepository.sumByCategory(USER_ID, start, end)).thenReturn(List.of());
+
+        ExpenseStatsResponse response = expenseService.getExpenseStats(USER_ID, start, end);
+
+        assertThat(response.totalAmount()).isEqualTo(0L);
+        assertThat(response.byCategory()).isEmpty();
     }
 }
