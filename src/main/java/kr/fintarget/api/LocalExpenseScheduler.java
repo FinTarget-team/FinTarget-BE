@@ -8,6 +8,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -44,7 +45,7 @@ public class LocalExpenseScheduler {
     @Scheduled(cron = "0 0 9 * * *", zone = "Asia/Seoul")
     public void generateRandomExpenses() {
         ThreadLocalRandom random = ThreadLocalRandom.current();
-        LocalDate today = LocalDate.now();
+        LocalDate today = LocalDate.now(ZoneId.of("Asia/Seoul"));
 
         for (UUID userId : List.of(PERSONA_1, PERSONA_2)) {
             int count = random.nextInt(1, 6);
