@@ -2,6 +2,7 @@ package kr.fintarget.api.domain.expense.controller;
 
 import kr.fintarget.api.common.ApiResponse;
 import kr.fintarget.api.domain.expense.dto.ExpenseResponse;
+import kr.fintarget.api.domain.expense.dto.ExpenseStatsResponse;
 import kr.fintarget.api.domain.expense.dto.ExpenseSyncRequest;
 import kr.fintarget.api.domain.expense.service.ExpenseService;
 import lombok.RequiredArgsConstructor;
@@ -41,6 +42,16 @@ public class ExpenseController {
             @RequestParam(name = "end") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate end) {
         return ResponseEntity.ok(
                 ApiResponse.ok(expenseService.getExpensesByPeriod(UUID.fromString(userId), start, end))
+        );
+    }
+
+    @GetMapping("/stats")
+    public ResponseEntity<ApiResponse<ExpenseStatsResponse>> getExpenseStats(
+            @AuthenticationPrincipal String userId,
+            @RequestParam(name = "start") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate start,
+            @RequestParam(name = "end") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate end) {
+        return ResponseEntity.ok(
+                ApiResponse.ok(expenseService.getExpenseStats(UUID.fromString(userId), start, end))
         );
     }
 }

@@ -1,6 +1,8 @@
 package kr.fintarget.api.domain.expense.service;
 
+import kr.fintarget.api.domain.expense.dto.ExpenseCategoryStat;
 import kr.fintarget.api.domain.expense.dto.ExpenseResponse;
+import kr.fintarget.api.domain.expense.dto.ExpenseStatsResponse;
 import kr.fintarget.api.domain.expense.dto.ExpenseSyncRequest;
 import kr.fintarget.api.domain.expense.entity.Expense;
 import kr.fintarget.api.domain.expense.repository.ExpenseRepository;
@@ -75,5 +77,16 @@ public class ExpenseService {
             .stream()
             .map(ExpenseResponse::from)
             .collect(Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
+    public ExpenseStatsResponse getExpenseStats(UUID userId, LocalDate start, LocalDate end) {
+        if (start.isAfter(end)) {
+            throw new IllegalArgumentException("시작일이 종료일보다 늦을 수 없습니다.");
+        }
+
+        List<ExpenseCategoryStat> byCategory = expenseRepository.sumByCategory(userId, start, end);
+        long totalAmount = byCategory.stream().mapToLong(ExpenseCategoryStat::amount).sum();
+        return new ExpenseStatsResponse(totalAmount, byCategory);
     }
 }
