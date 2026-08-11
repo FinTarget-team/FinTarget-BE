@@ -18,4 +18,6 @@ public interface PolicyRepository extends JpaRepository<Policy, UUID> {
     List<Policy> findMatchingPolicies(@Param("age") int age, @Param("income") Long income, @Param("policyType") String policyType);
 
     Optional<Policy> findByExternalId(String externalId);
+
+    boolean existsByExternalIdAndSource(String externalId, String source);
 }
