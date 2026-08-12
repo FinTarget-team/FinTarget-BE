@@ -22,7 +22,7 @@ public record PolicyResponse(
             policy.getMaxAge(),
             policy.getIncomeLimit(),
             policy.getBenefitAmount(),
-            policy.getPolicyType()
+            policy.getPolicyType().name()
         );
     }
 }
