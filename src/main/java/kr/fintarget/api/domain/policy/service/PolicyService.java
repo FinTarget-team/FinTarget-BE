@@ -4,6 +4,7 @@ import kr.fintarget.api.domain.policy.dto.PolicyResponse;
 import kr.fintarget.api.domain.policy.dto.UserPolicyCreateRequest;
 import kr.fintarget.api.domain.policy.dto.UserPolicyResponse;
 import kr.fintarget.api.domain.policy.entity.Policy;
+import kr.fintarget.api.domain.policy.entity.PolicyType;
 import kr.fintarget.api.domain.policy.entity.UserPolicy;
 import kr.fintarget.api.domain.policy.repository.PolicyRepository;
 import kr.fintarget.api.domain.policy.repository.UserPolicyRepository;
@@ -33,10 +34,21 @@ public class PolicyService {
             return List.of();
         }
 
-        return policyRepository.findMatchingPolicies(user.getAge(), user.getIncome(), policyType)
+        return policyRepository.findMatchingPolicies(user.getAge(), user.getIncome(), parsePolicyType(policyType))
                 .stream()
                 .map(PolicyResponse::from)
                 .collect(Collectors.toList());
+    }
+
+    private PolicyType parsePolicyType(String policyType) {
+        if (policyType == null || policyType.isBlank()) {
+            return null;
+        }
+        try {
+            return PolicyType.valueOf(policyType.trim().toUpperCase());
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("유효하지 않은 정책 유형입니다: " + policyType);
+        }
     }
 
     @Transactional

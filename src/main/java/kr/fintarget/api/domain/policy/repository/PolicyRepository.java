@@ -1,6 +1,7 @@
 package kr.fintarget.api.domain.policy.repository;
 
 import kr.fintarget.api.domain.policy.entity.Policy;
+import kr.fintarget.api.domain.policy.entity.PolicyType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -15,7 +16,7 @@ public interface PolicyRepository extends JpaRepository<Policy, UUID> {
             "(p.maxAge IS NULL OR p.maxAge >= :age) AND " +
             "(p.incomeLimit IS NULL OR p.incomeLimit >= :income) AND " +
             "(:policyType IS NULL OR p.policyType = :policyType)")
-    List<Policy> findMatchingPolicies(@Param("age") int age, @Param("income") Long income, @Param("policyType") String policyType);
+    List<Policy> findMatchingPolicies(@Param("age") int age, @Param("income") Long income, @Param("policyType") PolicyType policyType);
 
     Optional<Policy> findByExternalId(String externalId);
 

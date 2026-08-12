@@ -38,8 +38,9 @@ public class Policy {
     @Column(name = "benefit_amount")
     private Long benefitAmount;
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "policy_type", nullable = false)
-    private String policyType;
+    private PolicyType policyType;
 
     @Column(name = "region")
     private String region;
@@ -59,7 +60,7 @@ public class Policy {
     private LocalDateTime updatedAt;
 
     public static Policy create(String name, String description, Integer minAge, Integer maxAge,
-                                Long incomeLimit, Long benefitAmount, String policyType, String region,
+                                Long incomeLimit, Long benefitAmount, PolicyType policyType, String region,
                                 String externalId, String source) {
         Policy policy = new Policy();
         policy.name = name;

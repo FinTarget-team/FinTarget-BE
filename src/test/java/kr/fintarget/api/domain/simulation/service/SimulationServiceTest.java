@@ -3,6 +3,7 @@ package kr.fintarget.api.domain.simulation.service;
 import kr.fintarget.api.domain.goal.entity.Goal;
 import kr.fintarget.api.domain.goal.repository.GoalRepository;
 import kr.fintarget.api.domain.policy.entity.Policy;
+import kr.fintarget.api.domain.policy.entity.PolicyType;
 import kr.fintarget.api.domain.policy.entity.UserPolicy;
 import kr.fintarget.api.domain.policy.repository.UserPolicyRepository;
 import kr.fintarget.api.domain.simulation.dto.SimulationRequest;
@@ -124,7 +125,7 @@ class SimulationServiceTest {
                 .thenReturn(Optional.of(goal));
 
         UUID userPolicyId = UUID.randomUUID();
-        Policy policy = Policy.create("청년 저축 지원", "설명", null, null, null, 2_400_000L, "SAVINGS", "전국", null, null);
+        Policy policy = Policy.create("청년 저축 지원", "설명", null, null, null, 2_400_000L, PolicyType.FINANCE_WELFARE, "전국", null, null);
         UserPolicy userPolicy = new UserPolicy(USER_ID, policy, UserPolicy.UserPolicyStatus.APPLIED);
         when(userPolicyRepository.findByUserPolicyIdAndUserId(userPolicyId, USER_ID))
                 .thenReturn(Optional.of(userPolicy));

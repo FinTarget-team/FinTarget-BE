@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import kr.fintarget.api.domain.policy.client.dto.YouthCenterApiResponse;
 import kr.fintarget.api.domain.policy.client.dto.YouthCenterPolicyItem;
 import kr.fintarget.api.domain.policy.entity.Policy;
+import kr.fintarget.api.domain.policy.entity.PolicyType;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -111,6 +112,15 @@ class YouthCenterPolicyMapperTest {
     }
 
     @Test
+    void 주거_금융_외_카테고리는_ETC로_매핑된다() throws Exception {
+        YouthCenterPolicyItem item = parseItems().get(0);
+
+        Policy policy = YouthCenterPolicyMapper.toPolicy(item);
+
+        assertThat(policy.getPolicyType()).isEqualTo(PolicyType.ETC);
+    }
+
+    @Test
     void 금융복지_정책이_Policy_엔티티로_정상_매핑된다() throws Exception {
         YouthCenterPolicyItem item = parseItems().get(1);
 
@@ -120,7 +130,7 @@ class YouthCenterPolicyMapperTest {
         assertThat(policy.getDescription()).contains("경계선 지능 청년");
         assertThat(policy.getMinAge()).isEqualTo(18);
         assertThat(policy.getMaxAge()).isEqualTo(39);
-        assertThat(policy.getPolicyType()).isEqualTo("금융･복지･문화");
+        assertThat(policy.getPolicyType()).isEqualTo(PolicyType.FINANCE_WELFARE);
         assertThat(policy.getRegion()).isEqualTo("고용노동부");
         assertThat(policy.getExternalId()).isEqualTo("20260718005400113262");
         assertThat(policy.getSource()).isEqualTo("YOUTH_CENTER");
@@ -135,7 +145,7 @@ class YouthCenterPolicyMapperTest {
         assertThat(policy.getName()).isEqualTo("2026년 신혼부부 전세자금 대출이자 지원 안내");
         assertThat(policy.getMinAge()).isEqualTo(1);
         assertThat(policy.getMaxAge()).isEqualTo(99);
-        assertThat(policy.getPolicyType()).isEqualTo("주거");
+        assertThat(policy.getPolicyType()).isEqualTo(PolicyType.HOUSING);
         assertThat(policy.getRegion()).isEqualTo("전남광주통합특별시");
         assertThat(policy.getExternalId()).isEqualTo("20260710005400213254");
         assertThat(policy.getSource()).isEqualTo("YOUTH_CENTER");

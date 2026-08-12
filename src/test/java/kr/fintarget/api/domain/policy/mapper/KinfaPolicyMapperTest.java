@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import kr.fintarget.api.domain.policy.client.dto.KinfaApiResponse;
 import kr.fintarget.api.domain.policy.client.dto.KinfaItem;
 import kr.fintarget.api.domain.policy.entity.Policy;
+import kr.fintarget.api.domain.policy.entity.PolicyType;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -43,10 +44,27 @@ class KinfaPolicyMapperTest {
         assertThat(policy.getMaxAge()).isNull();
         assertThat(policy.getIncomeLimit()).isNull();
         assertThat(policy.getBenefitAmount()).isEqualTo(35_000_000L);
-        assertThat(policy.getPolicyType()).isEqualTo("생계");
+        assertThat(policy.getPolicyType()).isEqualTo(PolicyType.FINANCE_WELFARE);
         assertThat(policy.getRegion()).isEqualTo("전국");
         assertThat(policy.getExternalId()).isEqualTo("202607-1");
         assertThat(policy.getSource()).isEqualTo("KINFA");
+    }
+
+    @Test
+    void usge에_창업이_포함되면_STARTUP으로_매핑된다() throws Exception {
+        KinfaItem realItem = parseItem();
+        KinfaItem startupItem = new KinfaItem(
+                realItem.basYm(), realItem.snq(), realItem.finPrdNm(), realItem.lnLmt(),
+                realItem.irtCtg(), realItem.irt(), realItem.maxTotLnTrm(), realItem.maxDfrmTrm(),
+                realItem.maxRdptTrm(), realItem.rdptMthd(), "청년창업", realItem.trgt(),
+                realItem.instCtg(), realItem.ofrInstNm(), realItem.rsdAreaPamtEqltIstm(),
+                realItem.suprTgtDtlCond(), realItem.age(), realItem.incm(), realItem.jnMthd(),
+                realItem.prdExisYn(), realItem.prdCtg(), realItem.prdNm()
+        );
+
+        Policy policy = KinfaPolicyMapper.toPolicy(startupItem);
+
+        assertThat(policy.getPolicyType()).isEqualTo(PolicyType.STARTUP);
     }
 
     @Test

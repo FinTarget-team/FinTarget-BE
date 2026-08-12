@@ -2,6 +2,7 @@ package kr.fintarget.api.domain.policy.mapper;
 
 import kr.fintarget.api.domain.policy.client.dto.KinfaItem;
 import kr.fintarget.api.domain.policy.entity.Policy;
+import kr.fintarget.api.domain.policy.entity.PolicyType;
 
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -24,7 +25,7 @@ public class KinfaPolicyMapper {
                 null, // age 필드가 관측된 값("없음") 외의 형식이 검증되지 않아 파싱하지 않음
                 null, // incm 필드가 관측된 값("없음") 외의 형식이 검증되지 않아 파싱하지 않음
                 parseManwon(item.lnLmt()),
-                item.usge(),
+                resolvePolicyType(item.usge()),
                 item.rsdAreaPamtEqltIstm(),
                 toExternalId(item),
                 SOURCE
@@ -33,6 +34,13 @@ public class KinfaPolicyMapper {
 
     public static String toExternalId(KinfaItem item) {
         return item.basYm() + "-" + item.snq();
+    }
+
+    private static PolicyType resolvePolicyType(String usge) {
+        if (usge != null && usge.contains("창업")) {
+            return PolicyType.STARTUP;
+        }
+        return PolicyType.FINANCE_WELFARE; // 서민금융 상품은 대부분 금융복지 성격
     }
 
     private static Long parseManwon(String value) {
