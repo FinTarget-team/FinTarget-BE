@@ -1,5 +1,6 @@
 package kr.fintarget.api.domain.nudge.service;
 
+import kr.fintarget.api.domain.nudge.dto.NudgeListResponse;
 import kr.fintarget.api.domain.nudge.dto.NudgeResponse;
 import kr.fintarget.api.domain.nudge.entity.Nudge;
 import kr.fintarget.api.domain.nudge.repository.NudgeRepository;
@@ -31,15 +32,15 @@ public class NudgeService {
     private final ExpenseRepository expenseRepository;
 
     @Transactional
-    public Map<String, Object> getNudges(String userId) {
+    public NudgeListResponse getNudges(String userId) {
         generateGoalDeadlineNudge(userId);
         generateUnusualSpendingNudge(userId);
 
         List<Nudge> nudges = nudgeRepository.findByUserIdOrderByCreatedAtDesc(userId);
         long unreadCount = nudgeRepository.countByUserIdAndIsRead(userId, false);
-        return Map.of(
-                "nudges", nudges.stream().map(NudgeResponse::from).collect(Collectors.toList()),
-                "unreadCount", unreadCount
+        return new NudgeListResponse(
+                nudges.stream().map(NudgeResponse::from).collect(Collectors.toList()),
+                unreadCount
         );
     }
 
