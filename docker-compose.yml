@@ -1,0 +1,54 @@
+services:
+  db:
+    image: postgres:16
+    container_name: fintarget-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-fintarget}
+      POSTGRES_USER: ${DB_USERNAME:-moon}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-}
+    ports:
+      - "5432:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-moon} -d ${DB_NAME:-fintarget}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7
+    container_name: fintarget-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+
+  app:
+    build: .
+    container_name: fintarget-app
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    ports:
+      - "8080:8080"
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-fintarget}
+      DB_USERNAME: ${DB_USERNAME:-moon}
+      DB_PASSWORD: ${DB_PASSWORD:-}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      KAKAO_CLIENT_SECRET: ${KAKAO_CLIENT_SECRET:-}
+      JWT_SECRET: ${JWT_SECRET:-}
+      YOUTH_CENTER_API_KEY: ${YOUTH_CENTER_API_KEY:-}
+      YOUTH_CENTER_BASE_URL: ${YOUTH_CENTER_BASE_URL:-}
+      KINFA_API_KEY: ${KINFA_API_KEY:-}
+      KINFA_BASE_URL: ${KINFA_BASE_URL:-}
+
+volumes:
+  db-data:
