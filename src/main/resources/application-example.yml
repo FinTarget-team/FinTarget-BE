@@ -1,0 +1,37 @@
+# 이 파일은 예시용 템플릿입니다. 실제 설정은 이 파일을 복사해
+# application.yml로 저장한 뒤 값을 채워서 사용하세요 (application.yml은 .gitignore 대상입니다).
+spring:
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:fintarget}
+    username: ${DB_USERNAME:moon}
+    password: ${DB_PASSWORD:}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+  mvc:
+    pathmatch:
+      use-suffix-pattern: false
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+kakao:
+  client-id: your-kakao-rest-api-key
+  redirect-uri: http://localhost:8080/login/oauth2/code/kakao
+  client-secret: ${KAKAO_CLIENT_SECRET}
+server:
+  port: 8080
+jwt:
+  secret: ${JWT_SECRET}
+  expiration: 3600000
+youthcenter:
+  api:
+    key: ${YOUTH_CENTER_API_KEY}
+    base-url: ${YOUTH_CENTER_BASE_URL}
+kinfa:
+  api:
+    key: ${KINFA_API_KEY}
+    base-url: ${KINFA_BASE_URL}
