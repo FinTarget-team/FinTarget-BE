@@ -9,6 +9,7 @@ import kr.fintarget.api.domain.auth.dto.AppleLoginRequest;
 import kr.fintarget.api.domain.auth.dto.AuthResponse;
 import kr.fintarget.api.domain.auth.dto.KakaoLoginRequest;
 import kr.fintarget.api.domain.auth.dto.NaverLoginRequest;
+import kr.fintarget.api.domain.auth.dto.TokenRefreshResponse;
 import kr.fintarget.api.domain.user.entity.User;
 import kr.fintarget.api.domain.user.repository.UserRepository;
 import kr.fintarget.api.security.BlacklistedToken;
@@ -158,7 +159,7 @@ public class AuthController {
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(
                     responseCode = "200",
-                    description = "액세스 토큰 재발급 성공. data는 accessToken, expiresIn 필드를 포함하는 객체입니다.",
+                    description = "액세스 토큰 재발급 성공",
                     useReturnTypeSchema = true
             ),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(
@@ -173,14 +174,15 @@ public class AuthController {
             )
     })
     @PostMapping("/token/refresh")
-    public ResponseEntity<ApiResponse<?>> refreshToken(@RequestBody Map<String, String> body) {
+    public ResponseEntity<ApiResponse<TokenRefreshResponse>> refreshToken(@RequestBody Map<String, String> body) {
         String refreshToken = body.get("refreshToken");
         if (!jwtUtil.validateToken(refreshToken)) {
             return ResponseEntity.status(401).body(ApiResponse.error(401, "Invalid refresh token"));
         }
         String userId = jwtUtil.getUserId(refreshToken);
         String newAccessToken = jwtUtil.generateToken(userId, "REFRESH");
-        return ResponseEntity.ok(ApiResponse.ok(Map.of("accessToken", newAccessToken, "expiresIn", 3600)));
+        int expiresIn = (int) (jwtUtil.getExpirationMillis() / 1000);
+        return ResponseEntity.ok(ApiResponse.ok(new TokenRefreshResponse(newAccessToken, expiresIn)));
     }
 
     @Operation(
