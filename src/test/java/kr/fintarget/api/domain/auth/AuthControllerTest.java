@@ -1,7 +1,10 @@
 package kr.fintarget.api.domain.auth;
 
 import kr.fintarget.api.common.ApiResponse;
+import kr.fintarget.api.domain.auth.dto.AuthResponse;
+import kr.fintarget.api.domain.auth.dto.KakaoTokenLoginRequest;
 import kr.fintarget.api.domain.auth.dto.TokenRefreshResponse;
+import kr.fintarget.api.domain.user.entity.User;
 import kr.fintarget.api.domain.user.repository.UserRepository;
 import kr.fintarget.api.security.BlacklistedTokenRepository;
 import kr.fintarget.api.security.JwtUtil;
@@ -10,11 +13,17 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.web.client.HttpClientErrorException;
 
 import java.util.Map;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -74,5 +83,70 @@ class AuthControllerTest {
         assertThat(response.getStatusCode().value()).isEqualTo(401);
         assertThat(response.getBody().getMessage()).isEqualTo("Invalid refresh token");
         assertThat(response.getBody().getData()).isNull();
+    }
+
+    @Test
+    void 유효한_카카오_액세스_토큰이면_기존_회원은_200으로_로그인된다() {
+        User existingUser = User.builder()
+                .id("user-1")
+                .provider("KAKAO")
+                .providerId("kakao-123")
+                .build();
+
+        when(kakaoOAuthClient.getKakaoUserIdByAccessToken("valid-kakao-access-token")).thenReturn("kakao-123");
+        when(userRepository.findByProviderAndProviderId("KAKAO", "kakao-123"))
+                .thenReturn(Optional.of(existingUser));
+        when(jwtUtil.generateToken("user-1", "KAKAO")).thenReturn("access-token");
+        when(jwtUtil.generateRefreshToken("user-1")).thenReturn("refresh-token");
+
+        KakaoTokenLoginRequest request = new KakaoTokenLoginRequest();
+        ReflectionTestUtils.setField(request, "accessToken", "valid-kakao-access-token");
+
+        ResponseEntity<ApiResponse<AuthResponse>> response = authController.kakaoTokenLogin(request);
+
+        assertThat(response.getStatusCode().value()).isEqualTo(200);
+        AuthResponse data = response.getBody().getData();
+        assertThat(data.isNewUser()).isFalse();
+        assertThat(data.getUserId()).isEqualTo("user-1");
+        assertThat(data.getAccessToken()).isEqualTo("access-token");
+        assertThat(data.getRefreshToken()).isEqualTo("refresh-token");
+        assertThat(data.getProvider()).isEqualTo("KAKAO");
+    }
+
+    @Test
+    void 유효한_카카오_액세스_토큰이고_신규_사용자면_회원가입_후_201로_응답한다() {
+        User savedUser = User.builder()
+                .id("user-2")
+                .provider("KAKAO")
+                .providerId("kakao-456")
+                .build();
+
+        when(kakaoOAuthClient.getKakaoUserIdByAccessToken("new-kakao-access-token")).thenReturn("kakao-456");
+        when(userRepository.findByProviderAndProviderId("KAKAO", "kakao-456")).thenReturn(Optional.empty());
+        when(userRepository.save(any(User.class))).thenReturn(savedUser);
+        when(jwtUtil.generateToken("user-2", "KAKAO")).thenReturn("access-token");
+        when(jwtUtil.generateRefreshToken("user-2")).thenReturn("refresh-token");
+
+        KakaoTokenLoginRequest request = new KakaoTokenLoginRequest();
+        ReflectionTestUtils.setField(request, "accessToken", "new-kakao-access-token");
+
+        ResponseEntity<ApiResponse<AuthResponse>> response = authController.kakaoTokenLogin(request);
+
+        assertThat(response.getStatusCode().value()).isEqualTo(201);
+        assertThat(response.getBody().getData().isNewUser()).isTrue();
+        assertThat(response.getBody().getData().getUserId()).isEqualTo("user-2");
+    }
+
+    @Test
+    void 만료되거나_유효하지_않은_카카오_액세스_토큰이면_카카오_API_호출_단계에서_예외가_전파된다() {
+        when(kakaoOAuthClient.getKakaoUserIdByAccessToken("expired-kakao-access-token"))
+                .thenThrow(HttpClientErrorException.create(
+                        HttpStatus.UNAUTHORIZED, "Unauthorized", null, null, null));
+
+        KakaoTokenLoginRequest request = new KakaoTokenLoginRequest();
+        ReflectionTestUtils.setField(request, "accessToken", "expired-kakao-access-token");
+
+        assertThatThrownBy(() -> authController.kakaoTokenLogin(request))
+                .isInstanceOf(HttpClientErrorException.class);
     }
 }
