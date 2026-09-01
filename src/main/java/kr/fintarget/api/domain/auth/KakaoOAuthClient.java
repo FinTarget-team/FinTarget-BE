@@ -40,9 +40,13 @@ public class KakaoOAuthClient {
 
         String kakaoAccessToken = (String) tokenResponse.get("access_token");
 
+        return getKakaoUserIdByAccessToken(kakaoAccessToken);
+    }
+
+    public String getKakaoUserIdByAccessToken(String accessToken) {
         Map<String, Object> userResponse = restClient.get()
                 .uri("https://kapi.kakao.com/v2/user/me")
-                .header("Authorization", "Bearer " + kakaoAccessToken)
+                .header("Authorization", "Bearer " + accessToken)
                 .retrieve()
                 .body(Map.class);
 
