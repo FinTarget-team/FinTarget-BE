@@ -12,7 +12,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -32,6 +34,33 @@ public class OnboardingService {
             "200_300", 2_500_000L,
             "OVER_3M", 3_500_000L
     );
+
+    // 대한민국 17개 시/도 단위. value는 현재 Policy.region과 매칭되는 값이 아님(Policy.region이
+    // 아직 표준화된 지역 포맷을 갖고 있지 않아 매칭 불가 - PolicyMapper 참고).
+    // 1~3단계 CHIP과 동일하게 영문 코드 컨벤션을 사용.
+    private static final List<OnboardingStepResponse.OptionDto> REGION_OPTIONS = List.of(
+            OnboardingStepResponse.OptionDto.builder().label("서울").value("SEOUL").build(),
+            OnboardingStepResponse.OptionDto.builder().label("부산").value("BUSAN").build(),
+            OnboardingStepResponse.OptionDto.builder().label("대구").value("DAEGU").build(),
+            OnboardingStepResponse.OptionDto.builder().label("인천").value("INCHEON").build(),
+            OnboardingStepResponse.OptionDto.builder().label("광주").value("GWANGJU").build(),
+            OnboardingStepResponse.OptionDto.builder().label("대전").value("DAEJEON").build(),
+            OnboardingStepResponse.OptionDto.builder().label("울산").value("ULSAN").build(),
+            OnboardingStepResponse.OptionDto.builder().label("세종").value("SEJONG").build(),
+            OnboardingStepResponse.OptionDto.builder().label("경기").value("GYEONGGI").build(),
+            OnboardingStepResponse.OptionDto.builder().label("강원").value("GANGWON").build(),
+            OnboardingStepResponse.OptionDto.builder().label("충북").value("CHUNGBUK").build(),
+            OnboardingStepResponse.OptionDto.builder().label("충남").value("CHUNGNAM").build(),
+            OnboardingStepResponse.OptionDto.builder().label("전북").value("JEONBUK").build(),
+            OnboardingStepResponse.OptionDto.builder().label("전남").value("JEONNAM").build(),
+            OnboardingStepResponse.OptionDto.builder().label("경북").value("GYEONGBUK").build(),
+            OnboardingStepResponse.OptionDto.builder().label("경남").value("GYEONGNAM").build(),
+            OnboardingStepResponse.OptionDto.builder().label("제주").value("JEJU").build()
+    );
+
+    private static final Set<String> VALID_REGION_CODES = REGION_OPTIONS.stream()
+            .map(OnboardingStepResponse.OptionDto::getValue)
+            .collect(Collectors.toUnmodifiableSet());
 
     public OnboardingStepResponse getStep(int step) {
         return switch (step) {
@@ -68,8 +97,8 @@ public class OnboardingService {
             case 4 -> OnboardingStepResponse.builder()
                     .step(4).totalSteps(TOTAL_STEPS).progress(0.8)
                     .question("거주 지역별로 받을 수 있는 지역 정책도 있어요. 현재 어디에 살고 계신가요?")
-                    .answerType("TEXT")
-                    .options(List.of())
+                    .answerType("CHIP")
+                    .options(REGION_OPTIONS)
                     .isComplete(false).build();
             case 5 -> OnboardingStepResponse.builder()
                     .step(5).totalSteps(TOTAL_STEPS).progress(1.0)
@@ -95,7 +124,7 @@ public class OnboardingService {
 
         onboardingAnswerRepository.save(answer);
 
-        // step별 답변을 User 엔티티에 반영 (step1: age, step2: employmentType, step3: income)
+        // step별 답변을 User 엔티티에 반영 (step1: age, step2: employmentType, step3: income, step4: region)
         applyAnswerToUser(userId, request.getStep(), request.getValue());
 
         // 마지막 단계면 완료 처리
@@ -138,7 +167,7 @@ public class OnboardingService {
     }
 
     private void applyAnswerToUser(String userId, int step, String value) {
-        if (step != 1 && step != 2 && step != 3) return;
+        if (step != 1 && step != 2 && step != 3 && step != 4) return;
 
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("유저를 찾을 수 없습니다."));
@@ -147,6 +176,7 @@ public class OnboardingService {
             case 1 -> user.updateAge(resolveAge(value));
             case 2 -> user.updateEmploymentType(value);
             case 3 -> user.updateIncome(resolveIncome(value));
+            case 4 -> user.updateRegion(resolveRegion(value));
         }
 
         userRepository.save(user);
@@ -166,5 +196,12 @@ public class OnboardingService {
             throw new IllegalArgumentException("유효하지 않은 소득 코드입니다");
         }
         return income;
+    }
+
+    private String resolveRegion(String value) {
+        if (!VALID_REGION_CODES.contains(value)) {
+            throw new IllegalArgumentException("유효하지 않은 지역 코드입니다");
+        }
+        return value;
     }
 }

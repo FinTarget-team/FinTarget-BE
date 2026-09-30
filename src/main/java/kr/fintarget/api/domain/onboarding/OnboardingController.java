@@ -116,6 +116,12 @@ public class OnboardingController {
                                             """
                             ),
                             @ExampleObject(
+                                    name = "유효하지 않은 지역 코드 (4단계)",
+                                    value = """
+                                            {"status": 400, "message": "유효하지 않은 지역 코드입니다", "data": null}
+                                            """
+                            ),
+                            @ExampleObject(
                                     name = "유저를 찾을 수 없음",
                                     value = """
                                             {"status": 400, "message": "유저를 찾을 수 없습니다.", "data": null}
