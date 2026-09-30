@@ -66,7 +66,7 @@ public class OnboardingService {
         return switch (step) {
             case 1 -> OnboardingStepResponse.builder()
                     .step(1).totalSteps(TOTAL_STEPS).progress(0.2)
-                    .question("나이를 알면 받을 수 있는 정책이 달라져요! 어느 시기를 보내고 계신가요?")
+                    .question("나이를 알면 받을 수 있는 정책이 달라져요. 어느 시기를 보내고 계신가요?")
                     .answerType("CHIP")
                     .options(List.of(
                             OnboardingStepResponse.OptionDto.builder().label("청년 (~39세)").value("YOUTH").build(),
@@ -75,7 +75,7 @@ public class OnboardingService {
                     .isComplete(false).build();
             case 2 -> OnboardingStepResponse.builder()
                     .step(2).totalSteps(TOTAL_STEPS).progress(0.4)
-                    .question("고용 형태에 따라 신청 가능한 정책이 다르답니다. 현재 어떤 일을 하고 계신가요?")
+                    .question("고용 형태에 따라 신청 가능한 정책이 달라져요. 현재 어떤 일을 하고 계신가요?")
                     .answerType("CHIP")
                     .options(List.of(
                             OnboardingStepResponse.OptionDto.builder().label("직장인").value("EMPLOYED").build(),
@@ -86,7 +86,7 @@ public class OnboardingService {
                     .isComplete(false).build();
             case 3 -> OnboardingStepResponse.builder()
                     .step(3).totalSteps(TOTAL_STEPS).progress(0.6)
-                    .question("소득 수준에 맞는 청년 정책을 찾아드릴게요! 월 소득이 어느 정도인가요?")
+                    .question("소득 수준에 맞는 청년 정책을 찾아드릴게요. 월 소득이 어느 정도인가요?")
                     .answerType("CHIP")
                     .options(List.of(
                             OnboardingStepResponse.OptionDto.builder().label("200만원 미만").value("UNDER_2M").build(),
@@ -96,7 +96,7 @@ public class OnboardingService {
                     .isComplete(false).build();
             case 4 -> OnboardingStepResponse.builder()
                     .step(4).totalSteps(TOTAL_STEPS).progress(0.8)
-                    .question("거주 지역별로 받을 수 있는 지역 정책도 있어요. 현재 어디에 살고 계신가요?")
+                    .question("거주 지역에 따라 받을 수 있는 정책이 달라져요. 현재 어느 지역에 살고 계신가요?")
                     .answerType("CHIP")
                     .options(REGION_OPTIONS)
                     .isComplete(false).build();
