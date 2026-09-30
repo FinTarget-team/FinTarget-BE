@@ -62,4 +62,8 @@ public class User {
     public void updateEmploymentType(String employmentType) {
         this.employmentType = employmentType;
     }
+
+    public void updateRegion(String region) {
+        this.region = region;
+    }
 }
