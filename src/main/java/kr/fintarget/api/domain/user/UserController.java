@@ -67,7 +67,7 @@ public class UserController {
     @Operation(
             summary = "내 프로필 수정",
             description = "이름/이메일/지역/연령대/고용형태/소득구간을 수정합니다. 요청 필드 중 null인 값은 기존 값을 유지하고 변경하지 않습니다. " +
-                    "연령대/고용형태/소득구간에 허용되지 않은 코드(빈 문자열 포함)를 보내면 400으로 거부됩니다."
+                    "지역/연령대/고용형태/소득구간에 허용되지 않은 코드(빈 문자열 포함)를 보내면 400으로 거부됩니다."
     )
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(
@@ -83,6 +83,12 @@ public class UserController {
                                     name = "사용자를 찾을 수 없음",
                                     value = """
                                             {"status": 400, "message": "사용자를 찾을 수 없습니다.", "data": null}
+                                            """
+                            ),
+                            @ExampleObject(
+                                    name = "유효하지 않은 지역 코드",
+                                    value = """
+                                            {"status": 400, "message": "유효하지 않은 지역 코드입니다", "data": null}
                                             """
                             ),
                             @ExampleObject(

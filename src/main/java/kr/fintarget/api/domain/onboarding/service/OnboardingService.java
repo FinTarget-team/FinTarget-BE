@@ -7,14 +7,15 @@ import kr.fintarget.api.domain.onboarding.repository.OnboardingAnswerRepository;
 import kr.fintarget.api.domain.user.code.AgeGroup;
 import kr.fintarget.api.domain.user.code.EmploymentType;
 import kr.fintarget.api.domain.user.code.IncomeBracket;
+import kr.fintarget.api.domain.user.code.Region;
 import kr.fintarget.api.domain.user.entity.User;
 import kr.fintarget.api.domain.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Arrays;
 import java.util.List;
-import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -26,32 +27,9 @@ public class OnboardingService {
     private final OnboardingAnswerRepository onboardingAnswerRepository;
     private static final int TOTAL_STEPS = 5;
 
-    // 대한민국 17개 시/도 단위. value는 현재 Policy.region과 매칭되는 값이 아님(Policy.region이
-    // 아직 표준화된 지역 포맷을 갖고 있지 않아 매칭 불가 - PolicyMapper 참고).
-    // 1~3단계 CHIP과 동일하게 영문 코드 컨벤션을 사용.
-    private static final List<OnboardingStepResponse.OptionDto> REGION_OPTIONS = List.of(
-            OnboardingStepResponse.OptionDto.builder().label("서울").value("SEOUL").build(),
-            OnboardingStepResponse.OptionDto.builder().label("부산").value("BUSAN").build(),
-            OnboardingStepResponse.OptionDto.builder().label("대구").value("DAEGU").build(),
-            OnboardingStepResponse.OptionDto.builder().label("인천").value("INCHEON").build(),
-            OnboardingStepResponse.OptionDto.builder().label("광주").value("GWANGJU").build(),
-            OnboardingStepResponse.OptionDto.builder().label("대전").value("DAEJEON").build(),
-            OnboardingStepResponse.OptionDto.builder().label("울산").value("ULSAN").build(),
-            OnboardingStepResponse.OptionDto.builder().label("세종").value("SEJONG").build(),
-            OnboardingStepResponse.OptionDto.builder().label("경기").value("GYEONGGI").build(),
-            OnboardingStepResponse.OptionDto.builder().label("강원").value("GANGWON").build(),
-            OnboardingStepResponse.OptionDto.builder().label("충북").value("CHUNGBUK").build(),
-            OnboardingStepResponse.OptionDto.builder().label("충남").value("CHUNGNAM").build(),
-            OnboardingStepResponse.OptionDto.builder().label("전북").value("JEONBUK").build(),
-            OnboardingStepResponse.OptionDto.builder().label("전남").value("JEONNAM").build(),
-            OnboardingStepResponse.OptionDto.builder().label("경북").value("GYEONGBUK").build(),
-            OnboardingStepResponse.OptionDto.builder().label("경남").value("GYEONGNAM").build(),
-            OnboardingStepResponse.OptionDto.builder().label("제주").value("JEJU").build()
-    );
-
-    private static final Set<String> VALID_REGION_CODES = REGION_OPTIONS.stream()
-            .map(OnboardingStepResponse.OptionDto::getValue)
-            .collect(Collectors.toUnmodifiableSet());
+    private static final List<OnboardingStepResponse.OptionDto> REGION_OPTIONS = Arrays.stream(Region.values())
+            .map(region -> OnboardingStepResponse.OptionDto.builder().label(region.getLabel()).value(region.getCode()).build())
+            .collect(Collectors.toList());
 
     public OnboardingStepResponse getStep(int step) {
         return switch (step) {
@@ -198,9 +176,10 @@ public class OnboardingService {
     }
 
     private String resolveRegion(String value) {
-        if (!VALID_REGION_CODES.contains(value)) {
+        Region region = Region.fromCode(value);
+        if (region == null) {
             throw new IllegalArgumentException("유효하지 않은 지역 코드입니다");
         }
-        return value;
+        return region.getCode();
     }
 }
