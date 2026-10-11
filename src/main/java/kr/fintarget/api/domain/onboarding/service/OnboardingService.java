@@ -4,6 +4,8 @@ import kr.fintarget.api.domain.onboarding.dto.OnboardingAnswerRequest;
 import kr.fintarget.api.domain.onboarding.dto.OnboardingStepResponse;
 import kr.fintarget.api.domain.onboarding.entity.OnboardingAnswer;
 import kr.fintarget.api.domain.onboarding.repository.OnboardingAnswerRepository;
+import kr.fintarget.api.domain.user.code.AgeGroup;
+import kr.fintarget.api.domain.user.code.IncomeBracket;
 import kr.fintarget.api.domain.user.entity.User;
 import kr.fintarget.api.domain.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -11,7 +13,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -23,17 +24,6 @@ public class OnboardingService {
     private final UserRepository userRepository;
     private final OnboardingAnswerRepository onboardingAnswerRepository;
     private static final int TOTAL_STEPS = 5;
-
-    private static final Map<String, Integer> AGE_CODE_MAP = Map.of(
-            "YOUTH", 25,
-            "MIDDLE", 40
-    );
-
-    private static final Map<String, Long> INCOME_CODE_MAP = Map.of(
-            "UNDER_2M", 1_500_000L,
-            "200_300", 2_500_000L,
-            "OVER_3M", 3_500_000L
-    );
 
     // 대한민국 17개 시/도 단위. value는 현재 Policy.region과 매칭되는 값이 아님(Policy.region이
     // 아직 표준화된 지역 포맷을 갖고 있지 않아 매칭 불가 - PolicyMapper 참고).
@@ -183,19 +173,19 @@ public class OnboardingService {
     }
 
     private Integer resolveAge(String value) {
-        Integer age = AGE_CODE_MAP.get(value);
-        if (age == null) {
+        AgeGroup ageGroup = AgeGroup.fromCode(value);
+        if (ageGroup == null) {
             throw new IllegalArgumentException("유효하지 않은 나이 코드입니다");
         }
-        return age;
+        return ageGroup.getAge();
     }
 
     private Long resolveIncome(String value) {
-        Long income = INCOME_CODE_MAP.get(value);
-        if (income == null) {
+        IncomeBracket incomeBracket = IncomeBracket.fromCode(value);
+        if (incomeBracket == null) {
             throw new IllegalArgumentException("유효하지 않은 소득 코드입니다");
         }
-        return income;
+        return incomeBracket.getIncome();
     }
 
     private String resolveRegion(String value) {
