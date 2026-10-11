@@ -110,6 +110,12 @@ public class OnboardingController {
                                             """
                             ),
                             @ExampleObject(
+                                    name = "유효하지 않은 고용 형태 코드 (2단계)",
+                                    value = """
+                                            {"status": 400, "message": "유효하지 않은 고용 형태 코드입니다", "data": null}
+                                            """
+                            ),
+                            @ExampleObject(
                                     name = "유효하지 않은 소득 코드 (3단계)",
                                     value = """
                                             {"status": 400, "message": "유효하지 않은 소득 코드입니다", "data": null}

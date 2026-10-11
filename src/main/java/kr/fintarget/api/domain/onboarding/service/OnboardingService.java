@@ -5,6 +5,7 @@ import kr.fintarget.api.domain.onboarding.dto.OnboardingStepResponse;
 import kr.fintarget.api.domain.onboarding.entity.OnboardingAnswer;
 import kr.fintarget.api.domain.onboarding.repository.OnboardingAnswerRepository;
 import kr.fintarget.api.domain.user.code.AgeGroup;
+import kr.fintarget.api.domain.user.code.EmploymentType;
 import kr.fintarget.api.domain.user.code.IncomeBracket;
 import kr.fintarget.api.domain.user.entity.User;
 import kr.fintarget.api.domain.user.repository.UserRepository;
@@ -164,7 +165,7 @@ public class OnboardingService {
 
         switch (step) {
             case 1 -> user.updateAge(resolveAge(value));
-            case 2 -> user.updateEmploymentType(value);
+            case 2 -> user.updateEmploymentType(resolveEmploymentType(value));
             case 3 -> user.updateIncome(resolveIncome(value));
             case 4 -> user.updateRegion(resolveRegion(value));
         }
@@ -178,6 +179,14 @@ public class OnboardingService {
             throw new IllegalArgumentException("유효하지 않은 나이 코드입니다");
         }
         return ageGroup.getAge();
+    }
+
+    private String resolveEmploymentType(String value) {
+        EmploymentType employmentType = EmploymentType.fromCode(value);
+        if (employmentType == null) {
+            throw new IllegalArgumentException("유효하지 않은 고용 형태 코드입니다");
+        }
+        return employmentType.getCode();
     }
 
     private Long resolveIncome(String value) {

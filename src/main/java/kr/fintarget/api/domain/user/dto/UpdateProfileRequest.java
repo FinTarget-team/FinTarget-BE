@@ -11,4 +11,16 @@ public class UpdateProfileRequest {
 
     @Schema(description = "변경할 거주 지역. null이면 기존 값을 유지합니다.", example = "서울특별시 강남구", types = {"string", "null"})
     private String region;
+
+    @Schema(description = "변경할 연령대 코드. null이면 기존 값을 유지합니다. 허용되지 않은 코드는 400으로 거부됩니다.",
+            example = "YOUTH", allowableValues = {"YOUTH", "MIDDLE"}, types = {"string", "null"})
+    private String ageGroup;
+
+    @Schema(description = "변경할 고용 형태 코드. null이면 기존 값을 유지합니다. 허용되지 않은 코드는 400으로 거부됩니다.",
+            example = "EMPLOYED", allowableValues = {"EMPLOYED", "UNEMPLOYED", "STUDENT", "SELF_EMPLOYED"}, types = {"string", "null"})
+    private String employmentType;
+
+    @Schema(description = "변경할 소득 구간 코드. null이면 기존 값을 유지합니다. 허용되지 않은 코드는 400으로 거부됩니다.",
+            example = "UNDER_2M", allowableValues = {"UNDER_2M", "200_300", "OVER_3M"}, types = {"string", "null"})
+    private String incomeBracket;
 }
