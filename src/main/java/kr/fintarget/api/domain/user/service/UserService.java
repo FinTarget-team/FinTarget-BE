@@ -1,5 +1,8 @@
 package kr.fintarget.api.domain.user.service;
 
+import kr.fintarget.api.domain.user.code.AgeGroup;
+import kr.fintarget.api.domain.user.code.EmploymentType;
+import kr.fintarget.api.domain.user.code.IncomeBracket;
 import kr.fintarget.api.domain.user.dto.UpdateProfileRequest;
 import kr.fintarget.api.domain.user.dto.UserProfileResponse;
 import kr.fintarget.api.domain.user.entity.User;
@@ -35,7 +38,42 @@ public class UserService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
         user.updateProfile(request.getName(), request.getEmail(), request.getRegion());
+
+        if (request.getAgeGroup() != null) {
+            user.updateAge(resolveAge(request.getAgeGroup()));
+        }
+        if (request.getEmploymentType() != null) {
+            user.updateEmploymentType(resolveEmploymentType(request.getEmploymentType()));
+        }
+        if (request.getIncomeBracket() != null) {
+            user.updateIncome(resolveIncome(request.getIncomeBracket()));
+        }
+
         return UserProfileResponse.from(user);
+    }
+
+    private Integer resolveAge(String ageGroupCode) {
+        AgeGroup ageGroup = AgeGroup.fromCode(ageGroupCode);
+        if (ageGroup == null) {
+            throw new IllegalArgumentException("유효하지 않은 나이 코드입니다");
+        }
+        return ageGroup.getAge();
+    }
+
+    private Long resolveIncome(String incomeBracketCode) {
+        IncomeBracket incomeBracket = IncomeBracket.fromCode(incomeBracketCode);
+        if (incomeBracket == null) {
+            throw new IllegalArgumentException("유효하지 않은 소득 코드입니다");
+        }
+        return incomeBracket.getIncome();
+    }
+
+    private String resolveEmploymentType(String employmentTypeCode) {
+        EmploymentType employmentType = EmploymentType.fromCode(employmentTypeCode);
+        if (employmentType == null) {
+            throw new IllegalArgumentException("유효하지 않은 고용 형태 코드입니다");
+        }
+        return employmentType.getCode();
     }
 
     @Transactional

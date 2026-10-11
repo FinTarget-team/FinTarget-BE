@@ -95,6 +95,37 @@ class OnboardingServiceTest {
     }
 
     @Test
+    void step2_답변_제출시_유효한_고용형태_코드면_유저_employmentType이_갱신되고_3단계_질문을_반환한다() {
+        String userId = UUID.randomUUID().toString();
+        User user = User.builder().id(userId).provider("kakao").providerId("provider-1").build();
+
+        when(onboardingAnswerRepository.existsByUserIdAndStep(UUID.fromString(userId), 1)).thenReturn(true);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+        OnboardingStepResponse response = onboardingService.submitAnswer(userId, answerRequest(2, "STUDENT"));
+
+        assertThat(response.getStep()).isEqualTo(3);
+        assertThat(user.getEmploymentType()).isEqualTo("STUDENT");
+        verify(userRepository).save(user);
+    }
+
+    @Test
+    void step2_답변_제출시_유효하지_않은_고용형태_코드면_400_예외가_발생한다() {
+        String userId = UUID.randomUUID().toString();
+
+        when(onboardingAnswerRepository.existsByUserIdAndStep(UUID.fromString(userId), 1)).thenReturn(true);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(
+                User.builder().id(userId).provider("kakao").providerId("provider-1").build()
+        ));
+
+        assertThatThrownBy(() -> onboardingService.submitAnswer(userId, answerRequest(2, "FREELANCER")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("유효하지 않은 고용 형태 코드입니다");
+
+        verify(userRepository, never()).save(any());
+    }
+
+    @Test
     void step4_답변_제출시_이전_단계를_완료하지_않았으면_예외가_발생한다() {
         String userId = UUID.randomUUID().toString();
 
