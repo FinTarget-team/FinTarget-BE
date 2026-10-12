@@ -55,9 +55,10 @@ public class YouthCenterApiClient {
         try {
             YouthCenterApiResponse response = youthCenterWebClient.get()
                     .uri(uriBuilder -> uriBuilder
-                            .queryParam("openApiVlak", apiKey)
-                            .queryParam("pageIndex", pageIndex)
-                            .queryParam("display", display)
+                            .queryParam("apiKeyNm", apiKey)
+                            .queryParam("pageNum", pageIndex)
+                            .queryParam("pageSize", display)
+                            .queryParam("rtnType", "json")
                             .build())
                     .retrieve()
                     .onStatus(HttpStatusCode::is4xxClientError, clientResponse ->
