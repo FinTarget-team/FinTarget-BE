@@ -8,6 +8,9 @@ import org.springframework.web.reactive.function.client.WebClient;
 @Configuration
 public class WebClientConfig {
 
+    // 기본 한도(256KB)로는 온통청년 100건 페이지(2026-10 실측 최대 약 330KB)를 받지 못한다
+    static final int MAX_IN_MEMORY_SIZE = 2 * 1024 * 1024;
+
     @Value("${youthcenter.api.base-url}")
     private String youthCenterBaseUrl;
 
@@ -18,6 +21,7 @@ public class WebClientConfig {
     public WebClient youthCenterWebClient() {
         return WebClient.builder()
                 .baseUrl(youthCenterBaseUrl)
+                .codecs(configurer -> configurer.defaultCodecs().maxInMemorySize(MAX_IN_MEMORY_SIZE))
                 .build();
     }
 
@@ -25,6 +29,7 @@ public class WebClientConfig {
     public WebClient kinfaWebClient() {
         return WebClient.builder()
                 .baseUrl(kinfaBaseUrl)
+                .codecs(configurer -> configurer.defaultCodecs().maxInMemorySize(MAX_IN_MEMORY_SIZE))
                 .build();
     }
 }
