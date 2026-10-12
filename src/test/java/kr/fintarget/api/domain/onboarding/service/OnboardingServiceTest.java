@@ -1,5 +1,6 @@
 package kr.fintarget.api.domain.onboarding.service;
 
+import kr.fintarget.api.domain.goal.service.GoalService;
 import kr.fintarget.api.domain.onboarding.dto.OnboardingAnswerRequest;
 import kr.fintarget.api.domain.onboarding.dto.OnboardingStepResponse;
 import kr.fintarget.api.domain.onboarding.entity.OnboardingAnswer;
@@ -19,6 +20,8 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -31,6 +34,9 @@ class OnboardingServiceTest {
 
     @Mock
     private OnboardingAnswerRepository onboardingAnswerRepository;
+
+    @Mock
+    private GoalService goalService;
 
     @InjectMocks
     private OnboardingService onboardingService;
@@ -137,5 +143,49 @@ class OnboardingServiceTest {
 
         verify(onboardingAnswerRepository, never()).save(any());
         verify(userRepository, never()).findById(any());
+    }
+
+    @Test
+    void step5_답변_제출시_목표가_생성되고_온보딩이_완료된다() {
+        String userId = UUID.randomUUID().toString();
+        User user = User.builder().id(userId).provider("kakao").providerId("provider-1").build();
+
+        when(onboardingAnswerRepository.existsByUserIdAndStep(UUID.fromString(userId), 4)).thenReturn(true);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+        OnboardingStepResponse response = onboardingService.submitAnswer(userId, answerRequest(5, " 30000000 "));
+
+        assertThat(response.isComplete()).isTrue();
+        verify(goalService).upsertFromOnboarding(UUID.fromString(userId), 30_000_000L);
+        verify(userRepository).save(user);
+    }
+
+    @Test
+    void step5_답변이_숫자가_아니면_400_예외가_발생하고_목표를_만들지_않는다() {
+        String userId = UUID.randomUUID().toString();
+
+        when(onboardingAnswerRepository.existsByUserIdAndStep(UUID.fromString(userId), 4)).thenReturn(true);
+
+        assertThatThrownBy(() -> onboardingService.submitAnswer(userId, answerRequest(5, "3천만원")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("목표 금액은 숫자로 입력해주세요");
+
+        verify(goalService, never()).upsertFromOnboarding(any(), anyLong());
+        verify(userRepository, never()).save(any());
+    }
+
+    @Test
+    void step5_답변이_Long_범위를_넘는_자릿수면_상한_초과값으로_목표_검증에_넘긴다() {
+        String userId = UUID.randomUUID().toString();
+
+        when(onboardingAnswerRepository.existsByUserIdAndStep(UUID.fromString(userId), 4)).thenReturn(true);
+        doThrow(new IllegalArgumentException("목표 금액은 50억 원 이하로 입력해주세요"))
+                .when(goalService).upsertFromOnboarding(UUID.fromString(userId), Long.MAX_VALUE);
+
+        assertThatThrownBy(() -> onboardingService.submitAnswer(userId, answerRequest(5, "99999999999999999999")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("목표 금액은 50억 원 이하로 입력해주세요");
+
+        verify(userRepository, never()).save(any());
     }
 }
