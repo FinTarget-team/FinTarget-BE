@@ -75,4 +75,16 @@ public class Policy {
         policy.source = source;
         return policy;
     }
+
+    // 외부 API에서 다시 받아온 값으로 내용을 갱신한다 (externalId/source는 식별자라 유지)
+    public void updateFrom(Policy fetched) {
+        this.name = fetched.name;
+        this.description = fetched.description;
+        this.minAge = fetched.minAge;
+        this.maxAge = fetched.maxAge;
+        this.incomeLimit = fetched.incomeLimit;
+        this.benefitAmount = fetched.benefitAmount;
+        this.policyType = fetched.policyType;
+        this.region = fetched.region;
+    }
 }

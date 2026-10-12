@@ -11,7 +11,9 @@ public class KinfaPolicyMapper {
 
     public static final String SOURCE = "KINFA";
 
-    // snq는 basYm(기준연월) 내에서만 유효한 순번이라 그 자체로는 전역 고유값이 아님 -> basYm과 조합해 externalId 구성
+    // snq는 기준연월(basYm)마다 다시 매겨지는 순번이라 같은 snq가 다른 상품을 가리킬 수 있고,
+    // basYm을 붙이면 같은 상품이 달마다 중복 저장된다. 월 안에서 고유하고 월이 바뀌어도 유지되는
+    // 제공기관명 + 상품명 조합을 상품 식별자로 쓴다 (2026-10 실데이터 기준 검증).
     private static final Pattern MANWON_PATTERN = Pattern.compile("([\\d,]+)\\s*만원");
 
     private KinfaPolicyMapper() {
@@ -33,7 +35,7 @@ public class KinfaPolicyMapper {
     }
 
     public static String toExternalId(KinfaItem item) {
-        return item.basYm() + "-" + item.snq();
+        return item.ofrInstNm() + "|" + item.finPrdNm();
     }
 
     private static PolicyType resolvePolicyType(String usge) {

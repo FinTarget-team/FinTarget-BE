@@ -21,4 +21,8 @@ public interface PolicyRepository extends JpaRepository<Policy, UUID> {
     Optional<Policy> findByExternalId(String externalId);
 
     boolean existsByExternalIdAndSource(String externalId, String source);
+
+    Optional<Policy> findByExternalIdAndSource(String externalId, String source);
+
+    List<Policy> findBySource(String source);
 }

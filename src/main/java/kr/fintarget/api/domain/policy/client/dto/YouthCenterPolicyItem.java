@@ -23,6 +23,7 @@ public record YouthCenterPolicyItem(
         String refUrlAddr1,
         String aplyUrlAddr,
         String frstRegDt,
-        String lastMdfcnDt
+        String lastMdfcnDt,
+        String aplyPrdSeCd
 ) {
 }

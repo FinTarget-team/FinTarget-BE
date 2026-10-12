@@ -46,7 +46,7 @@ class KinfaPolicyMapperTest {
         assertThat(policy.getBenefitAmount()).isEqualTo(35_000_000L);
         assertThat(policy.getPolicyType()).isEqualTo(PolicyType.FINANCE_WELFARE);
         assertThat(policy.getRegion()).isEqualTo("전국");
-        assertThat(policy.getExternalId()).isEqualTo("202607-1");
+        assertThat(policy.getExternalId()).isEqualTo("14개 취급은행|새희망홀씨Ⅱ");
         assertThat(policy.getSource()).isEqualTo("KINFA");
     }
 
@@ -68,10 +68,11 @@ class KinfaPolicyMapperTest {
     }
 
     @Test
-    void basYm과_snq를_조합해_externalId를_만든다() throws Exception {
+    void 제공기관명과_상품명을_조합해_externalId를_만든다() throws Exception {
         KinfaItem item = parseItem();
 
-        assertThat(KinfaPolicyMapper.toExternalId(item)).isEqualTo("202607-1");
+        // 기준연월(basYm)/순번(snq)은 달마다 바뀌므로 식별자에 포함하지 않는다
+        assertThat(KinfaPolicyMapper.toExternalId(item)).isEqualTo("14개 취급은행|새희망홀씨Ⅱ");
     }
 
     private KinfaItem parseItem() throws Exception {
