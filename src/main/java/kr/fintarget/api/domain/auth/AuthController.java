@@ -10,6 +10,7 @@ import kr.fintarget.api.domain.auth.dto.AuthResponse;
 import kr.fintarget.api.domain.auth.dto.KakaoLoginRequest;
 import kr.fintarget.api.domain.auth.dto.KakaoTokenLoginRequest;
 import kr.fintarget.api.domain.auth.dto.NaverLoginRequest;
+import kr.fintarget.api.domain.auth.dto.NaverTokenLoginRequest;
 import kr.fintarget.api.domain.auth.dto.TokenRefreshResponse;
 import kr.fintarget.api.domain.user.entity.User;
 import kr.fintarget.api.domain.user.repository.UserRepository;
@@ -30,6 +31,7 @@ public class AuthController {
     private final JwtUtil jwtUtil;
     private final UserRepository userRepository;
     private final KakaoOAuthClient kakaoOAuthClient;
+    private final NaverOAuthClient naverOAuthClient;
     private final BlacklistedTokenRepository blacklistedTokenRepository;
 
     private ResponseEntity<ApiResponse<AuthResponse>> socialLogin(String providerId, String provider) {
@@ -154,6 +156,51 @@ public class AuthController {
     @PostMapping("/naver/login")
     public ResponseEntity<ApiResponse<AuthResponse>> naverLogin(@RequestBody NaverLoginRequest request) {
         return socialLogin(request.getAuthorizationCode(), "NAVER");
+    }
+
+    @Operation(
+            summary = "네이버 액세스 토큰 로그인 (네이티브 앱 전용)",
+            description = "iOS/Android 네이버 SDK 로그인 성공 시 SDK가 발급한 네이버 액세스 토큰(accessToken)으로 네이버 사용자 정보를 조회해 " +
+                    "로그인/회원가입을 처리합니다. /auth/naver/login과 달리 서버가 네이버 토큰 교환 API를 호출하지 않고 전달받은 " +
+                    "액세스 토큰을 그대로 사용합니다. " +
+                    "기존 회원이면 200, 신규 회원이면 자동 가입 후 201로 응답합니다. 응답 바디 구조는 두 경우 동일합니다."
+    )
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "200",
+                    description = "기존 회원 로그인 성공",
+                    useReturnTypeSchema = true
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "201",
+                    description = "신규 회원 자동 가입 및 로그인 성공",
+                    useReturnTypeSchema = true
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "401",
+                    description = "유효하지 않거나 만료된 네이버 액세스 토큰",
+                    content = @Content(examples = @ExampleObject(
+                            name = "유효하지 않은 네이버 액세스 토큰",
+                            value = """
+                                    {"status": 401, "message": "유효하지 않은 네이버 액세스 토큰입니다.", "data": null}
+                                    """
+                    ))
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "500",
+                    description = "네이버 인증 서버 호출 실패 등 처리 중 오류. message는 원인 예외 메시지이며 null일 수 있습니다.",
+                    content = @Content(examples = @ExampleObject(
+                            name = "서버 오류",
+                            value = """
+                                    {"status": 500, "message": null, "data": null}
+                                    """
+                    ))
+            )
+    })
+    @PostMapping("/naver/login/token")
+    public ResponseEntity<ApiResponse<AuthResponse>> naverTokenLogin(@RequestBody NaverTokenLoginRequest request) {
+        String naverUserId = naverOAuthClient.getNaverUserId(request.getAccessToken());
+        return socialLogin(naverUserId, "NAVER");
     }
 
     @Operation(
