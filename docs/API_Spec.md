@@ -144,6 +144,9 @@ Authorization: Bearer {accessToken}
   "value": "YOUTH"
 }
 ```
+- 5단계 `value`는 목표 금액(원, 숫자 문자열, 1원 이상 50억 원 이하)
+- 5단계 제출 시 목표(Goal)가 자동 생성됨: `title` "내 목표", `currentAmount` 0, `deadline` 1년 후, `deadlineDefaulted` true
+- 5단계를 다시 제출하면 새로 만들지 않고 기존 목표의 `targetAmount`만 갱신
 
 ---
 
@@ -159,6 +162,7 @@ Authorization: Bearer {accessToken}
   "targetAmount": 100000000,
   "currentAmount": 5000000,
   "deadline": "2027-12-31",
+  "deadlineDefaulted": false,
   "status": "ACTIVE",
   "createdAt": "datetime",
   "updatedAt": "datetime",
@@ -168,6 +172,8 @@ Authorization: Bearer {accessToken}
 ```
 > `status` 값: `ACTIVE` | `COMPLETED` | `ABANDONED`
 > `dday`: 양수=남은 일수, 0=오늘, 음수=기한 초과
+> `deadlineDefaulted`: 온보딩 자동 생성 시 채운 기본 마감일(생성일 + 1년)이면 `true`. 목표 수정에서 마감일을 바꾸면 `false`. `true`일 때는 시뮬레이션 성공 확률을 노출하지 않음
+> `targetAmount`: 1원 이상 50억 원 이하 (생성/수정 공통)
 
 ### 목표 생성
 - **POST** `/api/goals`
