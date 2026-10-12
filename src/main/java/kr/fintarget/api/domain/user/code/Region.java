@@ -48,4 +48,15 @@ public enum Region {
                 .findFirst()
                 .orElse(null);
     }
+
+    public static Region fromLabel(String label) {
+        if (label == null) {
+            return null;
+        }
+        String trimmed = label.trim();
+        return Arrays.stream(values())
+                .filter(region -> region.label.equals(trimmed))
+                .findFirst()
+                .orElse(null);
+    }
 }

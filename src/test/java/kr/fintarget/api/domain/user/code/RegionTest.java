@@ -32,4 +32,22 @@ class RegionTest {
         assertThat(Region.fromCode(null)).isNull();
         assertThat(Region.fromCode("")).isNull();
     }
+
+    @Test
+    void label로_조회하면_일치하는_enum을_반환한다() {
+        assertThat(Region.fromLabel("서울")).isEqualTo(Region.SEOUL);
+        assertThat(Region.fromLabel("제주")).isEqualTo(Region.JEJU);
+    }
+
+    @Test
+    void label_앞뒤_공백은_제거하고_비교한다() {
+        assertThat(Region.fromLabel(" 서울 ")).isEqualTo(Region.SEOUL);
+    }
+
+    @Test
+    void label이_매핑에_없거나_null이면_예외없이_null을_반환한다() {
+        assertThat(Region.fromLabel("아틀란티스")).isNull();
+        assertThat(Region.fromLabel(null)).isNull();
+        assertThat(Region.fromLabel("")).isNull();
+    }
 }
