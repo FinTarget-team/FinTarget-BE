@@ -9,7 +9,11 @@ public class UpdateProfileRequest {
     @Schema(description = "변경할 이메일. null이면 기존 값을 유지합니다.", example = "user@example.com", types = {"string", "null"})
     private String email;
 
-    @Schema(description = "변경할 거주 지역. null이면 기존 값을 유지합니다.", example = "서울특별시 강남구", types = {"string", "null"})
+    @Schema(description = "변경할 거주 지역 코드. null이면 기존 값을 유지합니다. 허용되지 않은 코드(빈 문자열 포함)는 400으로 거부됩니다.",
+            example = "SEOUL",
+            allowableValues = {"SEOUL", "BUSAN", "DAEGU", "INCHEON", "GWANGJU", "DAEJEON", "ULSAN", "SEJONG",
+                    "GYEONGGI", "GANGWON", "CHUNGBUK", "CHUNGNAM", "JEONBUK", "JEONNAM", "GYEONGBUK", "GYEONGNAM", "JEJU"},
+            types = {"string", "null"})
     private String region;
 
     @Schema(description = "변경할 연령대 코드. null이면 기존 값을 유지합니다. 허용되지 않은 코드는 400으로 거부됩니다.",

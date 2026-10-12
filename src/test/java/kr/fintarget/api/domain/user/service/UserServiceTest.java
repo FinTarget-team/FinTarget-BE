@@ -203,6 +203,58 @@ class UserServiceTest {
     }
 
     @Test
+    void region이_정상_코드면_변경된다() {
+        User user = User.builder().id("user-1").provider("KAKAO").providerId("kakao-1").region("BUSAN").build();
+        when(userRepository.findById("user-1")).thenReturn(Optional.of(user));
+
+        UpdateProfileRequest request = updateRequest(null, null, "SEOUL", null, null, null);
+
+        UserProfileResponse response = userService.updateProfile("user-1", request);
+
+        assertThat(user.getRegion()).isEqualTo("SEOUL");
+        assertThat(response.getRegion()).isEqualTo("SEOUL");
+    }
+
+    @Test
+    void region이_유효하지_않은_코드면_400_예외가_발생하고_값이_바뀌지_않는다() {
+        User user = User.builder().id("user-1").provider("KAKAO").providerId("kakao-1").region("BUSAN").build();
+        when(userRepository.findById("user-1")).thenReturn(Optional.of(user));
+
+        UpdateProfileRequest request = updateRequest(null, null, "ATLANTIS", null, null, null);
+
+        assertThatThrownBy(() -> userService.updateProfile("user-1", request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("유효하지 않은 지역 코드입니다");
+        assertThat(user.getRegion()).isEqualTo("BUSAN");
+    }
+
+    @Test
+    void region이_빈_문자열이면_400_예외가_발생한다() {
+        User user = User.builder().id("user-1").provider("KAKAO").providerId("kakao-1").region("BUSAN").build();
+        when(userRepository.findById("user-1")).thenReturn(Optional.of(user));
+
+        UpdateProfileRequest request = updateRequest(null, null, "", null, null, null);
+
+        assertThatThrownBy(() -> userService.updateProfile("user-1", request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("유효하지 않은 지역 코드입니다");
+        assertThat(user.getRegion()).isEqualTo("BUSAN");
+    }
+
+    @Test
+    void region이_null이면_기존_값을_유지한다() {
+        User user = User.builder().id("user-1").provider("KAKAO").providerId("kakao-1").region("BUSAN").build();
+        when(userRepository.findById("user-1")).thenReturn(Optional.of(user));
+
+        UpdateProfileRequest request = updateRequest(null, null, null, null, null, null);
+
+        UserProfileResponse response = userService.updateProfile("user-1", request);
+
+        assertThat(user.getRegion()).isEqualTo("BUSAN");
+        assertThat(response.getRegion()).isEqualTo("BUSAN");
+    }
+
+    @Test
     void name_email_region_수정은_기존과_동일하게_동작한다() {
         User user = User.builder()
                 .id("user-1").provider("KAKAO").providerId("kakao-1")

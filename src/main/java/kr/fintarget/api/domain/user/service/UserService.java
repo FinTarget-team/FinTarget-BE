@@ -3,6 +3,7 @@ package kr.fintarget.api.domain.user.service;
 import kr.fintarget.api.domain.user.code.AgeGroup;
 import kr.fintarget.api.domain.user.code.EmploymentType;
 import kr.fintarget.api.domain.user.code.IncomeBracket;
+import kr.fintarget.api.domain.user.code.Region;
 import kr.fintarget.api.domain.user.dto.UpdateProfileRequest;
 import kr.fintarget.api.domain.user.dto.UserProfileResponse;
 import kr.fintarget.api.domain.user.entity.User;
@@ -37,7 +38,9 @@ public class UserService {
     public UserProfileResponse updateProfile(String userId, UpdateProfileRequest request) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
-        user.updateProfile(request.getName(), request.getEmail(), request.getRegion());
+
+        String validatedRegion = request.getRegion() != null ? resolveRegion(request.getRegion()) : null;
+        user.updateProfile(request.getName(), request.getEmail(), validatedRegion);
 
         if (request.getAgeGroup() != null) {
             user.updateAge(resolveAge(request.getAgeGroup()));
@@ -74,6 +77,14 @@ public class UserService {
             throw new IllegalArgumentException("유효하지 않은 고용 형태 코드입니다");
         }
         return employmentType.getCode();
+    }
+
+    private String resolveRegion(String regionCode) {
+        Region region = Region.fromCode(regionCode);
+        if (region == null) {
+            throw new IllegalArgumentException("유효하지 않은 지역 코드입니다");
+        }
+        return region.getCode();
     }
 
     @Transactional
