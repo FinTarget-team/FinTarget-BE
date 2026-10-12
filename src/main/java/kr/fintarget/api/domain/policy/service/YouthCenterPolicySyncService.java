@@ -4,12 +4,12 @@ import kr.fintarget.api.domain.policy.client.YouthCenterApiClient;
 import kr.fintarget.api.domain.policy.client.dto.YouthCenterPolicyItem;
 import kr.fintarget.api.domain.policy.entity.Policy;
 import kr.fintarget.api.domain.policy.mapper.YouthCenterPolicyMapper;
-import kr.fintarget.api.domain.policy.repository.PolicyRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.List;
 
 @Slf4j
@@ -17,28 +17,24 @@ import java.util.List;
 @RequiredArgsConstructor
 public class YouthCenterPolicySyncService {
 
+    private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
+
     private final YouthCenterApiClient youthCenterApiClient;
-    private final PolicyRepository policyRepository;
+    private final PolicySyncWriter policySyncWriter;
 
     @Transactional
-    public int sync(int pageIndex, int display) {
-        List<YouthCenterPolicyItem> items = youthCenterApiClient.fetchHousingAndFinancePolicies(pageIndex, display);
+    public int sync() {
+        List<YouthCenterPolicyItem> items =
+                youthCenterApiClient.fetchOpenHousingAndFinancePolicies(LocalDate.now(SEOUL));
 
-        int savedCount = 0;
-        for (YouthCenterPolicyItem item : items) {
-            if (item.plcyNo() == null || item.plcyNo().isBlank()) {
-                continue;
-            }
-            if (policyRepository.existsByExternalIdAndSource(item.plcyNo(), YouthCenterPolicyMapper.SOURCE)) {
-                continue;
-            }
+        List<Policy> policies = items.stream()
+                .filter(item -> item.plcyNo() != null && !item.plcyNo().isBlank())
+                .map(YouthCenterPolicyMapper::toPolicy)
+                .toList();
+        PolicySyncWriter.SyncCounts counts = policySyncWriter.apply(YouthCenterPolicyMapper.SOURCE, policies);
 
-            Policy policy = YouthCenterPolicyMapper.toPolicy(item);
-            policyRepository.save(policy);
-            savedCount++;
-        }
-
-        log.info("온통청년 정책 동기화 완료: 조회 {}건 중 {}건 신규 저장", items.size(), savedCount);
-        return savedCount;
+        log.info("온통청년 정책 동기화 완료: 조회 {}건 - 신규 {}건, 갱신 {}건, 삭제 {}건",
+                items.size(), counts.saved(), counts.updated(), counts.deleted());
+        return counts.saved();
     }
 }

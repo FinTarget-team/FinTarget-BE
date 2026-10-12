@@ -15,9 +15,6 @@ import java.util.function.IntSupplier;
 @RequiredArgsConstructor
 public class PolicySyncOrchestrator {
 
-    private static final int PAGE_INDEX = 1;
-    private static final int PAGE_SIZE = 100;
-
     private final YouthCenterPolicySyncService youthCenterPolicySyncService;
     private final KinfaPolicySyncService kinfaPolicySyncService;
 
@@ -25,9 +22,9 @@ public class PolicySyncOrchestrator {
         long start = System.currentTimeMillis();
 
         SourceResult youthCenterResult = runSync("YOUTH_CENTER",
-                () -> youthCenterPolicySyncService.sync(PAGE_INDEX, PAGE_SIZE));
+                () -> youthCenterPolicySyncService.sync());
         SourceResult kinfaResult = runSync("KINFA",
-                () -> kinfaPolicySyncService.sync(PAGE_INDEX, PAGE_SIZE));
+                () -> kinfaPolicySyncService.sync());
 
         long elapsedMs = System.currentTimeMillis() - start;
         int failedSourceCount = (youthCenterResult.failed() ? 1 : 0) + (kinfaResult.failed() ? 1 : 0);
