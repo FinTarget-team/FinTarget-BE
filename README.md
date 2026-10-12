@@ -108,4 +108,6 @@ chore: application.yml gitignore 처리 (#3)
 - **수동 트리거 API**: 인증된 사용자로 `POST /api/admin/policy/sync` 호출 (온통청년 + KINFA 순차 동기화, 결과를 바로 응답으로 확인 가능)
 - **스케줄러 활성화**: `application.yml`의 `policy.sync.scheduler.enabled: true`로 바꾸면 매일 새벽 3시(Asia/Seoul)에 자동 동기화
 
+또한 스케줄러가 활성화된 환경(배포 기본값)에서는 앱 기동 시 정책 테이블이 비어 있으면 즉시 1회 동기화합니다(`PolicyInitialSyncRunner`). 새로 배포하거나 DB를 초기화한 직후 새벽 3시까지 정책이 비어 있는 문제를 막기 위함입니다.
+
 두 방법 모두 `YOUTH_CENTER_API_KEY`, `KINFA_API_KEY` 등 위 환경변수가 설정되어 있어야 동작합니다.
