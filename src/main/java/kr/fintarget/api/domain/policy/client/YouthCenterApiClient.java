@@ -33,12 +33,19 @@ public class YouthCenterApiClient {
     private static final int PAGE_SIZE = 100;
     // 무한 루프/과다 호출 방지용 상한 (2026-10 기준 전체 3,234건 = 33페이지)
     private static final int MAX_PAGES = 100;
+    // 온통청년 API는 연속 호출 시 간헐적으로 500(HTML) 또는 400(e002 invalid param data)을 반환하고,
+    // 같은 요청을 다시 보내면 성공한다 (2026-10-12 실측). 페이지 단위로 재시도하고 호출 간격을 둔다.
+    private static final int MAX_ATTEMPTS = 3;
     // 신청기간구분코드: 0057001 특정기간(aplyYmd에 기간 있음), 0057002 상시, 0057003 마감
     private static final String APPLY_PERIOD_CLOSED = "0057003";
     private static final Pattern YMD_PATTERN = Pattern.compile("\\d{8}");
     private static final DateTimeFormatter YMD = DateTimeFormatter.BASIC_ISO_DATE;
 
     private final WebClient youthCenterWebClient;
+
+    // 테스트에서 대기 없이 돌릴 수 있도록 final이 아님
+    private Duration pageInterval = Duration.ofMillis(200);
+    private Duration retryBackoff = Duration.ofSeconds(1);
 
     @Value("${youthcenter.api.key}")
     private String apiKey;
@@ -51,7 +58,10 @@ public class YouthCenterApiClient {
         List<YouthCenterPolicyItem> collected = new ArrayList<>();
 
         for (int pageNum = 1; pageNum <= MAX_PAGES; pageNum++) {
-            YouthCenterApiResponse response = call(pageNum, PAGE_SIZE);
+            if (pageNum > 1) {
+                sleep(pageInterval);
+            }
+            YouthCenterApiResponse response = callWithRetry(pageNum, PAGE_SIZE);
             if (response.result() == null || response.result().youthPolicyList() == null
                     || response.result().youthPolicyList().isEmpty()) {
                 break;
@@ -72,6 +82,33 @@ public class YouthCenterApiClient {
                 .filter(YouthCenterApiClient::isHousingOrFinance)
                 .filter(item -> isOpen(item, today))
                 .toList();
+    }
+
+    private YouthCenterApiResponse callWithRetry(int pageNum, int pageSize) {
+        for (int attempt = 1; ; attempt++) {
+            try {
+                return call(pageNum, pageSize);
+            } catch (YouthCenterApiException e) {
+                if (attempt >= MAX_ATTEMPTS) {
+                    throw e;
+                }
+                log.warn("온통청년 API {}페이지 호출 실패, 재시도합니다 ({}/{}): {}",
+                        pageNum, attempt, MAX_ATTEMPTS, e.getMessage());
+                sleep(retryBackoff.multipliedBy(attempt));
+            }
+        }
+    }
+
+    private static void sleep(Duration duration) {
+        if (duration.isZero()) {
+            return;
+        }
+        try {
+            Thread.sleep(duration.toMillis());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new YouthCenterApiException("온통청년 API 호출 대기 중 인터럽트되었습니다.", e);
+        }
     }
 
     static boolean isOpen(YouthCenterPolicyItem item, LocalDate today) {
