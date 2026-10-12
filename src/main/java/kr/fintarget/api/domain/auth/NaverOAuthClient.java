@@ -8,7 +8,11 @@ import java.util.Map;
 @Component
 public class NaverOAuthClient {
 
-    private final RestClient restClient = RestClient.create();
+    private final RestClient restClient;
+
+    public NaverOAuthClient(RestClient.Builder restClientBuilder) {
+        this.restClient = restClientBuilder.build();
+    }
 
     public String getNaverUserId(String accessToken) {
         Map<String, Object> apiResponse = restClient.get()
@@ -23,6 +27,11 @@ public class NaverOAuthClient {
         if (!(apiResponse.get("response") instanceof Map<?, ?> profile)) {
             throw new NaverOAuthException("네이버 사용자 정보 응답 형식이 올바르지 않습니다.");
         }
-        return String.valueOf(profile.get("id"));
+
+        Object id = profile.get("id");
+        if (id == null || String.valueOf(id).isBlank()) {
+            throw new NaverOAuthException("네이버 사용자 정보 응답에 id가 없습니다.");
+        }
+        return String.valueOf(id);
     }
 }
