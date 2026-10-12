@@ -18,6 +18,8 @@ public record GoalResponse(
         Long currentAmount,
         @Schema(description = "목표 달성 기한 (yyyy-MM-dd)", example = "2028-12-31")
         LocalDate deadline,
+        @Schema(description = "마감일이 온보딩 자동 생성 시 채워진 기본값(생성일 + 1년)인지 여부. true면 사용자가 정한 마감일이 아니므로 시뮬레이션 성공 확률을 노출하지 않는 것을 권장합니다. 목표 수정에서 마감일을 바꾸면 false가 됩니다.", example = "false")
+        boolean deadlineDefaulted,
         @Schema(description = "목표 상태", example = "ACTIVE", allowableValues = {"ACTIVE", "COMPLETED", "ABANDONED"})
         String status,
         @Schema(description = "목표 생성 시각", example = "2026-01-10T09:00:00")
@@ -41,6 +43,7 @@ public record GoalResponse(
                 goal.getTargetAmount(),
                 goal.getCurrentAmount(),
                 goal.getDeadline(),
+                goal.isDeadlineDefaulted(),
                 goal.getStatus().name(),
                 goal.getCreatedAt(),
                 goal.getUpdatedAt(),

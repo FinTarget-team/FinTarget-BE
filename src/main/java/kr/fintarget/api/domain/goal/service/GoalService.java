@@ -23,6 +23,7 @@ public class GoalService {
         if (goalRepository.findByUserId(userId).isPresent()) {
             throw new IllegalStateException("이미 목표가 존재합니다.");
         }
+        Goal.validateTargetAmount(request.targetAmount());
 
         Goal goal = new Goal(
                 userId,
@@ -33,6 +34,16 @@ public class GoalService {
         );
 
         return GoalResponse.from(goalRepository.save(goal));
+    }
+
+    // 온보딩 5단계 재제출(재시도)에도 안전하도록, 목표가 있으면 금액만 갱신한다
+    @Transactional
+    public void upsertFromOnboarding(UUID userId, long targetAmount) {
+        Goal.validateTargetAmount(targetAmount);
+        goalRepository.findByUserId(userId).ifPresentOrElse(
+                goal -> goal.updateTargetAmount(targetAmount),
+                () -> goalRepository.save(Goal.createFromOnboarding(userId, targetAmount))
+        );
     }
 
     @Transactional(readOnly = true)
@@ -46,6 +57,7 @@ public class GoalService {
     public GoalResponse updateGoal(UUID userId, GoalUpdateRequest request) {
         Goal goal = goalRepository.findByUserId(userId)
                 .orElseThrow(() -> new IllegalArgumentException("목표가 존재하지 않습니다."));
+        Goal.validateTargetAmount(request.targetAmount());
 
         goal.update(
                 request.title(),

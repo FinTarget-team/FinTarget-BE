@@ -67,6 +67,8 @@ public class OnboardingController {
             summary = "온보딩 답변 제출",
             description = "현재 단계의 답변을 저장하고 다음 단계 질문을 반환합니다. " +
                     "마지막 단계(5단계) 답변 제출 시 온보딩이 완료 처리되며, 응답의 isComplete가 true로 반환됩니다. " +
+                    "5단계 value는 목표 금액(원, 숫자만, 1원 이상 50억 원 이하)이며, 이 값으로 목표(Goal)가 자동 생성됩니다 " +
+                    "(제목 '내 목표', 현재 금액 0, 마감일 1년 후, deadlineDefaulted=true). 5단계를 다시 제출하면 기존 목표의 금액만 갱신됩니다. " +
                     "이전 단계를 완료하지 않고 다음 단계에 답변을 제출하면 400으로 거부됩니다."
     )
     @ApiResponses({
@@ -125,6 +127,18 @@ public class OnboardingController {
                                     name = "유효하지 않은 지역 코드 (4단계)",
                                     value = """
                                             {"status": 400, "message": "유효하지 않은 지역 코드입니다", "data": null}
+                                            """
+                            ),
+                            @ExampleObject(
+                                    name = "숫자가 아닌 목표 금액 (5단계)",
+                                    value = """
+                                            {"status": 400, "message": "목표 금액은 숫자로 입력해주세요", "data": null}
+                                            """
+                            ),
+                            @ExampleObject(
+                                    name = "범위를 벗어난 목표 금액 (5단계)",
+                                    value = """
+                                            {"status": 400, "message": "목표 금액은 50억 원 이하로 입력해주세요", "data": null}
                                             """
                             ),
                             @ExampleObject(

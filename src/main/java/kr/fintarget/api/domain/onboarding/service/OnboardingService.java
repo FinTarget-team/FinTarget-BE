@@ -1,5 +1,6 @@
 package kr.fintarget.api.domain.onboarding.service;
 
+import kr.fintarget.api.domain.goal.service.GoalService;
 import kr.fintarget.api.domain.onboarding.dto.OnboardingAnswerRequest;
 import kr.fintarget.api.domain.onboarding.dto.OnboardingStepResponse;
 import kr.fintarget.api.domain.onboarding.entity.OnboardingAnswer;
@@ -25,6 +26,7 @@ public class OnboardingService {
 
     private final UserRepository userRepository;
     private final OnboardingAnswerRepository onboardingAnswerRepository;
+    private final GoalService goalService;
     private static final int TOTAL_STEPS = 5;
 
     private static final List<OnboardingStepResponse.OptionDto> REGION_OPTIONS = Arrays.stream(Region.values())
@@ -96,8 +98,10 @@ public class OnboardingService {
         // step별 답변을 User 엔티티에 반영 (step1: age, step2: employmentType, step3: income, step4: region)
         applyAnswerToUser(userId, request.getStep(), request.getValue());
 
-        // 마지막 단계면 완료 처리
+        // 마지막 단계면 목표 생성 후 완료 처리
         if (request.getStep() == TOTAL_STEPS) {
+            goalService.upsertFromOnboarding(UUID.fromString(userId), resolveTargetAmount(request.getValue()));
+
             User user = userRepository.findById(userId)
                     .orElseThrow(() -> new IllegalArgumentException("유저를 찾을 수 없습니다."));
             user.completeOnboarding();
@@ -173,6 +177,18 @@ public class OnboardingService {
             throw new IllegalArgumentException("유효하지 않은 소득 코드입니다");
         }
         return incomeBracket.getIncome();
+    }
+
+    private long resolveTargetAmount(String value) {
+        String trimmed = value.trim();
+        if (!trimmed.matches("\\d+")) {
+            throw new IllegalArgumentException("목표 금액은 숫자로 입력해주세요");
+        }
+        // Long 범위를 넘는 자릿수는 상한 초과 값으로 넘겨 Goal 검증에서 거부되게 한다
+        if (trimmed.length() > 18) {
+            return Long.MAX_VALUE;
+        }
+        return Long.parseLong(trimmed);
     }
 
     private String resolveRegion(String value) {
