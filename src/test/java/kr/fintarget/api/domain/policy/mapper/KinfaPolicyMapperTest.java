@@ -45,7 +45,7 @@ class KinfaPolicyMapperTest {
         assertThat(policy.getIncomeLimit()).isNull();
         assertThat(policy.getBenefitAmount()).isEqualTo(35_000_000L);
         assertThat(policy.getPolicyType()).isEqualTo(PolicyType.FINANCE_WELFARE);
-        assertThat(policy.getRegion()).isEqualTo("전국");
+        assertThat(policy.getRegion()).isNull();
         assertThat(policy.getExternalId()).isEqualTo("14개 취급은행|새희망홀씨Ⅱ");
         assertThat(policy.getSource()).isEqualTo("KINFA");
     }
@@ -79,5 +79,64 @@ class KinfaPolicyMapperTest {
         List<KinfaItem> items = objectMapper.readValue(REAL_SAMPLE_RESPONSE, KinfaApiResponse.class)
                 .response().body().items().item();
         return items.get(0);
+    }
+
+    private KinfaItem regionItem(String rsdAreaPamtEqltIstm, String finPrdNm) {
+        return new KinfaItem(
+                null, null, finPrdNm, null,
+                null, null, null, null,
+                null, null, null, null,
+                null, "기관", rsdAreaPamtEqltIstm,
+                null, null, null, null,
+                null, null, null
+        );
+    }
+
+    @Test
+    void 지역_약칭은_Region_코드로_변환된다() {
+        assertThat(KinfaPolicyMapper.toPolicy(regionItem("서울", "상품")).getRegion()).isEqualTo("SEOUL");
+        assertThat(KinfaPolicyMapper.toPolicy(regionItem("전북", "상품")).getRegion()).isEqualTo("JEONBUK");
+    }
+
+    @Test
+    void 전국_관련_값은_null로_변환된다() {
+        assertThat(KinfaPolicyMapper.toPolicy(regionItem("전국", "상품")).getRegion()).isNull();
+        assertThat(KinfaPolicyMapper.toPolicy(regionItem("전국(농어촌)", "상품")).getRegion()).isNull();
+    }
+
+    @Test
+    void 쉼표로_구분된_다중_지역은_각각_코드로_변환되어_쉼표로_연결된다() {
+        assertThat(KinfaPolicyMapper.toPolicy(regionItem("경남, 울산", "상품")).getRegion())
+                .isEqualTo("GYEONGNAM,ULSAN");
+    }
+
+    @Test
+    void 지역값이_하이픈이면_정책명의_시도_정식명칭으로_보정된다() {
+        assertThat(KinfaPolicyMapper.toPolicy(
+                regionItem("-", "경기도 중소기업 육성자금(특별경영자금_재해피해)")).getRegion())
+                .isEqualTo("GYEONGGI");
+    }
+
+    @Test
+    void 지역값이_하이픈이고_정책명에_정식명칭이_없으면_null이다() {
+        assertThat(KinfaPolicyMapper.toPolicy(regionItem("-", "햇살론일반")).getRegion()).isNull();
+        assertThat(KinfaPolicyMapper.toPolicy(regionItem("-", "성실상환자 대출(소액금융)")).getRegion()).isNull();
+    }
+
+    @Test
+    void 지역값이_하이픈이고_정책명에_약칭만_있으면_오탐_없이_null이다() {
+        assertThat(KinfaPolicyMapper.toPolicy(regionItem("-", "서울 청년 대출")).getRegion()).isNull();
+        assertThat(KinfaPolicyMapper.toPolicy(regionItem("-", "경기침체 극복 자금")).getRegion()).isNull();
+    }
+
+    @Test
+    void 지역값이_null이거나_빈_문자열이면_null이다() {
+        assertThat(KinfaPolicyMapper.toPolicy(regionItem(null, "상품")).getRegion()).isNull();
+        assertThat(KinfaPolicyMapper.toPolicy(regionItem("", "상품")).getRegion()).isNull();
+    }
+
+    @Test
+    void 알_수_없는_지역값은_null이다() {
+        assertThat(KinfaPolicyMapper.toPolicy(regionItem("미지정", "상품")).getRegion()).isNull();
     }
 }
