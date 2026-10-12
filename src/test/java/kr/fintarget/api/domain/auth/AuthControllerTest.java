@@ -3,6 +3,7 @@ package kr.fintarget.api.domain.auth;
 import kr.fintarget.api.common.ApiResponse;
 import kr.fintarget.api.domain.auth.dto.AuthResponse;
 import kr.fintarget.api.domain.auth.dto.KakaoTokenLoginRequest;
+import kr.fintarget.api.domain.auth.dto.NaverTokenLoginRequest;
 import kr.fintarget.api.domain.auth.dto.TokenRefreshResponse;
 import kr.fintarget.api.domain.user.entity.User;
 import kr.fintarget.api.domain.user.repository.UserRepository;
@@ -37,6 +38,9 @@ class AuthControllerTest {
 
     @Mock
     private KakaoOAuthClient kakaoOAuthClient;
+
+    @Mock
+    private NaverOAuthClient naverOAuthClient;
 
     @Mock
     private BlacklistedTokenRepository blacklistedTokenRepository;
@@ -148,5 +152,70 @@ class AuthControllerTest {
 
         assertThatThrownBy(() -> authController.kakaoTokenLogin(request))
                 .isInstanceOf(HttpClientErrorException.class);
+    }
+
+    @Test
+    void 유효한_네이버_액세스_토큰이면_기존_회원은_200으로_로그인된다() {
+        User existingUser = User.builder()
+                .id("user-3")
+                .provider("NAVER")
+                .providerId("naver-123")
+                .build();
+
+        when(naverOAuthClient.getNaverUserId("valid-naver-access-token")).thenReturn("naver-123");
+        when(userRepository.findByProviderAndProviderId("NAVER", "naver-123"))
+                .thenReturn(Optional.of(existingUser));
+        when(jwtUtil.generateToken("user-3", "NAVER")).thenReturn("access-token");
+        when(jwtUtil.generateRefreshToken("user-3")).thenReturn("refresh-token");
+
+        NaverTokenLoginRequest request = new NaverTokenLoginRequest();
+        ReflectionTestUtils.setField(request, "accessToken", "valid-naver-access-token");
+
+        ResponseEntity<ApiResponse<AuthResponse>> response = authController.naverTokenLogin(request);
+
+        assertThat(response.getStatusCode().value()).isEqualTo(200);
+        AuthResponse data = response.getBody().getData();
+        assertThat(data.isNewUser()).isFalse();
+        assertThat(data.getUserId()).isEqualTo("user-3");
+        assertThat(data.getAccessToken()).isEqualTo("access-token");
+        assertThat(data.getRefreshToken()).isEqualTo("refresh-token");
+        assertThat(data.getProvider()).isEqualTo("NAVER");
+    }
+
+    @Test
+    void 유효한_네이버_액세스_토큰이고_신규_사용자면_회원가입_후_201로_응답한다() {
+        User savedUser = User.builder()
+                .id("user-4")
+                .provider("NAVER")
+                .providerId("naver-456")
+                .build();
+
+        when(naverOAuthClient.getNaverUserId("new-naver-access-token")).thenReturn("naver-456");
+        when(userRepository.findByProviderAndProviderId("NAVER", "naver-456")).thenReturn(Optional.empty());
+        when(userRepository.save(any(User.class))).thenReturn(savedUser);
+        when(jwtUtil.generateToken("user-4", "NAVER")).thenReturn("access-token");
+        when(jwtUtil.generateRefreshToken("user-4")).thenReturn("refresh-token");
+
+        NaverTokenLoginRequest request = new NaverTokenLoginRequest();
+        ReflectionTestUtils.setField(request, "accessToken", "new-naver-access-token");
+
+        ResponseEntity<ApiResponse<AuthResponse>> response = authController.naverTokenLogin(request);
+
+        assertThat(response.getStatusCode().value()).isEqualTo(201);
+        assertThat(response.getBody().getData().isNewUser()).isTrue();
+        assertThat(response.getBody().getData().getUserId()).isEqualTo("user-4");
+    }
+
+    @Test
+    void 유효하지_않은_네이버_액세스_토큰이면_NaverOAuthException이_전파된다() {
+        when(naverOAuthClient.getNaverUserId("expired-naver-access-token"))
+                .thenThrow(new NaverOAuthException("유효하지 않은 네이버 액세스 토큰입니다."));
+
+        NaverTokenLoginRequest request = new NaverTokenLoginRequest();
+        ReflectionTestUtils.setField(request, "accessToken", "expired-naver-access-token");
+
+        assertThatThrownBy(() -> authController.naverTokenLogin(request))
+                .isInstanceOf(NaverOAuthException.class)
+                .hasMessage("유효하지 않은 네이버 액세스 토큰입니다.");
     }
 }
