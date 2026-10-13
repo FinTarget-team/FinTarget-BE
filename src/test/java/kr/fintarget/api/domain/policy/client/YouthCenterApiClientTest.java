@@ -11,13 +11,16 @@ import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 
 import java.net.URI;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class YouthCenterApiClientTest {
 
@@ -67,8 +70,7 @@ class YouthCenterApiClientTest {
                             .body(body).build());
                 })
                 .build();
-        YouthCenterApiClient client = new YouthCenterApiClient(webClient);
-        ReflectionTestUtils.setField(client, "apiKey", "test-key");
+        YouthCenterApiClient client = clientWith(webClient);
 
         List<YouthCenterPolicyItem> result = client.fetchOpenHousingAndFinancePolicies(TODAY);
 
@@ -76,6 +78,61 @@ class YouthCenterApiClientTest {
         assertThat(queryParam(requested.get(0), "apiKeyNm")).isEqualTo("test-key");
         assertThat(queryParam(requested.get(0), "rtnType")).isEqualTo("json");
         assertThat(result).extracting(YouthCenterPolicyItem::plcyNo).containsExactly("P1-0", "P2-0", "P3-0");
+    }
+
+    @Test
+    void 페이지_호출이_일시적으로_실패하면_재시도해서_이어간다() {
+        // 1페이지(전체 1건)의 첫 두 번은 500, 세 번째에 성공
+        AtomicInteger attempts = new AtomicInteger();
+        WebClient webClient = WebClient.builder()
+                .baseUrl("https://example.com/getPlcy")
+                .exchangeFunction(request -> {
+                    if (attempts.incrementAndGet() < 3) {
+                        return Mono.just(ClientResponse.create(HttpStatus.INTERNAL_SERVER_ERROR)
+                                .header(HttpHeaders.CONTENT_TYPE, MediaType.TEXT_HTML_VALUE)
+                                .body("<html></html>").build());
+                    }
+                    return Mono.just(jsonResponse("{\"resultCode\":200,\"result\":{\"pagging\":{\"totCount\":1},"
+                            + "\"youthPolicyList\":[" + policyJson("P-1", "주거") + "]}}"));
+                })
+                .build();
+
+        List<YouthCenterPolicyItem> result = clientWith(webClient).fetchOpenHousingAndFinancePolicies(TODAY);
+
+        assertThat(attempts).hasValue(3);
+        assertThat(result).extracting(YouthCenterPolicyItem::plcyNo).containsExactly("P-1");
+    }
+
+    @Test
+    void 재시도_횟수를_모두_실패하면_예외를_던진다() {
+        AtomicInteger attempts = new AtomicInteger();
+        WebClient webClient = WebClient.builder()
+                .baseUrl("https://example.com/getPlcy")
+                .exchangeFunction(request -> {
+                    attempts.incrementAndGet();
+                    return Mono.just(ClientResponse.create(HttpStatus.BAD_REQUEST)
+                            .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+                            .body("{\"errorCode\":\"e002\",\"errorMsg\":\"invalid param data.\"}").build());
+                })
+                .build();
+
+        assertThatThrownBy(() -> clientWith(webClient).fetchOpenHousingAndFinancePolicies(TODAY))
+                .isInstanceOf(YouthCenterApiException.class);
+        assertThat(attempts).hasValue(3);
+    }
+
+    private static YouthCenterApiClient clientWith(WebClient webClient) {
+        YouthCenterApiClient client = new YouthCenterApiClient(webClient);
+        ReflectionTestUtils.setField(client, "apiKey", "test-key");
+        ReflectionTestUtils.setField(client, "pageInterval", Duration.ZERO);
+        ReflectionTestUtils.setField(client, "retryBackoff", Duration.ZERO);
+        return client;
+    }
+
+    private static ClientResponse jsonResponse(String body) {
+        return ClientResponse.create(HttpStatus.OK)
+                .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+                .body(body).build();
     }
 
     private static String policyJson(String plcyNo, String lclsfNm) {
