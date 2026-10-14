@@ -52,19 +52,6 @@ Authorization: Bearer {accessToken}
 }
 ```
 
-### 애플 로그인
-- **POST** `/auth/apple/login`
-- 인증 불필요
-- Request Body:
-```json
-{
-  "identityToken": "string",
-  "authorizationCode": "string",
-  "fullName": "string",
-  "email": "string"
-}
-```
-
 ### 토큰 갱신
 - **POST** `/auth/token/refresh`
 - Request Body:

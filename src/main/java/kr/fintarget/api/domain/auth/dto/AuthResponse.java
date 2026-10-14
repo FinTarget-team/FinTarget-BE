@@ -20,6 +20,6 @@ public class AuthResponse {
     @Schema(description = "액세스 토큰 만료까지 남은 시간(초)", example = "3600")
     private int expiresIn;
 
-    @Schema(description = "로그인에 사용한 소셜 로그인 제공자", example = "KAKAO", allowableValues = {"KAKAO", "NAVER", "APPLE"})
+    @Schema(description = "로그인에 사용한 소셜 로그인 제공자", example = "KAKAO", allowableValues = {"KAKAO", "NAVER"})
     private String provider;
 }

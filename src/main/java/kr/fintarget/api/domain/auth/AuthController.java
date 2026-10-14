@@ -5,7 +5,6 @@ import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import kr.fintarget.api.common.ApiResponse;
-import kr.fintarget.api.domain.auth.dto.AppleLoginRequest;
 import kr.fintarget.api.domain.auth.dto.AuthResponse;
 import kr.fintarget.api.domain.auth.dto.KakaoLoginRequest;
 import kr.fintarget.api.domain.auth.dto.KakaoTokenLoginRequest;
@@ -201,38 +200,6 @@ public class AuthController {
     public ResponseEntity<ApiResponse<AuthResponse>> naverTokenLogin(@RequestBody NaverTokenLoginRequest request) {
         String naverUserId = naverOAuthClient.getNaverUserId(request.getAccessToken());
         return socialLogin(naverUserId, "NAVER");
-    }
-
-    @Operation(
-            summary = "애플 소셜 로그인",
-            description = "식별 토큰(identityToken)으로 애플 사용자 정보를 조회해 로그인/회원가입을 처리합니다. " +
-                    "기존 회원이면 200, 신규 회원이면 자동 가입 후 201로 응답합니다. 응답 바디 구조는 두 경우 동일합니다."
-    )
-    @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(
-                    responseCode = "200",
-                    description = "기존 회원 로그인 성공",
-                    useReturnTypeSchema = true
-            ),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(
-                    responseCode = "201",
-                    description = "신규 회원 자동 가입 및 로그인 성공",
-                    useReturnTypeSchema = true
-            ),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(
-                    responseCode = "500",
-                    description = "애플 인증 서버 호출 실패 등 처리 중 오류. message는 원인 예외 메시지이며 null일 수 있습니다.",
-                    content = @Content(examples = @ExampleObject(
-                            name = "서버 오류",
-                            value = """
-                                    {"status": 500, "message": null, "data": null}
-                                    """
-                    ))
-            )
-    })
-    @PostMapping("/apple/login")
-    public ResponseEntity<ApiResponse<AuthResponse>> appleLogin(@RequestBody AppleLoginRequest request) {
-        return socialLogin(request.getIdentityToken(), "APPLE");
     }
 
     @Operation(

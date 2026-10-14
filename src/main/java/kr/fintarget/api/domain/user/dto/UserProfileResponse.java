@@ -20,7 +20,7 @@ public class UserProfileResponse {
     @Schema(description = "거주 지역. 온보딩 4단계를 완료하지 않았으면 null입니다.", example = "SEOUL", types = {"string", "null"})
     private String region;
 
-    @Schema(description = "가입에 사용한 소셜 로그인 제공자", example = "KAKAO", allowableValues = {"KAKAO", "NAVER", "APPLE"})
+    @Schema(description = "가입에 사용한 소셜 로그인 제공자", example = "KAKAO", allowableValues = {"KAKAO", "NAVER"})
     private String provider;
 
     @Schema(description = "연령대 코드. 온보딩 1단계를 완료하지 않았으면 null입니다.",
