@@ -14,10 +14,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.test.util.ReflectionTestUtils;
-import org.springframework.web.client.HttpClientErrorException;
 
 import java.util.Map;
 import java.util.Optional;
@@ -142,16 +140,16 @@ class AuthControllerTest {
     }
 
     @Test
-    void 만료되거나_유효하지_않은_카카오_액세스_토큰이면_카카오_API_호출_단계에서_예외가_전파된다() {
+    void 유효하지_않은_카카오_액세스_토큰이면_KakaoOAuthException이_전파된다() {
         when(kakaoOAuthClient.getKakaoUserIdByAccessToken("expired-kakao-access-token"))
-                .thenThrow(HttpClientErrorException.create(
-                        HttpStatus.UNAUTHORIZED, "Unauthorized", null, null, null));
+                .thenThrow(new KakaoOAuthException("유효하지 않거나 만료된 카카오 인증 정보입니다."));
 
         KakaoTokenLoginRequest request = new KakaoTokenLoginRequest();
         ReflectionTestUtils.setField(request, "accessToken", "expired-kakao-access-token");
 
         assertThatThrownBy(() -> authController.kakaoTokenLogin(request))
-                .isInstanceOf(HttpClientErrorException.class);
+                .isInstanceOf(KakaoOAuthException.class)
+                .hasMessage("유효하지 않거나 만료된 카카오 인증 정보입니다.");
     }
 
     @Test
