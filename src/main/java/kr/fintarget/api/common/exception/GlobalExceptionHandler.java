@@ -1,5 +1,6 @@
 package kr.fintarget.api.common.exception;
 import kr.fintarget.api.common.ApiResponse;
+import kr.fintarget.api.domain.auth.KakaoOAuthException;
 import kr.fintarget.api.domain.auth.NaverOAuthException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -14,6 +15,10 @@ public class GlobalExceptionHandler {
     }
     @ExceptionHandler(NaverOAuthException.class)
     public ResponseEntity<ApiResponse<?>> handleNaverOAuth(NaverOAuthException e) {
+        return ResponseEntity.status(401).body(ApiResponse.error(401, e.getMessage()));
+    }
+    @ExceptionHandler(KakaoOAuthException.class)
+    public ResponseEntity<ApiResponse<?>> handleKakaoOAuth(KakaoOAuthException e) {
         return ResponseEntity.status(401).body(ApiResponse.error(401, e.getMessage()));
     }
     @ExceptionHandler(IllegalStateException.class)

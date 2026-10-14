@@ -21,7 +21,11 @@ public class KakaoOAuthClient {
     @Value("${kakao.redirect-uri}")
     private String redirectUri;
 
-    private final RestClient restClient = RestClient.create();
+    private final RestClient restClient;
+
+    public KakaoOAuthClient(RestClient.Builder restClientBuilder) {
+        this.restClient = restClientBuilder.build();
+    }
 
     public String getKakaoUserId(String authorizationCode) {
         MultiValueMap<String, String> params = new LinkedMultiValueMap<>();
@@ -48,8 +52,15 @@ public class KakaoOAuthClient {
                 .uri("https://kapi.kakao.com/v2/user/me")
                 .header("Authorization", "Bearer " + accessToken)
                 .retrieve()
+                .onStatus(status -> status.value() == 401, (req, res) -> {
+                    throw new KakaoOAuthException("유효하지 않거나 만료된 카카오 인증 정보입니다.");
+                })
                 .body(Map.class);
 
-        return String.valueOf(userResponse.get("id"));
+        Object id = userResponse.get("id");
+        if (id == null || String.valueOf(id).isBlank()) {
+            throw new KakaoOAuthException("카카오 사용자 정보 응답에 id가 없습니다.");
+        }
+        return String.valueOf(id);
     }
 }

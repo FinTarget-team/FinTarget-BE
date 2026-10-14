@@ -16,6 +16,7 @@ import kr.fintarget.api.domain.user.repository.UserRepository;
 import kr.fintarget.api.security.BlacklistedToken;
 import kr.fintarget.api.security.BlacklistedTokenRepository;
 import kr.fintarget.api.security.JwtUtil;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -74,6 +75,16 @@ public class AuthController {
                     useReturnTypeSchema = true
             ),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "401",
+                    description = "유효하지 않거나 만료된 카카오 인증 정보",
+                    content = @Content(examples = @ExampleObject(
+                            name = "유효하지 않은 카카오 인증 정보",
+                            value = """
+                                    {"status": 401, "message": "유효하지 않거나 만료된 카카오 인증 정보입니다.", "data": null}
+                                    """
+                    ))
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
                     responseCode = "500",
                     description = "카카오 인증 서버 호출 실패 등 처리 중 오류. message는 원인 예외 메시지이며 null일 수 있습니다.",
                     content = @Content(examples = @ExampleObject(
@@ -109,6 +120,26 @@ public class AuthController {
                     useReturnTypeSchema = true
             ),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "400",
+                    description = "요청 값이 유효하지 않음 (accessToken 누락/공백)",
+                    content = @Content(examples = @ExampleObject(
+                            name = "액세스 토큰 누락",
+                            value = """
+                                    {"status": 400, "message": "카카오 액세스 토큰을 입력해주세요.", "data": null}
+                                    """
+                    ))
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "401",
+                    description = "유효하지 않거나 만료된 카카오 인증 정보",
+                    content = @Content(examples = @ExampleObject(
+                            name = "유효하지 않은 카카오 인증 정보",
+                            value = """
+                                    {"status": 401, "message": "유효하지 않거나 만료된 카카오 인증 정보입니다.", "data": null}
+                                    """
+                    ))
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
                     responseCode = "500",
                     description = "카카오 인증 서버 호출 실패 등 처리 중 오류. message는 원인 예외 메시지이며 null일 수 있습니다.",
                     content = @Content(examples = @ExampleObject(
@@ -120,7 +151,7 @@ public class AuthController {
             )
     })
     @PostMapping("/kakao/login/token")
-    public ResponseEntity<ApiResponse<AuthResponse>> kakaoTokenLogin(@RequestBody KakaoTokenLoginRequest request) {
+    public ResponseEntity<ApiResponse<AuthResponse>> kakaoTokenLogin(@Valid @RequestBody KakaoTokenLoginRequest request) {
         String kakaoUserId = kakaoOAuthClient.getKakaoUserIdByAccessToken(request.getAccessToken());
         return socialLogin(kakaoUserId, "KAKAO");
     }
@@ -176,6 +207,16 @@ public class AuthController {
                     useReturnTypeSchema = true
             ),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "400",
+                    description = "요청 값이 유효하지 않음 (accessToken 누락/공백)",
+                    content = @Content(examples = @ExampleObject(
+                            name = "액세스 토큰 누락",
+                            value = """
+                                    {"status": 400, "message": "네이버 액세스 토큰을 입력해주세요.", "data": null}
+                                    """
+                    ))
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
                     responseCode = "401",
                     description = "유효하지 않거나 만료된 네이버 액세스 토큰",
                     content = @Content(examples = @ExampleObject(
@@ -197,7 +238,7 @@ public class AuthController {
             )
     })
     @PostMapping("/naver/login/token")
-    public ResponseEntity<ApiResponse<AuthResponse>> naverTokenLogin(@RequestBody NaverTokenLoginRequest request) {
+    public ResponseEntity<ApiResponse<AuthResponse>> naverTokenLogin(@Valid @RequestBody NaverTokenLoginRequest request) {
         String naverUserId = naverOAuthClient.getNaverUserId(request.getAccessToken());
         return socialLogin(naverUserId, "NAVER");
     }
