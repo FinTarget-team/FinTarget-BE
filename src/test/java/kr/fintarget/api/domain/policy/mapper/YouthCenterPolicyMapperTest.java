@@ -72,7 +72,8 @@ class YouthCenterPolicyMapperTest {
                             "sprtTrgtMinAge": "18",
                             "sprtTrgtMaxAge": "39",
                             "aplyYmd": "20260101 ~ 20261231",
-                            "refUrlAddr1": "https://www.moel.go.kr/policyitrd/policyItrdView.do?policy_itrd_sn=413"
+                            "refUrlAddr1": "https://www.moel.go.kr/policyitrd/policyItrdView.do?policy_itrd_sn=413",
+                            "zipCd": "41135"
                         },
                         {
                             "plcyNo": "20260710005400213254",
@@ -86,7 +87,8 @@ class YouthCenterPolicyMapperTest {
                             "sprtTrgtMinAge": "1",
                             "sprtTrgtMaxAge": "99",
                             "aplyYmd": "20260105 ~ 20261030",
-                            "aplyUrlAddr": "https://www.xn--hc0by27bu6atul3dc6t.kr/main/rentSubsidy"
+                            "aplyUrlAddr": "https://www.xn--hc0by27bu6atul3dc6t.kr/main/rentSubsidy",
+                            "zipCd": "29000,46000"
                         }
                     ]
                 }
@@ -131,7 +133,7 @@ class YouthCenterPolicyMapperTest {
         assertThat(policy.getMinAge()).isEqualTo(18);
         assertThat(policy.getMaxAge()).isEqualTo(39);
         assertThat(policy.getPolicyType()).isEqualTo(PolicyType.FINANCE_WELFARE);
-        assertThat(policy.getRegion()).isEqualTo("고용노동부");
+        assertThat(policy.getRegion()).isEqualTo("GYEONGGI");
         assertThat(policy.getExternalId()).isEqualTo("20260718005400113262");
         assertThat(policy.getSource()).isEqualTo("YOUTH_CENTER");
     }
@@ -146,11 +148,91 @@ class YouthCenterPolicyMapperTest {
         assertThat(policy.getMinAge()).isEqualTo(1);
         assertThat(policy.getMaxAge()).isEqualTo(99);
         assertThat(policy.getPolicyType()).isEqualTo(PolicyType.HOUSING);
-        assertThat(policy.getRegion()).isEqualTo("전남광주통합특별시");
+        assertThat(policy.getRegion()).isEqualTo("GWANGJU,JEONNAM");
         assertThat(policy.getExternalId()).isEqualTo("20260710005400213254");
         assertThat(policy.getSource()).isEqualTo("YOUTH_CENTER");
         assertThat(policy.getIncomeLimit()).isNull();
         assertThat(policy.getBenefitAmount()).isNull();
+    }
+
+    @Test
+    void 단일_시군구_코드는_해당_시도로_변환된다() {
+        assertThat(YouthCenterPolicyMapper.toPolicy(itemWithZipCd("41135")).getRegion())
+                .isEqualTo("GYEONGGI");
+    }
+
+    @Test
+    void 같은_시도의_여러_시군구는_중복_제거되어_하나의_코드로_변환된다() {
+        assertThat(YouthCenterPolicyMapper.toPolicy(itemWithZipCd("41135,41111")).getRegion())
+                .isEqualTo("GYEONGGI");
+    }
+
+    @Test
+    void 여러_시도가_섞이면_입력_순서대로_쉼표로_연결된다() {
+        assertThat(YouthCenterPolicyMapper.toPolicy(itemWithZipCd("47000,43000")).getRegion())
+                .isEqualTo("GYEONGBUK,CHUNGBUK");
+    }
+
+    @Test
+    void 알려진_시도_prefix_16개_전부를_포함하면_전국으로_판정되어_null이다() {
+        String allSido = "11,26,27,28,30,31,36,41,43,44,47,48,50,51,52,12";
+
+        assertThat(YouthCenterPolicyMapper.toPolicy(itemWithZipCd(allSido)).getRegion()).isNull();
+    }
+
+    @Test
+    void 전국_목록에서_하나라도_빠지면_전국으로_판정되지_않는다() {
+        String without43 = "11,26,27,28,30,31,36,41,44,47,48,50,51,52,12"; // 43(충북) 제외
+        String without51 = "11,26,27,28,30,31,36,41,43,44,47,48,50,52,12"; // 51(강원) 제외
+
+        assertThat(YouthCenterPolicyMapper.toPolicy(itemWithZipCd(without43)).getRegion()).isNotNull();
+        assertThat(YouthCenterPolicyMapper.toPolicy(itemWithZipCd(without51)).getRegion()).isNotNull();
+    }
+
+    @Test
+    void 구_코드로만_구성된_전국_목록도_전국으로_판정되어_null이다() {
+        // 51(강원)/52(전북)/12(전남광주) 대신 구 코드 42(강원)/45(전북)/29(광주)/46(전남)을 사용
+        String allSidoWithOldCodes = "11,26,27,28,30,31,36,41,42,43,44,45,47,48,50,29,46";
+
+        assertThat(YouthCenterPolicyMapper.toPolicy(itemWithZipCd(allSidoWithOldCodes)).getRegion()).isNull();
+    }
+
+    @Test
+    void 구_전남광주_통합_코드_12는_광주와_전남_두_지역으로_전개된다() {
+        assertThat(YouthCenterPolicyMapper.toPolicy(itemWithZipCd("12345")).getRegion())
+                .isEqualTo("GWANGJU,JEONNAM");
+    }
+
+    @Test
+    void 구_코드_42_45_29_46도_각각_하나의_시도로_변환된다() {
+        assertThat(YouthCenterPolicyMapper.toPolicy(itemWithZipCd("42000")).getRegion()).isEqualTo("GANGWON");
+        assertThat(YouthCenterPolicyMapper.toPolicy(itemWithZipCd("45000")).getRegion()).isEqualTo("JEONBUK");
+        assertThat(YouthCenterPolicyMapper.toPolicy(itemWithZipCd("29000")).getRegion()).isEqualTo("GWANGJU");
+        assertThat(YouthCenterPolicyMapper.toPolicy(itemWithZipCd("46000")).getRegion()).isEqualTo("JEONNAM");
+    }
+
+    @Test
+    void 알_수_없는_prefix는_제외되고_나머지만_변환된다() {
+        assertThat(YouthCenterPolicyMapper.toPolicy(itemWithZipCd("41000,99000")).getRegion())
+                .isEqualTo("GYEONGGI");
+    }
+
+    @Test
+    void 모든_prefix가_알_수_없으면_null이다() {
+        assertThat(YouthCenterPolicyMapper.toPolicy(itemWithZipCd("99000,98000")).getRegion()).isNull();
+    }
+
+    @Test
+    void zipCd가_빈_문자열이거나_null이면_null이다() {
+        assertThat(YouthCenterPolicyMapper.toPolicy(itemWithZipCd("")).getRegion()).isNull();
+        assertThat(YouthCenterPolicyMapper.toPolicy(itemWithZipCd(null)).getRegion()).isNull();
+    }
+
+    private YouthCenterPolicyItem itemWithZipCd(String zipCd) {
+        return new YouthCenterPolicyItem(
+                "plcyNo", "plcyNm", null, null, null, null, null, null, null,
+                null, null, null, null, null, null, null, null, null, zipCd
+        );
     }
 
     private List<YouthCenterPolicyItem> parseItems() throws Exception {

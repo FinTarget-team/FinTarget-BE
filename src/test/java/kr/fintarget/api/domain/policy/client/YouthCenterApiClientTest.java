@@ -28,7 +28,7 @@ class YouthCenterApiClientTest {
 
     private YouthCenterPolicyItem item(String plcyNo, String lclsfNm, String aplyPrdSeCd, String aplyYmd) {
         return new YouthCenterPolicyItem(plcyNo, "정책", null, null, lclsfNm, null, null, null, null,
-                null, null, null, aplyYmd, null, null, null, null, aplyPrdSeCd);
+                null, null, null, aplyYmd, null, null, null, null, aplyPrdSeCd, null);
     }
 
     @Test

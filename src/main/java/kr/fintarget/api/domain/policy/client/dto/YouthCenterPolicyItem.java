@@ -24,6 +24,7 @@ public record YouthCenterPolicyItem(
         String aplyUrlAddr,
         String frstRegDt,
         String lastMdfcnDt,
-        String aplyPrdSeCd
+        String aplyPrdSeCd,
+        String zipCd
 ) {
 }
