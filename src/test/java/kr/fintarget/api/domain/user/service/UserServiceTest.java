@@ -307,6 +307,32 @@ class UserServiceTest {
     }
 
     @Test
+    void name이_전각_공백만_있으면_400_예외가_발생하고_값이_바뀌지_않는다() {
+        User user = User.builder().id("user-1").provider("KAKAO").providerId("kakao-1").name("기존이름").build();
+        when(userRepository.findById("user-1")).thenReturn(Optional.of(user));
+
+        UpdateProfileRequest request = updateRequest("　　", null, null, null, null, null);
+
+        assertThatThrownBy(() -> userService.updateProfile("user-1", request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("이름은 비어 있을 수 없습니다");
+        assertThat(user.getName()).isEqualTo("기존이름");
+    }
+
+    @Test
+    void name의_앞뒤_전각_공백은_제거되어_저장된다() {
+        User user = User.builder().id("user-1").provider("KAKAO").providerId("kakao-1").build();
+        when(userRepository.findById("user-1")).thenReturn(Optional.of(user));
+
+        UpdateProfileRequest request = updateRequest("　홍길동　", null, null, null, null, null);
+
+        UserProfileResponse response = userService.updateProfile("user-1", request);
+
+        assertThat(user.getName()).isEqualTo("홍길동");
+        assertThat(response.getName()).isEqualTo("홍길동");
+    }
+
+    @Test
     void name이_20자면_정상_저장된다() {
         User user = User.builder().id("user-1").provider("KAKAO").providerId("kakao-1").build();
         when(userRepository.findById("user-1")).thenReturn(Optional.of(user));

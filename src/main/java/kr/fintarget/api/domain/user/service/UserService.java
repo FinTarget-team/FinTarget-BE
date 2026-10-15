@@ -81,7 +81,7 @@ public class UserService {
     }
 
     private String resolveName(String name) {
-        String trimmed = name.trim();
+        String trimmed = name.strip();
         if (trimmed.isEmpty()) {
             throw new IllegalArgumentException("이름은 비어 있을 수 없습니다");
         }
