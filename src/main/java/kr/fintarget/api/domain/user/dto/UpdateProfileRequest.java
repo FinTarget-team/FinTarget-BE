@@ -3,7 +3,8 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Getter;
 @Getter
 public class UpdateProfileRequest {
-    @Schema(description = "변경할 이름. null이면 기존 값을 유지합니다.", example = "홍길동", types = {"string", "null"})
+    @Schema(description = "변경할 이름. null이면 기존 값을 유지합니다. 앞뒤 공백은 제거되어 저장되며, 공백만 있거나 빈 문자열이거나 20자를 초과하면 400으로 거부됩니다.",
+            example = "홍길동", types = {"string", "null"})
     private String name;
 
     @Schema(description = "변경할 이메일. null이면 기존 값을 유지합니다.", example = "user@example.com", types = {"string", "null"})

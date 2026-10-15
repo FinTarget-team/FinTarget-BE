@@ -39,8 +39,9 @@ public class UserService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
 
+        String validatedName = request.getName() != null ? resolveName(request.getName()) : null;
         String validatedRegion = request.getRegion() != null ? resolveRegion(request.getRegion()) : null;
-        user.updateProfile(request.getName(), request.getEmail(), validatedRegion);
+        user.updateProfile(validatedName, request.getEmail(), validatedRegion);
 
         if (request.getAgeGroup() != null) {
             user.updateAge(resolveAge(request.getAgeGroup()));
@@ -77,6 +78,17 @@ public class UserService {
             throw new IllegalArgumentException("유효하지 않은 고용 형태 코드입니다");
         }
         return employmentType.getCode();
+    }
+
+    private String resolveName(String name) {
+        String trimmed = name.strip();
+        if (trimmed.isEmpty()) {
+            throw new IllegalArgumentException("이름은 비어 있을 수 없습니다");
+        }
+        if (trimmed.length() > 20) {
+            throw new IllegalArgumentException("이름은 20자 이하여야 합니다");
+        }
+        return trimmed;
     }
 
     private String resolveRegion(String regionCode) {

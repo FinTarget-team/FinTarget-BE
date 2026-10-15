@@ -67,7 +67,8 @@ public class UserController {
     @Operation(
             summary = "내 프로필 수정",
             description = "이름/이메일/지역/연령대/고용형태/소득구간을 수정합니다. 요청 필드 중 null인 값은 기존 값을 유지하고 변경하지 않습니다. " +
-                    "지역/연령대/고용형태/소득구간에 허용되지 않은 코드(빈 문자열 포함)를 보내면 400으로 거부됩니다."
+                    "지역/연령대/고용형태/소득구간에 허용되지 않은 코드(빈 문자열 포함)를 보내면 400으로 거부됩니다. " +
+                    "이름은 앞뒤 공백을 제거한 뒤 저장되며, 공백만 있거나 빈 문자열이거나 20자를 초과하면 400으로 거부됩니다."
     )
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(
@@ -83,6 +84,18 @@ public class UserController {
                                     name = "사용자를 찾을 수 없음",
                                     value = """
                                             {"status": 400, "message": "사용자를 찾을 수 없습니다.", "data": null}
+                                            """
+                            ),
+                            @ExampleObject(
+                                    name = "이름이 비어 있음",
+                                    value = """
+                                            {"status": 400, "message": "이름은 비어 있을 수 없습니다", "data": null}
+                                            """
+                            ),
+                            @ExampleObject(
+                                    name = "이름이 20자 초과",
+                                    value = """
+                                            {"status": 400, "message": "이름은 20자 이하여야 합니다", "data": null}
                                             """
                             ),
                             @ExampleObject(
