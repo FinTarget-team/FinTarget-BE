@@ -11,6 +11,7 @@ import kr.fintarget.api.domain.user.code.IncomeBracket;
 import kr.fintarget.api.domain.user.code.Region;
 import kr.fintarget.api.domain.user.entity.User;
 import kr.fintarget.api.domain.user.repository.UserRepository;
+import kr.fintarget.api.domain.user.validation.NameValidator;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,7 +28,13 @@ public class OnboardingService {
     private final UserRepository userRepository;
     private final OnboardingAnswerRepository onboardingAnswerRepository;
     private final GoalService goalService;
-    private static final int TOTAL_STEPS = 5;
+    static final int STEP_NAME = 1;
+    static final int STEP_AGE = 2;
+    static final int STEP_EMPLOYMENT = 3;
+    static final int STEP_INCOME = 4;
+    static final int STEP_REGION = 5;
+    static final int STEP_GOAL = 6;
+    static final int TOTAL_STEPS = STEP_GOAL;
 
     private static final List<OnboardingStepResponse.OptionDto> REGION_OPTIONS = Arrays.stream(Region.values())
             .map(region -> OnboardingStepResponse.OptionDto.builder().label(region.getLabel()).value(region.getCode()).build())
@@ -35,8 +42,14 @@ public class OnboardingService {
 
     public OnboardingStepResponse getStep(int step) {
         return switch (step) {
-            case 1 -> OnboardingStepResponse.builder()
-                    .step(1).totalSteps(TOTAL_STEPS).progress(0.2)
+            case STEP_NAME -> OnboardingStepResponse.builder()
+                    .step(STEP_NAME).totalSteps(TOTAL_STEPS).progress((double) STEP_NAME / TOTAL_STEPS)
+                    .question("사용할 닉네임을 입력해 주세요. (최대 20자)")
+                    .answerType("TEXT")
+                    .options(List.of())
+                    .isComplete(false).build();
+            case STEP_AGE -> OnboardingStepResponse.builder()
+                    .step(STEP_AGE).totalSteps(TOTAL_STEPS).progress((double) STEP_AGE / TOTAL_STEPS)
                     .question("나이를 알면 받을 수 있는 정책이 달라져요. 어느 시기를 보내고 계신가요?")
                     .answerType("CHIP")
                     .options(List.of(
@@ -44,8 +57,8 @@ public class OnboardingService {
                             OnboardingStepResponse.OptionDto.builder().label("중장년 (40대~)").value("MIDDLE").build()
                     ))
                     .isComplete(false).build();
-            case 2 -> OnboardingStepResponse.builder()
-                    .step(2).totalSteps(TOTAL_STEPS).progress(0.4)
+            case STEP_EMPLOYMENT -> OnboardingStepResponse.builder()
+                    .step(STEP_EMPLOYMENT).totalSteps(TOTAL_STEPS).progress((double) STEP_EMPLOYMENT / TOTAL_STEPS)
                     .question("고용 형태에 따라 신청 가능한 정책이 달라져요. 현재 어떤 일을 하고 계신가요?")
                     .answerType("CHIP")
                     .options(List.of(
@@ -55,8 +68,8 @@ public class OnboardingService {
                             OnboardingStepResponse.OptionDto.builder().label("자영업자").value("SELF_EMPLOYED").build()
                     ))
                     .isComplete(false).build();
-            case 3 -> OnboardingStepResponse.builder()
-                    .step(3).totalSteps(TOTAL_STEPS).progress(0.6)
+            case STEP_INCOME -> OnboardingStepResponse.builder()
+                    .step(STEP_INCOME).totalSteps(TOTAL_STEPS).progress((double) STEP_INCOME / TOTAL_STEPS)
                     .question("소득 수준에 맞는 청년 정책을 찾아드릴게요. 월 소득이 어느 정도인가요?")
                     .answerType("CHIP")
                     .options(List.of(
@@ -65,14 +78,14 @@ public class OnboardingService {
                             OnboardingStepResponse.OptionDto.builder().label("300만원 이상").value("OVER_3M").build()
                     ))
                     .isComplete(false).build();
-            case 4 -> OnboardingStepResponse.builder()
-                    .step(4).totalSteps(TOTAL_STEPS).progress(0.8)
+            case STEP_REGION -> OnboardingStepResponse.builder()
+                    .step(STEP_REGION).totalSteps(TOTAL_STEPS).progress((double) STEP_REGION / TOTAL_STEPS)
                     .question("거주 지역에 따라 받을 수 있는 정책이 달라져요. 현재 어느 지역에 살고 계신가요?")
                     .answerType("CHIP")
                     .options(REGION_OPTIONS)
                     .isComplete(false).build();
-            case 5 -> OnboardingStepResponse.builder()
-                    .step(5).totalSteps(TOTAL_STEPS).progress(1.0)
+            case STEP_GOAL -> OnboardingStepResponse.builder()
+                    .step(STEP_GOAL).totalSteps(TOTAL_STEPS).progress((double) STEP_GOAL / TOTAL_STEPS)
                     .question("목표 금액을 알면 달성일을 바로 계산해드릴게요. 목표 자산이 얼마인가요?")
                     .answerType("NUMBER")
                     .options(List.of())
@@ -95,11 +108,11 @@ public class OnboardingService {
 
         onboardingAnswerRepository.save(answer);
 
-        // step별 답변을 User 엔티티에 반영 (step1: age, step2: employmentType, step3: income, step4: region)
+        // step별 답변을 User 엔티티에 반영 (STEP_NAME: name, STEP_AGE: age, STEP_EMPLOYMENT: employmentType, STEP_INCOME: income, STEP_REGION: region)
         applyAnswerToUser(userId, request.getStep(), request.getValue());
 
         // 마지막 단계면 목표 생성 후 완료 처리
-        if (request.getStep() == TOTAL_STEPS) {
+        if (request.getStep() == STEP_GOAL) {
             goalService.upsertFromOnboarding(UUID.fromString(userId), resolveTargetAmount(request.getValue()));
 
             User user = userRepository.findById(userId)
@@ -108,7 +121,7 @@ public class OnboardingService {
             userRepository.save(user);
 
             return OnboardingStepResponse.builder()
-                    .step(TOTAL_STEPS).totalSteps(TOTAL_STEPS).progress(1.0)
+                    .step(STEP_GOAL).totalSteps(TOTAL_STEPS).progress(1.0)
                     .question("완료! 맞춤 정책과 시뮬레이션을 준비할게요.")
                     .answerType("NONE").options(List.of())
                     .isComplete(true).build();
@@ -130,7 +143,7 @@ public class OnboardingService {
     }
 
     private void validatePreviousStepCompleted(String userId, int step) {
-        if (step == 1) return;
+        if (step == STEP_NAME) return;
 
         boolean previousStepCompleted = onboardingAnswerRepository
                 .existsByUserIdAndStep(UUID.fromString(userId), step - 1);
@@ -140,16 +153,18 @@ public class OnboardingService {
     }
 
     private void applyAnswerToUser(String userId, int step, String value) {
-        if (step != 1 && step != 2 && step != 3 && step != 4) return;
+        if (step != STEP_NAME && step != STEP_AGE && step != STEP_EMPLOYMENT
+                && step != STEP_INCOME && step != STEP_REGION) return;
 
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("유저를 찾을 수 없습니다."));
 
         switch (step) {
-            case 1 -> user.updateAge(resolveAge(value));
-            case 2 -> user.updateEmploymentType(resolveEmploymentType(value));
-            case 3 -> user.updateIncome(resolveIncome(value));
-            case 4 -> user.updateRegion(resolveRegion(value));
+            case STEP_NAME -> user.updateName(NameValidator.validate(value));
+            case STEP_AGE -> user.updateAge(resolveAge(value));
+            case STEP_EMPLOYMENT -> user.updateEmploymentType(resolveEmploymentType(value));
+            case STEP_INCOME -> user.updateIncome(resolveIncome(value));
+            case STEP_REGION -> user.updateRegion(resolveRegion(value));
         }
 
         userRepository.save(user);

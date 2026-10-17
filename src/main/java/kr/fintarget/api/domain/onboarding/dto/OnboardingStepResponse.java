@@ -9,7 +9,7 @@ public class OnboardingStepResponse {
     @Schema(description = "현재 단계 번호", example = "1")
     private int step;
 
-    @Schema(description = "전체 단계 수", example = "5")
+    @Schema(description = "전체 단계 수", example = "6")
     private int totalSteps;
 
     @Schema(description = "진행률 (0.0 ~ 1.0)", example = "0.2")
@@ -24,7 +24,7 @@ public class OnboardingStepResponse {
     @Schema(description = "선택형 질문(CHIP)의 선택지 목록. TEXT/NUMBER/NONE 유형이면 빈 배열입니다.")
     private List<OptionDto> options;
 
-    @Schema(description = "온보딩 전체 완료 여부. 5단계 답변 제출 완료 시 true입니다.", example = "false")
+    @Schema(description = "온보딩 전체 완료 여부. 6단계 답변 제출 완료 시 true입니다.", example = "false")
     private boolean isComplete;
     @Getter
     @Builder

@@ -66,4 +66,8 @@ public class User {
     public void updateRegion(String region) {
         this.region = region;
     }
+
+    public void updateName(String name) {
+        this.name = name;
+    }
 }
