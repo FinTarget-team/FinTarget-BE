@@ -50,6 +50,7 @@ services:
       YOUTH_CENTER_BASE_URL: ${YOUTH_CENTER_BASE_URL:-}
       KINFA_API_KEY: ${KINFA_API_KEY:-}
       KINFA_BASE_URL: ${KINFA_BASE_URL:-}
+      ADMIN_API_KEY: ${ADMIN_API_KEY:-}
 
 volumes:
   db-data:

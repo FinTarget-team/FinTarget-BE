@@ -21,6 +21,12 @@ public class OpenApiConfig {
                                         .scheme("bearer")
                                         .bearerFormat("JWT")
                         )
+                        .addSecuritySchemes("adminApiKey",
+                                new SecurityScheme()
+                                        .name("X-Admin-Key")
+                                        .type(SecurityScheme.Type.APIKEY)
+                                        .in(SecurityScheme.In.HEADER)
+                        )
                 );
     }
 }

@@ -1,7 +1,9 @@
 package kr.fintarget.api.domain.policy.scheduler;
 
+import kr.fintarget.api.domain.policy.service.PolicySyncInProgressException;
 import kr.fintarget.api.domain.policy.service.PolicySyncOrchestrator;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -10,6 +12,7 @@ import org.springframework.stereotype.Component;
  * 매일 새벽 3시, 온통청년/KINFA 정책 데이터를 동기화한다.
  * policy.sync.scheduler.enabled=false 이면 등록되지 않는다 (로컬 개발 기본값).
  */
+@Slf4j
 @Component
 @RequiredArgsConstructor
 @ConditionalOnProperty(prefix = "policy.sync.scheduler", name = "enabled", havingValue = "true", matchIfMissing = true)
@@ -19,6 +22,10 @@ public class PolicySyncScheduler {
 
     @Scheduled(cron = "0 0 3 * * *", zone = "Asia/Seoul")
     public void syncPolicies() {
-        policySyncOrchestrator.syncAll();
+        try {
+            policySyncOrchestrator.syncAll();
+        } catch (PolicySyncInProgressException e) {
+            log.warn("정책 동기화가 이미 실행 중이어서 스케줄 동기화를 건너뜁니다");
+        }
     }
 }

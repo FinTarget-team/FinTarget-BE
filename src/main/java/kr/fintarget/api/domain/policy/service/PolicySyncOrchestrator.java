@@ -4,11 +4,13 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.IntSupplier;
 
 /**
  * 온통청년/KINFA 정책 동기화를 순차 실행한다. 스케줄러와 수동 트리거 API가 공유한다.
  * 한쪽 API 장애가 다른 쪽 동기화를 막지 않도록 각각 격리해서 실행한다.
+ * 같은 정책을 중복 저장하지 않도록 동시에 하나의 동기화만 실행하며, 실행 중 요청은 PolicySyncInProgressException으로 거절한다.
  */
 @Slf4j
 @Service
@@ -17,8 +19,20 @@ public class PolicySyncOrchestrator {
 
     private final YouthCenterPolicySyncService youthCenterPolicySyncService;
     private final KinfaPolicySyncService kinfaPolicySyncService;
+    private final AtomicBoolean running = new AtomicBoolean(false);
 
     public PolicySyncResult syncAll() {
+        if (!running.compareAndSet(false, true)) {
+            throw new PolicySyncInProgressException();
+        }
+        try {
+            return doSyncAll();
+        } finally {
+            running.set(false);
+        }
+    }
+
+    private PolicySyncResult doSyncAll() {
         long start = System.currentTimeMillis();
 
         SourceResult youthCenterResult = runSync("YOUTH_CENTER",
