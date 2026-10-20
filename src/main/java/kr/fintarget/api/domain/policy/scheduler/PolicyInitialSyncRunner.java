@@ -1,6 +1,7 @@
 package kr.fintarget.api.domain.policy.scheduler;
 
 import kr.fintarget.api.domain.policy.repository.PolicyRepository;
+import kr.fintarget.api.domain.policy.service.PolicySyncInProgressException;
 import kr.fintarget.api.domain.policy.service.PolicySyncOrchestrator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -31,6 +32,10 @@ public class PolicyInitialSyncRunner {
             return;
         }
         log.info("정책 데이터가 비어 있어 기동 시 동기화를 실행합니다");
-        policySyncOrchestrator.syncAll();
+        try {
+            policySyncOrchestrator.syncAll();
+        } catch (PolicySyncInProgressException e) {
+            log.warn("정책 동기화가 이미 실행 중이어서 기동 시 동기화를 건너뜁니다");
+        }
     }
 }

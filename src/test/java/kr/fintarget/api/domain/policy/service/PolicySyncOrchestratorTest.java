@@ -6,7 +6,12 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -60,5 +65,37 @@ class PolicySyncOrchestratorTest {
         assertThat(result.youthCenterSavedCount()).isEqualTo(4);
         assertThat(result.kinfaFailed()).isTrue();
         assertThat(result.kinfaSavedCount()).isZero();
+    }
+
+    @Test
+    void 동기화가_실행_중이면_새_동기화_요청을_거절한다() throws Exception {
+        CountDownLatch started = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        when(youthCenterPolicySyncService.sync()).thenAnswer(invocation -> {
+            started.countDown();
+            release.await(5, TimeUnit.SECONDS);
+            return 1;
+        });
+        when(kinfaPolicySyncService.sync()).thenReturn(2);
+
+        CompletableFuture<PolicySyncResult> first = CompletableFuture.supplyAsync(policySyncOrchestrator::syncAll);
+        assertThat(started.await(5, TimeUnit.SECONDS)).isTrue();
+
+        assertThatThrownBy(() -> policySyncOrchestrator.syncAll())
+                .isInstanceOf(PolicySyncInProgressException.class);
+
+        release.countDown();
+        assertThat(first.get(5, TimeUnit.SECONDS).youthCenterSavedCount()).isEqualTo(1);
+    }
+
+    @Test
+    void 동기화가_끝나면_다시_실행할_수_있다() {
+        when(youthCenterPolicySyncService.sync()).thenReturn(1);
+        when(kinfaPolicySyncService.sync()).thenReturn(2);
+
+        policySyncOrchestrator.syncAll();
+        PolicySyncResult second = policySyncOrchestrator.syncAll();
+
+        assertThat(second.kinfaSavedCount()).isEqualTo(2);
     }
 }
