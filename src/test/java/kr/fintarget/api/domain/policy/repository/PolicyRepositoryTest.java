@@ -36,6 +36,16 @@ class PolicyRepositoryTest {
     }
 
     @Test
+    void 나이_하한이_없는_정책은_최대_나이_이하면_매칭된다() {
+        policyRepository.save(Policy.create("상한만 있는 정책", "설명", null, 34, null, 100000L, PolicyType.ETC, "전국", null, null));
+
+        assertThat(policyRepository.findMatchingPolicies(34, 1_000_000L, null))
+                .extracting(Policy::getName).contains("상한만 있는 정책");
+        assertThat(policyRepository.findMatchingPolicies(35, 1_000_000L, null))
+                .extracting(Policy::getName).doesNotContain("상한만 있는 정책");
+    }
+
+    @Test
     void 소득_제한이_있는_정책은_초과시_매칭되지_않는다() {
         policyRepository.save(Policy.create("저소득 정책", "설명", 18, 65, 3_000_000L, 100000L, PolicyType.ETC, "전국", null, null));
 

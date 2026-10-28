@@ -52,8 +52,8 @@ public class YouthCenterPolicyMapper {
         return Policy.create(
                 item.plcyNm(),
                 item.plcyExplnCn(),
-                parseAge(item.sprtTrgtMinAge()),
-                parseAge(item.sprtTrgtMaxAge()),
+                parseAge(item.sprtTrgtMinAge(), item.plcyNo(), "sprtTrgtMinAge"),
+                parseAge(item.sprtTrgtMaxAge(), item.plcyNo(), "sprtTrgtMaxAge"),
                 null, // 온통청년 응답에 정형화된 소득 상한 필드가 확인되지 않음
                 null, // 온통청년 응답에 정형화된 지원금액 필드가 확인되지 않음 (plcySprtCn은 자유 텍스트)
                 resolvePolicyType(item.lclsfNm()),
@@ -124,14 +124,26 @@ public class YouthCenterPolicyMapper {
         return PolicyType.ETC;
     }
 
-    private static Integer parseAge(String value) {
+    /**
+     * 온통청년 지원대상 최소/최대 연령을 Policy 나이 조건으로 변환한다. null은 "제한 없음"이다.
+     * - null/빈 문자열: null
+     * - 0 이하: null. 온통청년은 나이 제한이 없는 정책에 0을 보내며, 최소·최대를 각각 판정한다 (예: 18, 0 → 18 이상 상한 없음)
+     * - 숫자가 아님: null, 정책 ID와 원래 값을 WARN 로그로 남김
+     * - 99, 120처럼 큰 상한은 사용자 나이로 넘을 수 없어 그대로 둔다
+     * sprtTrgtAgeLmtYn(나이 제한 여부)은 읽지 않는다. 2026-10 실응답 기준 Y인데 19~39처럼 실제 나이가 있는 정책과
+     * N인데 0/0인 정책이 섞여 있어 판정 근거로 쓸 수 없다 (#110).
+     */
+    private static Integer parseAge(String value, String plcyNo, String field) {
         if (value == null || value.isBlank()) {
             return null;
         }
+        int age;
         try {
-            return Integer.parseInt(value.trim());
+            age = Integer.parseInt(value.trim());
         } catch (NumberFormatException e) {
+            log.warn("온통청년 나이 값이 숫자가 아니어서 제한 없음으로 저장: plcyNo={}, {}={}", plcyNo, field, value);
             return null;
         }
+        return age <= 0 ? null : age;
     }
 }
