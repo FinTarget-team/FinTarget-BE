@@ -263,7 +263,34 @@ Authorization: Bearer {accessToken}
 {
   "goalId": "uuid",
   "monthlySaving": 500000,
-  "userPolicyId": "uuid (optional)"
+  "userPolicyId": "uuid (optional)",
+  "annualInterestRate": 0.03
+}
+```
+- 요청 필드 검증 규칙:
+
+| 필드 | 필수 | 규칙 | 실패 시 메시지 |
+|---|---|---|---|
+| `goalId` | O | 본인 소유 목표의 ID | 누락: `목표를 선택해주세요.` / 없거나 타인 목표: `존재하지 않는 목표입니다.` |
+| `monthlySaving` | O | 0보다 큰 정수(원) | 누락: `월 저축액을 입력해주세요.` / 0·음수: `월 저축액은 0보다 커야 합니다.` |
+| `userPolicyId` | X | 본인이 스크랩한 정책 ID. 생략하면 `policyCompletionDate`는 `null` | `존재하지 않는 유저 정책입니다.` |
+| `annualInterestRate` | X | 0.0 이상 1.0 이하(예: 3% = `0.03`). 생략하면 `0.03` 적용 | 음수: `연이율은 0 이상이어야 합니다.` / 1.0 초과: `연이율은 100%(1.0) 이하여야 합니다.` |
+
+- 검증 실패는 모두 **HTTP 400**으로 응답합니다. 여러 필드가 동시에 틀려도 메시지는 하나만 반환되며, 어떤 필드인지 알려주는 `field` 키는 없습니다.
+```json
+// monthlySaving: null
+{
+  "status": 400,
+  "message": "월 저축액을 입력해주세요.",
+  "data": null
+}
+```
+```json
+// monthlySaving: 0 또는 음수
+{
+  "status": 400,
+  "message": "월 저축액은 0보다 커야 합니다.",
+  "data": null
 }
 ```
 
