@@ -76,7 +76,7 @@ class OnboardingServiceTest {
         OnboardingStepResponse response = onboardingService.submitAnswer(userId, answerRequest(STEP_NAME, "홍길동"));
 
         assertThat(response.getStep()).isEqualTo(STEP_AGE);
-        assertThat(response.getAnswerType()).isEqualTo("CHIP");
+        assertThat(response.getAnswerType()).isEqualTo("NUMBER");
         assertThat(user.getName()).isEqualTo("홍길동");
         verify(onboardingAnswerRepository).save(any(OnboardingAnswer.class));
         verify(userRepository).save(user);
@@ -163,12 +163,69 @@ class OnboardingServiceTest {
 
         when(onboardingAnswerRepository.existsByUserIdAndStep(UUID.fromString(userId), STEP_NAME)).thenReturn(false);
 
-        assertThatThrownBy(() -> onboardingService.submitAnswer(userId, answerRequest(STEP_AGE, "YOUTH")))
+        assertThatThrownBy(() -> onboardingService.submitAnswer(userId, answerRequest(STEP_AGE, "2000")))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("이전 온보딩 단계를 먼저 완료해주세요");
 
         verify(onboardingAnswerRepository, never()).save(any());
         verify(userRepository, never()).findById(any());
+    }
+
+    @Test
+    void step2_조회시_출생연도_NUMBER_질문과_빈_옵션을_반환한다() {
+        OnboardingStepResponse response = onboardingService.getStep(STEP_AGE);
+
+        assertThat(response.getStep()).isEqualTo(STEP_AGE);
+        assertThat(response.getAnswerType()).isEqualTo("NUMBER");
+        assertThat(response.getQuestion()).isEqualTo("태어난 연도를 입력해 주세요. (예: 2000)");
+        assertThat(response.getOptions()).isEmpty();
+    }
+
+    @Test
+    void step2_답변_제출시_유효한_출생연도면_유저_birthYear가_갱신되고_3단계_질문을_반환한다() {
+        String userId = UUID.randomUUID().toString();
+        User user = User.builder().id(userId).provider("kakao").providerId("provider-1").build();
+
+        when(onboardingAnswerRepository.existsByUserIdAndStep(UUID.fromString(userId), STEP_NAME)).thenReturn(true);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+        OnboardingStepResponse response = onboardingService.submitAnswer(userId, answerRequest(STEP_AGE, " 1998 "));
+
+        assertThat(response.getStep()).isEqualTo(STEP_EMPLOYMENT);
+        assertThat(user.getBirthYear()).isEqualTo(1998);
+        verify(userRepository).save(user);
+    }
+
+    @Test
+    void step2_답변_제출시_구버전_연령대_코드면_400_예외가_발생한다() {
+        String userId = UUID.randomUUID().toString();
+        User user = User.builder().id(userId).provider("kakao").providerId("provider-1").build();
+
+        when(onboardingAnswerRepository.existsByUserIdAndStep(UUID.fromString(userId), STEP_NAME)).thenReturn(true);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+        assertThatThrownBy(() -> onboardingService.submitAnswer(userId, answerRequest(STEP_AGE, "YOUTH")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("출생연도는 4자리 숫자로 입력해주세요");
+
+        assertThat(user.getBirthYear()).isNull();
+        verify(userRepository, never()).save(any());
+    }
+
+    @Test
+    void step2_답변_제출시_출생연도가_범위_밖이면_400_예외가_발생한다() {
+        String userId = UUID.randomUUID().toString();
+        User user = User.builder().id(userId).provider("kakao").providerId("provider-1").build();
+
+        when(onboardingAnswerRepository.existsByUserIdAndStep(UUID.fromString(userId), STEP_NAME)).thenReturn(true);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+        assertThatThrownBy(() -> onboardingService.submitAnswer(userId, answerRequest(STEP_AGE, "1939")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageStartingWith("출생연도는 1940년부터");
+
+        assertThat(user.getBirthYear()).isNull();
+        verify(userRepository, never()).save(any());
     }
 
     @Test

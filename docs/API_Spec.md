@@ -119,7 +119,7 @@ Authorization: Bearer {accessToken}
   }
 }
 ```
-- Response (2단계 예시, CHIP 타입):
+- Response (2단계, 출생연도 입력):
 ```json
 {
   "status": 200,
@@ -128,10 +128,26 @@ Authorization: Bearer {accessToken}
     "step": 2,
     "totalSteps": 6,
     "progress": 0.33,
+    "question": "태어난 연도를 입력해 주세요. (예: 2000)",
+    "answerType": "NUMBER",
+    "options": [],
+    "complete": false
+  }
+}
+```
+- Response (3단계 예시, CHIP 타입):
+```json
+{
+  "status": 200,
+  "message": "OK",
+  "data": {
+    "step": 3,
+    "totalSteps": 6,
+    "progress": 0.5,
     "question": "string",
     "answerType": "CHIP",
     "options": [
-      { "label": "청년 (~39세)", "value": "YOUTH" }
+      { "label": "직장인", "value": "EMPLOYED" }
     ],
     "complete": false
   }
@@ -148,6 +164,7 @@ Authorization: Bearer {accessToken}
 }
 ```
 - 1단계 `value`는 이름(닉네임)이며, 앞뒤 공백은 제거되어 저장되고 공백만 있거나 빈 문자열이거나 20자를 초과하면 400으로 거부됨
+- 2단계 `value`는 출생연도(ASCII 숫자 4자리 문자열, 1940년 이상 (올해-14)년 이하, 올해는 Asia/Seoul 기준)이며, 앞뒤 공백은 제거되고 형식이나 범위가 맞지 않으면 400으로 거부됨
 - 6단계 `value`는 목표 금액(원, 숫자 문자열, 1원 이상 50억 원 이하)
 - 6단계 제출 시 목표(Goal)가 자동 생성됨: `title` "내 목표", `currentAmount` 0, `deadline` 1년 후, `deadlineDefaulted` true
 - 6단계를 다시 제출하면 새로 만들지 않고 기존 목표의 `targetAmount`만 갱신

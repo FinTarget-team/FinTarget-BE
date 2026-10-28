@@ -5,12 +5,12 @@ import kr.fintarget.api.domain.onboarding.dto.OnboardingAnswerRequest;
 import kr.fintarget.api.domain.onboarding.dto.OnboardingStepResponse;
 import kr.fintarget.api.domain.onboarding.entity.OnboardingAnswer;
 import kr.fintarget.api.domain.onboarding.repository.OnboardingAnswerRepository;
-import kr.fintarget.api.domain.user.code.AgeGroup;
 import kr.fintarget.api.domain.user.code.EmploymentType;
 import kr.fintarget.api.domain.user.code.IncomeBracket;
 import kr.fintarget.api.domain.user.code.Region;
 import kr.fintarget.api.domain.user.entity.User;
 import kr.fintarget.api.domain.user.repository.UserRepository;
+import kr.fintarget.api.domain.user.validation.BirthYearValidator;
 import kr.fintarget.api.domain.user.validation.NameValidator;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -50,12 +50,9 @@ public class OnboardingService {
                     .isComplete(false).build();
             case STEP_AGE -> OnboardingStepResponse.builder()
                     .step(STEP_AGE).totalSteps(TOTAL_STEPS).progress((double) STEP_AGE / TOTAL_STEPS)
-                    .question("나이를 알면 받을 수 있는 정책이 달라져요. 어느 시기를 보내고 계신가요?")
-                    .answerType("CHIP")
-                    .options(List.of(
-                            OnboardingStepResponse.OptionDto.builder().label("청년 (~39세)").value("YOUTH").build(),
-                            OnboardingStepResponse.OptionDto.builder().label("중장년 (40대~)").value("MIDDLE").build()
-                    ))
+                    .question("태어난 연도를 입력해 주세요. (예: 2000)")
+                    .answerType("NUMBER")
+                    .options(List.of())
                     .isComplete(false).build();
             case STEP_EMPLOYMENT -> OnboardingStepResponse.builder()
                     .step(STEP_EMPLOYMENT).totalSteps(TOTAL_STEPS).progress((double) STEP_EMPLOYMENT / TOTAL_STEPS)
@@ -111,7 +108,7 @@ public class OnboardingService {
 
         onboardingAnswerRepository.save(answer);
 
-        // step별 답변을 User 엔티티에 반영 (STEP_NAME: name, STEP_AGE: age, STEP_EMPLOYMENT: employmentType, STEP_INCOME: income, STEP_REGION: region)
+        // step별 답변을 User 엔티티에 반영 (STEP_NAME: name, STEP_AGE: birthYear, STEP_EMPLOYMENT: employmentType, STEP_INCOME: income, STEP_REGION: region)
         applyAnswerToUser(userId, request.getStep(), request.getValue());
 
         // 마지막 단계면 목표 생성 후 완료 처리
@@ -164,21 +161,13 @@ public class OnboardingService {
 
         switch (step) {
             case STEP_NAME -> user.updateName(NameValidator.validate(value));
-            case STEP_AGE -> user.updateAge(resolveAge(value));
+            case STEP_AGE -> user.updateBirthYear(BirthYearValidator.validate(value));
             case STEP_EMPLOYMENT -> user.updateEmploymentType(resolveEmploymentType(value));
             case STEP_INCOME -> user.updateIncome(resolveIncome(value));
             case STEP_REGION -> user.updateRegion(resolveRegion(value));
         }
 
         userRepository.save(user);
-    }
-
-    private Integer resolveAge(String value) {
-        AgeGroup ageGroup = AgeGroup.fromCode(value);
-        if (ageGroup == null) {
-            throw new IllegalArgumentException("유효하지 않은 나이 코드입니다");
-        }
-        return ageGroup.getAge();
     }
 
     private String resolveEmploymentType(String value) {

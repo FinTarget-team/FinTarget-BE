@@ -1,6 +1,5 @@
 package kr.fintarget.api.domain.user.service;
 
-import kr.fintarget.api.domain.user.code.AgeGroup;
 import kr.fintarget.api.domain.user.code.EmploymentType;
 import kr.fintarget.api.domain.user.code.IncomeBracket;
 import kr.fintarget.api.domain.user.code.Region;
@@ -8,6 +7,7 @@ import kr.fintarget.api.domain.user.dto.UpdateProfileRequest;
 import kr.fintarget.api.domain.user.dto.UserProfileResponse;
 import kr.fintarget.api.domain.user.entity.User;
 import kr.fintarget.api.domain.user.repository.UserRepository;
+import kr.fintarget.api.domain.user.validation.BirthYearValidator;
 import kr.fintarget.api.domain.user.validation.NameValidator;
 import kr.fintarget.api.domain.expense.repository.ExpenseRepository;
 import kr.fintarget.api.domain.goal.repository.GoalRepository;
@@ -44,8 +44,8 @@ public class UserService {
         String validatedRegion = request.getRegion() != null ? resolveRegion(request.getRegion()) : null;
         user.updateProfile(validatedName, request.getEmail(), validatedRegion);
 
-        if (request.getAgeGroup() != null) {
-            user.updateAge(resolveAge(request.getAgeGroup()));
+        if (request.getBirthYear() != null) {
+            user.updateBirthYear(BirthYearValidator.validate(request.getBirthYear()));
         }
         if (request.getEmploymentType() != null) {
             user.updateEmploymentType(resolveEmploymentType(request.getEmploymentType()));
@@ -55,14 +55,6 @@ public class UserService {
         }
 
         return UserProfileResponse.from(user);
-    }
-
-    private Integer resolveAge(String ageGroupCode) {
-        AgeGroup ageGroup = AgeGroup.fromCode(ageGroupCode);
-        if (ageGroup == null) {
-            throw new IllegalArgumentException("유효하지 않은 나이 코드입니다");
-        }
-        return ageGroup.getAge();
     }
 
     private Long resolveIncome(String incomeBracketCode) {

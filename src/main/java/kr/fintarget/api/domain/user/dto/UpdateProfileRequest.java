@@ -17,9 +17,10 @@ public class UpdateProfileRequest {
             types = {"string", "null"})
     private String region;
 
-    @Schema(description = "변경할 연령대 코드. null이면 기존 값을 유지합니다. 허용되지 않은 코드는 400으로 거부됩니다.",
-            example = "YOUTH", allowableValues = {"YOUTH", "MIDDLE"}, types = {"string", "null"})
-    private String ageGroup;
+    @Schema(description = "변경할 출생연도 (4자리 숫자 문자열). null이면 기존 값을 유지합니다. 앞뒤 공백은 제거되며, "
+            + "빈 문자열·4자리 숫자가 아닌 값·1940년 미만·(올해-14)년 초과는 400으로 거부됩니다.",
+            example = "2000", types = {"string", "null"})
+    private String birthYear;
 
     @Schema(description = "변경할 고용 형태 코드. null이면 기존 값을 유지합니다. 허용되지 않은 코드는 400으로 거부됩니다.",
             example = "EMPLOYED", allowableValues = {"EMPLOYED", "UNEMPLOYED", "STUDENT", "SELF_EMPLOYED"}, types = {"string", "null"})

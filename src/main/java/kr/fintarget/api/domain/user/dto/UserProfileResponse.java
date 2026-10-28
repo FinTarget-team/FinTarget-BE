@@ -1,6 +1,5 @@
 package kr.fintarget.api.domain.user.dto;
 import io.swagger.v3.oas.annotations.media.Schema;
-import kr.fintarget.api.domain.user.code.AgeGroup;
 import kr.fintarget.api.domain.user.code.IncomeBracket;
 import kr.fintarget.api.domain.user.entity.User;
 import lombok.Builder;
@@ -23,9 +22,9 @@ public class UserProfileResponse {
     @Schema(description = "가입에 사용한 소셜 로그인 제공자", example = "KAKAO", allowableValues = {"KAKAO", "NAVER"})
     private String provider;
 
-    @Schema(description = "연령대 코드. 온보딩 1단계를 완료하지 않았으면 null입니다.",
-            example = "YOUTH", allowableValues = {"YOUTH", "MIDDLE"}, types = {"string", "null"})
-    private String ageGroup;
+    @Schema(description = "출생연도. 온보딩 나이 단계를 완료하지 않았거나 출생연도 입력 도입 전에 연령대만 입력한 사용자는 null입니다.",
+            example = "2000", types = {"integer", "null"})
+    private Integer birthYear;
 
     @Schema(description = "고용 형태 코드. 온보딩 2단계를 완료하지 않았으면 null입니다.",
             example = "EMPLOYED", allowableValues = {"EMPLOYED", "UNEMPLOYED", "STUDENT", "SELF_EMPLOYED"}, types = {"string", "null"})
@@ -40,7 +39,6 @@ public class UserProfileResponse {
     private boolean onboardingCompleted;
 
     public static UserProfileResponse from(User user) {
-        AgeGroup ageGroup = AgeGroup.fromAge(user.getAge());
         IncomeBracket incomeBracket = IncomeBracket.fromIncome(user.getIncome());
 
         return UserProfileResponse.builder()
@@ -49,7 +47,7 @@ public class UserProfileResponse {
                 .email(user.getEmail())
                 .region(user.getRegion())
                 .provider(user.getProvider())
-                .ageGroup(ageGroup != null ? ageGroup.getCode() : null)
+                .birthYear(user.getBirthYear())
                 .employmentType(user.getEmploymentType())
                 .incomeBracket(incomeBracket != null ? incomeBracket.getCode() : null)
                 .onboardingCompleted(user.isOnboardingCompleted())

@@ -15,7 +15,7 @@ public class OnboardingStepResponse {
     @Schema(description = "진행률 (0.0 ~ 1.0)", example = "0.2")
     private double progress;
 
-    @Schema(description = "현재 단계의 질문 문구", example = "나이를 알면 받을 수 있는 정책이 달라져요! 어느 시기를 보내고 계신가요?")
+    @Schema(description = "현재 단계의 질문 문구", example = "고용 형태에 따라 신청 가능한 정책이 달라져요. 현재 어떤 일을 하고 계신가요?")
     private String question;
 
     @Schema(description = "질문 응답 UI 형태", example = "CHIP", allowableValues = {"CHIP", "TEXT", "NUMBER", "NONE"})
@@ -30,10 +30,10 @@ public class OnboardingStepResponse {
     @Builder
     public static class OptionDto {
 
-        @Schema(description = "선택지에 표시할 라벨", example = "청년 (~39세)")
+        @Schema(description = "선택지에 표시할 라벨", example = "직장인")
         private String label;
 
-        @Schema(description = "선택지 제출 값", example = "YOUTH")
+        @Schema(description = "선택지 제출 값", example = "EMPLOYED")
         private String value;
 
     }
