@@ -30,12 +30,16 @@ public class PolicyService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
 
-        if (user.getAge() == null || user.getIncome() == null) {
+        User.AgeRange ageRange = user.ageRange();
+        if (ageRange == null || user.getIncome() == null) {
             return List.of();
         }
 
-        return policyRepository.findMatchingPolicies(user.getAge(), user.getIncome(), parsePolicyType(policyType))
+        // 지역은 조회 후 거른다. 목록 API가 페이지네이션 없이 전체를 반환하므로 결과는 DB에서 거르는 것과 같다.
+        // 페이지네이션을 도입하면 페이지 크기·전체 건수가 어긋나므로 그때는 지역을 쿼리 조건으로 옮겨야 한다 (예: policy_region 정규화)
+        return policyRepository.findMatchingPolicies(ageRange.lower(), ageRange.upper(), user.getIncome(), parsePolicyType(policyType))
                 .stream()
+                .filter(policy -> policy.appliesToRegion(user.getRegion()))
                 .map(PolicyResponse::from)
                 .collect(Collectors.toList());
     }

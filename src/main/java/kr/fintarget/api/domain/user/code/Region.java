@@ -3,9 +3,9 @@ package kr.fintarget.api.domain.user.code;
 import java.util.Arrays;
 
 /**
- * User.region에 허용되는 대한민국 17개 시/도 코드.
- * Policy.region은 아직 표준화된 지역 포맷을 갖고 있지 않아 이 코드와 매칭되지 않음(PolicyMapper 참고).
- * 정책 매칭용 값(예: 전국 단위)은 이 enum에 포함하지 않음 — User.region 전용.
+ * 대한민국 17개 시/도 코드. User.region에 허용되는 값이며, Policy.region도 이 코드를 쉼표로 이어 저장한다
+ * (YouthCenterPolicyMapper, KinfaPolicyMapper가 변환. 전국 정책은 null).
+ * 전국 단위 같은 정책 매칭용 값은 이 enum에 포함하지 않음 — 지역 일치 판정은 Policy.appliesToRegion 참고.
  */
 public enum Region {
     SEOUL("SEOUL", "서울"),
