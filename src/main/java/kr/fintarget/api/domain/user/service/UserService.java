@@ -1,13 +1,15 @@
 package kr.fintarget.api.domain.user.service;
 
-import kr.fintarget.api.domain.user.code.AgeGroup;
 import kr.fintarget.api.domain.user.code.EmploymentType;
+import kr.fintarget.api.domain.user.code.HousingStatus;
 import kr.fintarget.api.domain.user.code.IncomeBracket;
 import kr.fintarget.api.domain.user.code.Region;
 import kr.fintarget.api.domain.user.dto.UpdateProfileRequest;
 import kr.fintarget.api.domain.user.dto.UserProfileResponse;
 import kr.fintarget.api.domain.user.entity.User;
 import kr.fintarget.api.domain.user.repository.UserRepository;
+import kr.fintarget.api.domain.user.validation.BirthYearValidator;
+import kr.fintarget.api.domain.user.validation.NameValidator;
 import kr.fintarget.api.domain.expense.repository.ExpenseRepository;
 import kr.fintarget.api.domain.goal.repository.GoalRepository;
 import kr.fintarget.api.domain.policy.repository.UserPolicyRepository;
@@ -39,12 +41,12 @@ public class UserService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
 
-        String validatedName = request.getName() != null ? resolveName(request.getName()) : null;
+        String validatedName = request.getName() != null ? NameValidator.validate(request.getName()) : null;
         String validatedRegion = request.getRegion() != null ? resolveRegion(request.getRegion()) : null;
         user.updateProfile(validatedName, request.getEmail(), validatedRegion);
 
-        if (request.getAgeGroup() != null) {
-            user.updateAge(resolveAge(request.getAgeGroup()));
+        if (request.getBirthYear() != null) {
+            user.updateBirthYear(BirthYearValidator.validate(request.getBirthYear()));
         }
         if (request.getEmploymentType() != null) {
             user.updateEmploymentType(resolveEmploymentType(request.getEmploymentType()));
@@ -52,16 +54,20 @@ public class UserService {
         if (request.getIncomeBracket() != null) {
             user.updateIncome(resolveIncome(request.getIncomeBracket()));
         }
+        // null은 기존 값 유지. 선택 안 함으로 되돌리려면 NOT_SPECIFIED를 보낸다 (null로 저장됨)
+        if (request.getHousingStatus() != null) {
+            user.updateHousingStatus(resolveHousingStatus(request.getHousingStatus()));
+        }
 
         return UserProfileResponse.from(user);
     }
 
-    private Integer resolveAge(String ageGroupCode) {
-        AgeGroup ageGroup = AgeGroup.fromCode(ageGroupCode);
-        if (ageGroup == null) {
-            throw new IllegalArgumentException("유효하지 않은 나이 코드입니다");
+    private String resolveHousingStatus(String housingStatusCode) {
+        HousingStatus housingStatus = HousingStatus.fromCode(housingStatusCode);
+        if (housingStatus == null) {
+            throw new IllegalArgumentException("유효하지 않은 주택 보유 코드입니다");
         }
-        return ageGroup.getAge();
+        return housingStatus.storedValue();
     }
 
     private Long resolveIncome(String incomeBracketCode) {
@@ -78,17 +84,6 @@ public class UserService {
             throw new IllegalArgumentException("유효하지 않은 고용 형태 코드입니다");
         }
         return employmentType.getCode();
-    }
-
-    private String resolveName(String name) {
-        String trimmed = name.strip();
-        if (trimmed.isEmpty()) {
-            throw new IllegalArgumentException("이름은 비어 있을 수 없습니다");
-        }
-        if (trimmed.length() > 20) {
-            throw new IllegalArgumentException("이름은 20자 이하여야 합니다");
-        }
-        return trimmed;
     }
 
     private String resolveRegion(String regionCode) {

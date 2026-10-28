@@ -36,7 +36,7 @@ public class GoalService {
         return GoalResponse.from(goalRepository.save(goal));
     }
 
-    // 온보딩 5단계 재제출(재시도)에도 안전하도록, 목표가 있으면 금액만 갱신한다
+    // 온보딩 마지막 단계(목표 금액, 현재 7단계) 재제출(재시도)에도 안전하도록, 목표가 있으면 금액만 갱신한다
     @Transactional
     public void upsertFromOnboarding(UUID userId, long targetAmount) {
         Goal.validateTargetAmount(targetAmount);

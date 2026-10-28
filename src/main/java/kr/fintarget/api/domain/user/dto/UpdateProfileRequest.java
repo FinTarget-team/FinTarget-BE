@@ -17,15 +17,22 @@ public class UpdateProfileRequest {
             types = {"string", "null"})
     private String region;
 
-    @Schema(description = "변경할 연령대 코드. null이면 기존 값을 유지합니다. 허용되지 않은 코드는 400으로 거부됩니다.",
-            example = "YOUTH", allowableValues = {"YOUTH", "MIDDLE"}, types = {"string", "null"})
-    private String ageGroup;
+    @Schema(description = "변경할 출생연도 (4자리 숫자 문자열). null이면 기존 값을 유지합니다. 앞뒤 공백은 제거되며, "
+            + "빈 문자열·4자리 숫자가 아닌 값·1940년 미만·(올해-14)년 초과는 400으로 거부됩니다.",
+            example = "2000", types = {"string", "null"})
+    private String birthYear;
 
     @Schema(description = "변경할 고용 형태 코드. null이면 기존 값을 유지합니다. 허용되지 않은 코드는 400으로 거부됩니다.",
             example = "EMPLOYED", allowableValues = {"EMPLOYED", "UNEMPLOYED", "STUDENT", "SELF_EMPLOYED"}, types = {"string", "null"})
     private String employmentType;
 
-    @Schema(description = "변경할 소득 구간 코드. null이면 기존 값을 유지합니다. 허용되지 않은 코드는 400으로 거부됩니다.",
-            example = "UNDER_2M", allowableValues = {"UNDER_2M", "200_300", "OVER_3M"}, types = {"string", "null"})
+    @Schema(description = "변경할 세전 월 소득 구간 코드. null이면 기존 값을 유지합니다. 허용되지 않은 코드(구버전 코드 포함)는 400으로 거부됩니다.",
+            example = "300_380", allowableValues = {"UNDER_150", "150_260", "260_300", "300_380", "380_410", "OVER_410"},
+            types = {"string", "null"})
     private String incomeBracket;
+
+    @Schema(description = "변경할 주택 보유 여부 코드. null이면 기존 값을 유지합니다. 선택 안 함으로 되돌리려면 NOT_SPECIFIED를 보냅니다. "
+            + "허용되지 않은 코드(빈 문자열·공백 포함)는 400으로 거부됩니다.",
+            example = "HOMELESS", allowableValues = {"HOMELESS", "HOMEOWNER", "NOT_SPECIFIED"}, types = {"string", "null"})
+    private String housingStatus;
 }
