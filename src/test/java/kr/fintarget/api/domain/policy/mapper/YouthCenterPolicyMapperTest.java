@@ -6,6 +6,9 @@ import kr.fintarget.api.domain.policy.client.dto.YouthCenterPolicyItem;
 import kr.fintarget.api.domain.policy.entity.Policy;
 import kr.fintarget.api.domain.policy.entity.PolicyType;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 
 import java.util.List;
 
@@ -226,6 +229,99 @@ class YouthCenterPolicyMapperTest {
     void zipCd가_빈_문자열이거나_null이면_null이다() {
         assertThat(YouthCenterPolicyMapper.toPolicy(itemWithZipCd("")).getRegion()).isNull();
         assertThat(YouthCenterPolicyMapper.toPolicy(itemWithZipCd(null)).getRegion()).isNull();
+    }
+
+    @Test
+    void 나이가_0이면_최소_최대_모두_제한_없음으로_null이다() {
+        Policy policy = YouthCenterPolicyMapper.toPolicy(itemWithAges("0", "0", "Y"));
+
+        assertThat(policy.getMinAge()).isNull();
+        assertThat(policy.getMaxAge()).isNull();
+    }
+
+    @Test
+    void 최대_나이만_0이면_최소_나이는_유지하고_상한은_null이다() {
+        Policy policy = YouthCenterPolicyMapper.toPolicy(itemWithAges("18", "0", "Y"));
+
+        assertThat(policy.getMinAge()).isEqualTo(18);
+        assertThat(policy.getMaxAge()).isNull();
+    }
+
+    @Test
+    void 최소_나이만_0이면_하한은_null이고_최대_나이는_유지한다() {
+        Policy policy = YouthCenterPolicyMapper.toPolicy(itemWithAges("0", "34", "N"));
+
+        assertThat(policy.getMinAge()).isNull();
+        assertThat(policy.getMaxAge()).isEqualTo(34);
+    }
+
+    @Test
+    void 음수_나이도_제한_없음으로_null이다() {
+        Policy policy = YouthCenterPolicyMapper.toPolicy(itemWithAges("-1", "-5", "N"));
+
+        assertThat(policy.getMinAge()).isNull();
+        assertThat(policy.getMaxAge()).isNull();
+    }
+
+    @Test
+    void 빈_값과_공백은_null이고_앞뒤_공백이_있는_0도_null이다() {
+        assertThat(YouthCenterPolicyMapper.toPolicy(itemWithAges("", "   ", "Y")).getMinAge()).isNull();
+        assertThat(YouthCenterPolicyMapper.toPolicy(itemWithAges("", "   ", "Y")).getMaxAge()).isNull();
+        assertThat(YouthCenterPolicyMapper.toPolicy(itemWithAges(" 0 ", null, "Y")).getMinAge()).isNull();
+        assertThat(YouthCenterPolicyMapper.toPolicy(itemWithAges(" 0 ", null, "Y")).getMaxAge()).isNull();
+    }
+
+    @Test
+    void 양수_나이는_그대로_저장되고_99_120처럼_큰_상한도_유지한다() {
+        Policy normal = YouthCenterPolicyMapper.toPolicy(itemWithAges(" 19 ", "39", "N"));
+        Policy upper99 = YouthCenterPolicyMapper.toPolicy(itemWithAges("34", "99", "Y"));
+        Policy upper120 = YouthCenterPolicyMapper.toPolicy(itemWithAges("1", "120", "N"));
+
+        assertThat(normal.getMinAge()).isEqualTo(19);
+        assertThat(normal.getMaxAge()).isEqualTo(39);
+        assertThat(upper99.getMaxAge()).isEqualTo(99);
+        assertThat(upper120.getMinAge()).isEqualTo(1);
+        assertThat(upper120.getMaxAge()).isEqualTo(120);
+    }
+
+    @Test
+    void 나이_제한_여부_플래그와_관계없이_나이_값으로만_판정한다() {
+        for (String flag : new String[]{"Y", "N", null, ""}) {
+            Policy limited = YouthCenterPolicyMapper.toPolicy(itemWithAges("19", "39", flag));
+            Policy unlimited = YouthCenterPolicyMapper.toPolicy(itemWithAges("0", "0", flag));
+
+            assertThat(limited.getMinAge()).isEqualTo(19);
+            assertThat(limited.getMaxAge()).isEqualTo(39);
+            assertThat(unlimited.getMinAge()).isNull();
+            assertThat(unlimited.getMaxAge()).isNull();
+        }
+    }
+
+    @Test
+    @ExtendWith(OutputCaptureExtension.class)
+    void 숫자가_아닌_나이는_null로_저장하고_정책_ID와_원래_값을_경고_로그로_남긴다(CapturedOutput output) {
+        Policy policy = YouthCenterPolicyMapper.toPolicy(itemWithAges("19세", "만 39세", "N"));
+
+        assertThat(policy.getMinAge()).isNull();
+        assertThat(policy.getMaxAge()).isNull();
+        assertThat(output.getOut())
+                .contains("plcyNo=AGE-TEST, sprtTrgtMinAge=19세")
+                .contains("plcyNo=AGE-TEST, sprtTrgtMaxAge=만 39세");
+    }
+
+    @Test
+    @ExtendWith(OutputCaptureExtension.class)
+    void 숫자인_나이와_0은_경고_로그를_남기지_않는다(CapturedOutput output) {
+        YouthCenterPolicyMapper.toPolicy(itemWithAges("0", "39", "Y"));
+
+        assertThat(output.getOut()).doesNotContain("plcyNo=AGE-TEST");
+    }
+
+    private YouthCenterPolicyItem itemWithAges(String minAge, String maxAge, String ageLmtYn) {
+        return new YouthCenterPolicyItem(
+                "AGE-TEST", "plcyNm", null, null, null, null, null, null, null,
+                minAge, maxAge, ageLmtYn, null, null, null, null, null, null, null
+        );
     }
 
     private YouthCenterPolicyItem itemWithZipCd(String zipCd) {
