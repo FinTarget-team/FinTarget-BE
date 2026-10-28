@@ -17,7 +17,7 @@ public class UserProfileResponse {
     @Schema(description = "이메일. 아직 설정하지 않았으면 null입니다.", example = "user@example.com", types = {"string", "null"})
     private String email;
 
-    @Schema(description = "거주 지역. 온보딩 4단계를 완료하지 않았으면 null입니다.", example = "SEOUL", types = {"string", "null"})
+    @Schema(description = "거주 지역. 온보딩 5단계를 완료하지 않았으면 null입니다.", example = "SEOUL", types = {"string", "null"})
     private String region;
 
     @Schema(description = "가입에 사용한 소셜 로그인 제공자", example = "KAKAO", allowableValues = {"KAKAO", "NAVER"})
@@ -27,7 +27,7 @@ public class UserProfileResponse {
             example = "2000", types = {"integer", "null"})
     private Integer birthYear;
 
-    @Schema(description = "고용 형태 코드. 온보딩 2단계를 완료하지 않았으면 null입니다.",
+    @Schema(description = "고용 형태 코드. 온보딩 3단계를 완료하지 않았으면 null입니다.",
             example = "EMPLOYED", allowableValues = {"EMPLOYED", "UNEMPLOYED", "STUDENT", "SELF_EMPLOYED"}, types = {"string", "null"})
     private String employmentType;
 

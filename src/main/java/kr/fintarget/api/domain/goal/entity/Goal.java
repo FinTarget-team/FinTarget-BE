@@ -73,7 +73,7 @@ public class Goal {
         this.deadlineDefaulted = false;
     }
 
-    // 온보딩 5단계에서 받은 목표 금액만으로 목표를 만든다. 나머지 값은 Goal 화면에서 수정
+    // 온보딩 마지막 단계(목표 금액, 현재 7단계)에서 받은 목표 금액만으로 목표를 만든다. 나머지 값은 Goal 화면에서 수정
     public static Goal createFromOnboarding(UUID userId, long targetAmount) {
         Goal goal = new Goal(userId, DEFAULT_TITLE, targetAmount, 0L,
                 LocalDate.now().plusYears(DEFAULT_DEADLINE_YEARS));
