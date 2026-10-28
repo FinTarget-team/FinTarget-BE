@@ -2,6 +2,7 @@ package kr.fintarget.api.domain.policy.mapper;
 
 import kr.fintarget.api.domain.policy.client.dto.KinfaItem;
 import kr.fintarget.api.domain.policy.entity.Policy;
+import kr.fintarget.api.domain.policy.entity.PolicyText;
 import kr.fintarget.api.domain.policy.entity.PolicyType;
 import kr.fintarget.api.domain.user.code.Region;
 import lombok.extern.slf4j.Slf4j;
@@ -60,7 +61,9 @@ public class KinfaPolicyMapper {
     public static Policy toPolicy(KinfaItem item) {
         return Policy.create(
                 item.finPrdNm(),
-                item.suprTgtDtlCond(),
+                // KINFA는 별도의 정책 설명 필드가 없어 지원 대상 상세 조건(suprTgtDtlCond)을 description으로 쓴다.
+                // 즉 KINFA의 description은 자격 조건이며, PolicyText.eligibilityDetail에는 중복해 넣지 않는다
+                PolicyTextCleaner.unescapeOnly(item.suprTgtDtlCond()),
                 null, // age 필드가 관측된 값("없음") 외의 형식이 검증되지 않아 파싱하지 않음
                 null, // age 필드가 관측된 값("없음") 외의 형식이 검증되지 않아 파싱하지 않음
                 null, // incm 필드가 관측된 값("없음") 외의 형식이 검증되지 않아 파싱하지 않음
@@ -68,8 +71,35 @@ public class KinfaPolicyMapper {
                 resolvePolicyType(item.usge()),
                 resolveRegion(item.rsdAreaPamtEqltIstm(), item.finPrdNm()),
                 toExternalId(item),
-                SOURCE
+                SOURCE,
+                toPolicyText(item)
         );
+    }
+
+    // KINFA 원문 필드 → PolicyText. 짧은 값 여러 개로 나뉜 항목은 "라벨: 값" 줄로 묶고, 값이 빈 줄은 뺀다
+    static PolicyText toPolicyText(KinfaItem item) {
+        return PolicyText.builder()
+                .supportContent(PolicyTextCleaner.labeledLines(
+                        "대출 한도", item.lnLmt(),
+                        "금리 구분", item.irtCtg(),
+                        "금리", item.irt(),
+                        "최대 총 대출 기간", item.maxTotLnTrm(),
+                        "최대 거치 기간", item.maxDfrmTrm(),
+                        "최대 상환 기간", item.maxRdptTrm(),
+                        "상환 방법", item.rdptMthd(),
+                        "자금 용도", item.usge()))
+                .eligibilityDetail(PolicyTextCleaner.labeledLines(
+                        "대상", item.trgt(),
+                        "신용 조건", item.crdtSc()))
+                .incomeCondition(PolicyTextCleaner.clean(item.incm()))
+                .ageCondition(PolicyTextCleaner.clean(item.age()))
+                .applyMethod(PolicyTextCleaner.clean(item.jnMthd()))
+                .applyPeriod(PolicyTextCleaner.clean(item.mgmDln()))
+                .contactInfo(PolicyTextCleaner.labeledLines(
+                        "문의처", item.cnpl(),
+                        "관련 사이트", item.rltSite()))
+                .etcNote(PolicyTextCleaner.clean(item.etcRefSbjc()))
+                .build();
     }
 
     public static String toExternalId(KinfaItem item) {

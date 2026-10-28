@@ -56,6 +56,10 @@ public class Policy {
     @Column(name = "source")
     private String source;
 
+    // 정책 원문 (#113). 원문이 없는 정책(테스트 데이터, 원문 저장 전 행)은 null일 수 있다
+    @Embedded
+    private PolicyText text;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
@@ -67,7 +71,15 @@ public class Policy {
     public static Policy create(String name, String description, Integer minAge, Integer maxAge,
                                 Long incomeLimit, Long benefitAmount, PolicyType policyType, String region,
                                 String externalId, String source) {
+        return create(name, description, minAge, maxAge, incomeLimit, benefitAmount, policyType, region,
+                externalId, source, null);
+    }
+
+    public static Policy create(String name, String description, Integer minAge, Integer maxAge,
+                                Long incomeLimit, Long benefitAmount, PolicyType policyType, String region,
+                                String externalId, String source, PolicyText text) {
         Policy policy = new Policy();
+        policy.text = text;
         policy.name = name;
         policy.description = description;
         policy.minAge = minAge;
@@ -131,5 +143,6 @@ public class Policy {
         this.benefitAmount = fetched.benefitAmount;
         this.policyType = fetched.policyType;
         this.region = fetched.region;
+        this.text = fetched.text;
     }
 }

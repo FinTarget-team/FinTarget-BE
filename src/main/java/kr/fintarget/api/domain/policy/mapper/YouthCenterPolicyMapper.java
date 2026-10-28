@@ -2,6 +2,7 @@ package kr.fintarget.api.domain.policy.mapper;
 
 import kr.fintarget.api.domain.policy.client.dto.YouthCenterPolicyItem;
 import kr.fintarget.api.domain.policy.entity.Policy;
+import kr.fintarget.api.domain.policy.entity.PolicyText;
 import kr.fintarget.api.domain.policy.entity.PolicyType;
 import kr.fintarget.api.domain.user.code.Region;
 import lombok.extern.slf4j.Slf4j;
@@ -51,7 +52,7 @@ public class YouthCenterPolicyMapper {
     public static Policy toPolicy(YouthCenterPolicyItem item) {
         return Policy.create(
                 item.plcyNm(),
-                item.plcyExplnCn(),
+                PolicyTextCleaner.unescapeOnly(item.plcyExplnCn()),
                 parseAge(item.sprtTrgtMinAge(), item.plcyNo(), "sprtTrgtMinAge"),
                 parseAge(item.sprtTrgtMaxAge(), item.plcyNo(), "sprtTrgtMaxAge"),
                 null, // 온통청년 응답에 정형화된 소득 상한 필드가 확인되지 않음
@@ -59,8 +60,41 @@ public class YouthCenterPolicyMapper {
                 resolvePolicyType(item.lclsfNm()),
                 resolveRegion(item.zipCd()),
                 item.plcyNo(),
-                SOURCE
+                SOURCE,
+                toPolicyText(item)
         );
+    }
+
+    // 온통청년 원문 필드 → PolicyText. 컬럼마다 원문 필드 하나를 정제해 넣는다 (사업 기간만 합침)
+    static PolicyText toPolicyText(YouthCenterPolicyItem item) {
+        return PolicyText.builder()
+                .supportContent(PolicyTextCleaner.clean(item.plcySprtCn()))
+                .eligibilityDetail(PolicyTextCleaner.clean(item.addAplyQlfcCndCn()))
+                .exclusionCriteria(PolicyTextCleaner.clean(item.ptcpPrpTrgtCn()))
+                .incomeCondition(PolicyTextCleaner.clean(item.earnEtcCn()))
+                .applyMethod(PolicyTextCleaner.clean(item.plcyAplyMthdCn()))
+                .screeningMethod(PolicyTextCleaner.clean(item.srngMthdCn()))
+                .requiredDocuments(PolicyTextCleaner.clean(item.sbmsnDcmntCn()))
+                .applyPeriod(PolicyTextCleaner.clean(item.aplyYmd()))
+                .businessPeriod(businessPeriod(item))
+                .referenceUrl(PolicyTextCleaner.clean(item.refUrlAddr1()))
+                .applyUrl(PolicyTextCleaner.clean(item.aplyUrlAddr()))
+                .etcNote(PolicyTextCleaner.clean(item.etcMttrCn()))
+                .build();
+    }
+
+    /**
+     * 사업 기간: 시작·종료일(yyyyMMdd)과 기타 문구를 합친다. 실응답에서 날짜 자리에 공백 8칸만 오는 경우가 있어
+     * 공백만 있는 값은 없는 것으로 본다. 한쪽 날짜만 있으면 "시작 ~" 또는 "~ 종료"로 둔다. 전부 비면 null.
+     */
+    private static String businessPeriod(YouthCenterPolicyItem item) {
+        String begin = PolicyTextCleaner.clean(item.bizPrdBgngYmd());
+        String end = PolicyTextCleaner.clean(item.bizPrdEndYmd());
+        String range = null;
+        if (begin != null || end != null) {
+            range = ((begin != null ? begin + " " : "") + "~" + (end != null ? " " + end : "")).strip();
+        }
+        return PolicyTextCleaner.joinLines(range, PolicyTextCleaner.clean(item.bizPrdEtcCn()));
     }
 
     /**

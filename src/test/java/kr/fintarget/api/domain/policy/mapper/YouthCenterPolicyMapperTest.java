@@ -320,14 +320,14 @@ class YouthCenterPolicyMapperTest {
     private YouthCenterPolicyItem itemWithAges(String minAge, String maxAge, String ageLmtYn) {
         return new YouthCenterPolicyItem(
                 "AGE-TEST", "plcyNm", null, null, null, null, null, null, null,
-                minAge, maxAge, ageLmtYn, null, null, null, null, null, null, null
+                minAge, maxAge, ageLmtYn, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null
         );
     }
 
     private YouthCenterPolicyItem itemWithZipCd(String zipCd) {
         return new YouthCenterPolicyItem(
                 "plcyNo", "plcyNm", null, null, null, null, null, null, null,
-                null, null, null, null, null, null, null, null, null, zipCd
+                null, null, null, null, null, null, null, null, null, zipCd, null, null, null, null, null, null, null, null, null, null
         );
     }
 

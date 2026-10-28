@@ -25,6 +25,17 @@ public record YouthCenterPolicyItem(
         String frstRegDt,
         String lastMdfcnDt,
         String aplyPrdSeCd,
-        String zipCd
+        String zipCd,
+        // 이하 정책 원문 필드 (#113, 2026-10-28 실응답으로 확인). 기존 생성자 호출 순서를 유지하려고 끝에 추가
+        String addAplyQlfcCndCn,
+        String ptcpPrpTrgtCn,
+        String plcyAplyMthdCn,
+        String srngMthdCn,
+        String sbmsnDcmntCn,
+        String etcMttrCn,
+        String bizPrdBgngYmd,
+        String bizPrdEndYmd,
+        String bizPrdEtcCn,
+        String earnEtcCn
 ) {
 }

@@ -35,7 +35,7 @@ class KinfaPolicySyncServiceTest {
         return new KinfaItem(
                 "202609", "1", finPrdNm, "3500만원", "변동금리", "은행별 상이", "은행별 상이", "-", "-",
                 "원(리)금균등분할상환", "생계", "근로자", "시중은행", ofrInstNm, "전국",
-                "지원조건", "없음", "없음", "은행 문의", "Y", "1", "대출상품"
+                "지원조건", "없음", "없음", "은행 문의", "Y", "1", "대출상품", null, null, null, null, null
         );
     }
 
