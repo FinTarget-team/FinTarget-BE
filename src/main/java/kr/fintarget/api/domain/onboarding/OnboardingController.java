@@ -26,8 +26,8 @@ public class OnboardingController {
 
     @Operation(
             summary = "온보딩 질문 단계 조회",
-            description = "step 파라미터(1~6)에 해당하는 온보딩 질문/선택지를 반환합니다. " +
-                    "step을 생략하면 1단계가 조회됩니다. 1~6 범위를 벗어난 step 값은 400으로 거부됩니다."
+            description = "step 파라미터(1~7)에 해당하는 온보딩 질문/선택지를 반환합니다. " +
+                    "step을 생략하면 1단계가 조회됩니다. 1~7 범위를 벗어난 step 값은 400으로 거부됩니다."
     )
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(
@@ -58,7 +58,7 @@ public class OnboardingController {
     })
     @GetMapping("/step")
     public ResponseEntity<ApiResponse<OnboardingStepResponse>> getStep(
-            @Parameter(description = "조회할 온보딩 단계 (1~6, 생략 시 1)", required = false, example = "1")
+            @Parameter(description = "조회할 온보딩 단계 (1~7, 생략 시 1)", required = false, example = "1")
             @RequestParam(defaultValue = "1") int step) {
         return ResponseEntity.ok(ApiResponse.ok(onboardingService.getStep(step)));
     }
@@ -68,9 +68,10 @@ public class OnboardingController {
             description = "현재 단계의 답변을 저장하고 다음 단계 질문을 반환합니다. " +
                     "1단계 value는 사용할 이름(닉네임)이며, 앞뒤 공백은 제거되어 저장되고 공백만 있거나 빈 문자열이거나 20자를 초과하면 400으로 거부됩니다. " +
                     "2단계 value는 출생연도(4자리 숫자, 1940년 이상 (올해-14)년 이하, 올해는 Asia/Seoul 기준)이며, 형식이나 범위가 맞지 않으면 400으로 거부됩니다. " +
-                    "마지막 단계(6단계) 답변 제출 시 온보딩이 완료 처리되며, 응답의 isComplete가 true로 반환됩니다. " +
-                    "6단계 value는 목표 금액(원, 숫자만, 1원 이상 50억 원 이하)이며, 이 값으로 목표(Goal)가 자동 생성됩니다 " +
-                    "(제목 '내 목표', 현재 금액 0, 마감일 1년 후, deadlineDefaulted=true). 6단계를 다시 제출하면 기존 목표의 금액만 갱신됩니다. " +
+                    "6단계 value는 주택 보유 여부 코드(HOMELESS, HOMEOWNER, NOT_SPECIFIED)이며, NOT_SPECIFIED(선택 안 함)는 사용자 정보에 값 없음으로 저장됩니다. 허용되지 않은 코드는 400으로 거부됩니다. " +
+                    "마지막 단계(7단계) 답변 제출 시 온보딩이 완료 처리되며, 응답의 isComplete가 true로 반환됩니다. " +
+                    "7단계 value는 목표 금액(원, 숫자만, 1원 이상 50억 원 이하)이며, 이 값으로 목표(Goal)가 자동 생성됩니다 " +
+                    "(제목 '내 목표', 현재 금액 0, 마감일 1년 후, deadlineDefaulted=true). 7단계를 다시 제출하면 기존 목표의 금액만 갱신됩니다. " +
                     "이전 단계를 완료하지 않고 다음 단계에 답변을 제출하면 400으로 거부됩니다."
     )
     @ApiResponses({
@@ -150,13 +151,19 @@ public class OnboardingController {
                                             """
                             ),
                             @ExampleObject(
-                                    name = "숫자가 아닌 목표 금액 (6단계)",
+                                    name = "유효하지 않은 주택 보유 코드 (6단계)",
+                                    value = """
+                                            {"status": 400, "message": "유효하지 않은 주택 보유 코드입니다", "data": null}
+                                            """
+                            ),
+                            @ExampleObject(
+                                    name = "숫자가 아닌 목표 금액 (7단계)",
                                     value = """
                                             {"status": 400, "message": "목표 금액은 숫자로 입력해주세요", "data": null}
                                             """
                             ),
                             @ExampleObject(
-                                    name = "범위를 벗어난 목표 금액 (6단계)",
+                                    name = "범위를 벗어난 목표 금액 (7단계)",
                                     value = """
                                             {"status": 400, "message": "목표 금액은 50억 원 이하로 입력해주세요", "data": null}
                                             """

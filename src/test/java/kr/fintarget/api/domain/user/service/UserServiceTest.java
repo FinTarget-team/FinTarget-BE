@@ -450,4 +450,75 @@ class UserServiceTest {
         assertThat(response.getEmail()).isEqualTo("new@example.com");
         assertThat(response.getRegion()).isEqualTo("SEOUL");
     }
+
+    private UpdateProfileRequest housingRequest(String housingStatus) {
+        UpdateProfileRequest request = updateRequest(null, null, null, null, null, null);
+        ReflectionTestUtils.setField(request, "housingStatus", housingStatus);
+        return request;
+    }
+
+    @Test
+    void housingStatus가_null이면_기존_값을_유지한다() {
+        User user = User.builder().id("user-1").provider("KAKAO").providerId("kakao-1").housingStatus("HOMEOWNER").build();
+        when(userRepository.findById("user-1")).thenReturn(Optional.of(user));
+
+        UserProfileResponse response = userService.updateProfile("user-1", housingRequest(null));
+
+        assertThat(user.getHousingStatus()).isEqualTo("HOMEOWNER");
+        assertThat(response.getHousingStatus()).isEqualTo("HOMEOWNER");
+    }
+
+    @Test
+    void housingStatus가_HOMELESS면_저장된다() {
+        User user = User.builder().id("user-1").provider("KAKAO").providerId("kakao-1").build();
+        when(userRepository.findById("user-1")).thenReturn(Optional.of(user));
+
+        UserProfileResponse response = userService.updateProfile("user-1", housingRequest("HOMELESS"));
+
+        assertThat(user.getHousingStatus()).isEqualTo("HOMELESS");
+        assertThat(response.getHousingStatus()).isEqualTo("HOMELESS");
+    }
+
+    @Test
+    void housingStatus가_NOT_SPECIFIED면_기존_값이_null로_바뀌고_NOT_SPECIFIED로_응답한다() {
+        User user = User.builder().id("user-1").provider("KAKAO").providerId("kakao-1").housingStatus("HOMEOWNER").build();
+        when(userRepository.findById("user-1")).thenReturn(Optional.of(user));
+
+        UserProfileResponse response = userService.updateProfile("user-1", housingRequest("NOT_SPECIFIED"));
+
+        assertThat(user.getHousingStatus()).isNull();
+        assertThat(response.getHousingStatus()).isEqualTo("NOT_SPECIFIED");
+    }
+
+    @Test
+    void housingStatus가_빈_문자열이면_400_예외가_발생하고_값이_바뀌지_않는다() {
+        User user = User.builder().id("user-1").provider("KAKAO").providerId("kakao-1").housingStatus("HOMELESS").build();
+        when(userRepository.findById("user-1")).thenReturn(Optional.of(user));
+
+        assertThatThrownBy(() -> userService.updateProfile("user-1", housingRequest("")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("유효하지 않은 주택 보유 코드입니다");
+        assertThat(user.getHousingStatus()).isEqualTo("HOMELESS");
+    }
+
+    @Test
+    void housingStatus가_공백만이면_400_예외가_발생한다() {
+        User user = User.builder().id("user-1").provider("KAKAO").providerId("kakao-1").build();
+        when(userRepository.findById("user-1")).thenReturn(Optional.of(user));
+
+        assertThatThrownBy(() -> userService.updateProfile("user-1", housingRequest("   ")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("유효하지 않은 주택 보유 코드입니다");
+    }
+
+    @Test
+    void housingStatus가_유효하지_않은_코드면_400_예외가_발생하고_값이_바뀌지_않는다() {
+        User user = User.builder().id("user-1").provider("KAKAO").providerId("kakao-1").housingStatus("HOMELESS").build();
+        when(userRepository.findById("user-1")).thenReturn(Optional.of(user));
+
+        assertThatThrownBy(() -> userService.updateProfile("user-1", housingRequest("RENT")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("유효하지 않은 주택 보유 코드입니다");
+        assertThat(user.getHousingStatus()).isEqualTo("HOMELESS");
+    }
 }

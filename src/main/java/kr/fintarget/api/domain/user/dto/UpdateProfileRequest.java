@@ -30,4 +30,9 @@ public class UpdateProfileRequest {
             example = "300_380", allowableValues = {"UNDER_150", "150_260", "260_300", "300_380", "380_410", "OVER_410"},
             types = {"string", "null"})
     private String incomeBracket;
+
+    @Schema(description = "변경할 주택 보유 여부 코드. null이면 기존 값을 유지합니다. 선택 안 함으로 되돌리려면 NOT_SPECIFIED를 보냅니다. "
+            + "허용되지 않은 코드(빈 문자열·공백 포함)는 400으로 거부됩니다.",
+            example = "HOMELESS", allowableValues = {"HOMELESS", "HOMEOWNER", "NOT_SPECIFIED"}, types = {"string", "null"})
+    private String housingStatus;
 }

@@ -1,6 +1,7 @@
 package kr.fintarget.api.domain.user.service;
 
 import kr.fintarget.api.domain.user.code.EmploymentType;
+import kr.fintarget.api.domain.user.code.HousingStatus;
 import kr.fintarget.api.domain.user.code.IncomeBracket;
 import kr.fintarget.api.domain.user.code.Region;
 import kr.fintarget.api.domain.user.dto.UpdateProfileRequest;
@@ -53,8 +54,20 @@ public class UserService {
         if (request.getIncomeBracket() != null) {
             user.updateIncome(resolveIncome(request.getIncomeBracket()));
         }
+        // null은 기존 값 유지. 선택 안 함으로 되돌리려면 NOT_SPECIFIED를 보낸다 (null로 저장됨)
+        if (request.getHousingStatus() != null) {
+            user.updateHousingStatus(resolveHousingStatus(request.getHousingStatus()));
+        }
 
         return UserProfileResponse.from(user);
+    }
+
+    private String resolveHousingStatus(String housingStatusCode) {
+        HousingStatus housingStatus = HousingStatus.fromCode(housingStatusCode);
+        if (housingStatus == null) {
+            throw new IllegalArgumentException("유효하지 않은 주택 보유 코드입니다");
+        }
+        return housingStatus.storedValue();
     }
 
     private Long resolveIncome(String incomeBracketCode) {

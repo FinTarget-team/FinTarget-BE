@@ -33,6 +33,8 @@ public class User {
     private Integer birthYear;
     private Long income;
     private String employmentType;
+    // HousingStatus 코드. 선택 안 함과 주택 단계 도입(#87) 전 미응답은 모두 null
+    private String housingStatus;
 
     @Column(nullable = false)
     private boolean onboardingCompleted = false;
@@ -84,6 +86,10 @@ public class User {
 
     public void updateEmploymentType(String employmentType) {
         this.employmentType = employmentType;
+    }
+
+    public void updateHousingStatus(String housingStatus) {
+        this.housingStatus = housingStatus;
     }
 
     public void updateRegion(String region) {

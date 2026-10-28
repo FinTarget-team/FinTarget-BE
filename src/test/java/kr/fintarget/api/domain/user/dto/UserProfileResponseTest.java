@@ -83,4 +83,18 @@ class UserProfileResponseTest {
 
         assertThat(response.getBirthYear()).isNull();
     }
+
+    @Test
+    void housingStatus가_저장되어_있으면_코드를_그대로_반환한다() {
+        User user = User.builder().id("user-5").provider("KAKAO").providerId("kakao-5").housingStatus("HOMEOWNER").build();
+
+        assertThat(UserProfileResponse.from(user).getHousingStatus()).isEqualTo("HOMEOWNER");
+    }
+
+    @Test
+    void housingStatus가_null이면_선택_안_함과_미응답_모두_NOT_SPECIFIED로_반환한다() {
+        User user = User.builder().id("user-6").provider("KAKAO").providerId("kakao-6").onboardingCompleted(true).build();
+
+        assertThat(UserProfileResponse.from(user).getHousingStatus()).isEqualTo("NOT_SPECIFIED");
+    }
 }

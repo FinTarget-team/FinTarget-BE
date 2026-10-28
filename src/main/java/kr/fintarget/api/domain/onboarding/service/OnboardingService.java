@@ -6,6 +6,7 @@ import kr.fintarget.api.domain.onboarding.dto.OnboardingStepResponse;
 import kr.fintarget.api.domain.onboarding.entity.OnboardingAnswer;
 import kr.fintarget.api.domain.onboarding.repository.OnboardingAnswerRepository;
 import kr.fintarget.api.domain.user.code.EmploymentType;
+import kr.fintarget.api.domain.user.code.HousingStatus;
 import kr.fintarget.api.domain.user.code.IncomeBracket;
 import kr.fintarget.api.domain.user.code.Region;
 import kr.fintarget.api.domain.user.entity.User;
@@ -33,11 +34,16 @@ public class OnboardingService {
     static final int STEP_EMPLOYMENT = 3;
     static final int STEP_INCOME = 4;
     static final int STEP_REGION = 5;
-    static final int STEP_GOAL = 6;
+    static final int STEP_HOUSING = 6;
+    static final int STEP_GOAL = 7;
     static final int TOTAL_STEPS = STEP_GOAL;
 
     private static final List<OnboardingStepResponse.OptionDto> REGION_OPTIONS = Arrays.stream(Region.values())
             .map(region -> OnboardingStepResponse.OptionDto.builder().label(region.getLabel()).value(region.getCode()).build())
+            .collect(Collectors.toList());
+
+    private static final List<OnboardingStepResponse.OptionDto> HOUSING_OPTIONS = Arrays.stream(HousingStatus.values())
+            .map(status -> OnboardingStepResponse.OptionDto.builder().label(status.getLabel()).value(status.getCode()).build())
             .collect(Collectors.toList());
 
     public OnboardingStepResponse getStep(int step) {
@@ -84,7 +90,13 @@ public class OnboardingService {
                     .answerType("CHIP")
                     .options(REGION_OPTIONS)
                     .isComplete(false).build();
-            case STEP_GOAL -> OnboardingStepResponse.builder()
+            case STEP_HOUSING -> OnboardingStepResponse.builder()
+                    .step(STEP_HOUSING).totalSteps(TOTAL_STEPS).progress((double) STEP_HOUSING / TOTAL_STEPS)
+                    .question("현재 주택을 소유하고 계신가요?")
+                    .answerType("CHIP")
+                    .options(HOUSING_OPTIONS)
+                    .isComplete(false).build();
+            case STEP_GOAL ->OnboardingStepResponse.builder()
                     .step(STEP_GOAL).totalSteps(TOTAL_STEPS).progress((double) STEP_GOAL / TOTAL_STEPS)
                     .question("목표 금액을 알면 달성일을 바로 계산해드릴게요. 목표 자산이 얼마인가요?")
                     .answerType("NUMBER")
@@ -108,7 +120,7 @@ public class OnboardingService {
 
         onboardingAnswerRepository.save(answer);
 
-        // step별 답변을 User 엔티티에 반영 (STEP_NAME: name, STEP_AGE: birthYear, STEP_EMPLOYMENT: employmentType, STEP_INCOME: income, STEP_REGION: region)
+        // step별 답변을 User 엔티티에 반영 (STEP_NAME: name, STEP_AGE: birthYear, STEP_EMPLOYMENT: employmentType, STEP_INCOME: income, STEP_REGION: region, STEP_HOUSING: housingStatus)
         applyAnswerToUser(userId, request.getStep(), request.getValue());
 
         // 마지막 단계면 목표 생성 후 완료 처리
@@ -154,7 +166,7 @@ public class OnboardingService {
 
     private void applyAnswerToUser(String userId, int step, String value) {
         if (step != STEP_NAME && step != STEP_AGE && step != STEP_EMPLOYMENT
-                && step != STEP_INCOME && step != STEP_REGION) return;
+                && step != STEP_INCOME && step != STEP_REGION && step != STEP_HOUSING) return;
 
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("유저를 찾을 수 없습니다."));
@@ -165,6 +177,7 @@ public class OnboardingService {
             case STEP_EMPLOYMENT -> user.updateEmploymentType(resolveEmploymentType(value));
             case STEP_INCOME -> user.updateIncome(resolveIncome(value));
             case STEP_REGION -> user.updateRegion(resolveRegion(value));
+            case STEP_HOUSING -> user.updateHousingStatus(resolveHousingStatus(value));
         }
 
         userRepository.save(user);
@@ -176,6 +189,14 @@ public class OnboardingService {
             throw new IllegalArgumentException("유효하지 않은 고용 형태 코드입니다");
         }
         return employmentType.getCode();
+    }
+
+    private String resolveHousingStatus(String value) {
+        HousingStatus housingStatus = HousingStatus.fromCode(value);
+        if (housingStatus == null) {
+            throw new IllegalArgumentException("유효하지 않은 주택 보유 코드입니다");
+        }
+        return housingStatus.storedValue();
     }
 
     private Long resolveIncome(String value) {

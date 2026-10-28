@@ -23,9 +23,11 @@ import java.util.UUID;
 import static kr.fintarget.api.domain.onboarding.service.OnboardingService.STEP_AGE;
 import static kr.fintarget.api.domain.onboarding.service.OnboardingService.STEP_EMPLOYMENT;
 import static kr.fintarget.api.domain.onboarding.service.OnboardingService.STEP_GOAL;
+import static kr.fintarget.api.domain.onboarding.service.OnboardingService.STEP_HOUSING;
 import static kr.fintarget.api.domain.onboarding.service.OnboardingService.STEP_INCOME;
 import static kr.fintarget.api.domain.onboarding.service.OnboardingService.STEP_NAME;
 import static kr.fintarget.api.domain.onboarding.service.OnboardingService.STEP_REGION;
+import static kr.fintarget.api.domain.onboarding.service.OnboardingService.TOTAL_STEPS;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -248,7 +250,7 @@ class OnboardingServiceTest {
     }
 
     @Test
-    void step5_답변_제출시_유효한_지역코드면_유저_region이_갱신되고_6단계_질문을_반환한다() {
+    void step5_답변_제출시_유효한_지역코드면_유저_region이_갱신되고_주택_단계_질문을_반환한다() {
         String userId = UUID.randomUUID().toString();
         User user = User.builder().id(userId).provider("kakao").providerId("provider-1").build();
 
@@ -257,8 +259,8 @@ class OnboardingServiceTest {
 
         OnboardingStepResponse response = onboardingService.submitAnswer(userId, answerRequest(STEP_REGION, "SEOUL"));
 
-        assertThat(response.getStep()).isEqualTo(STEP_GOAL);
-        assertThat(response.getAnswerType()).isEqualTo("NUMBER");
+        assertThat(response.getStep()).isEqualTo(STEP_HOUSING);
+        assertThat(response.getAnswerType()).isEqualTo("CHIP");
         assertThat(user.getRegion()).isEqualTo("SEOUL");
         verify(onboardingAnswerRepository).save(any(OnboardingAnswer.class));
         verify(userRepository).save(user);
@@ -372,11 +374,135 @@ class OnboardingServiceTest {
     }
 
     @Test
-    void step6_답변_제출시_목표가_생성되고_온보딩이_완료된다() {
+    void 전체_단계는_7단계이고_목표_금액이_마지막_단계다() {
+        assertThat(STEP_HOUSING).isEqualTo(6);
+        assertThat(STEP_GOAL).isEqualTo(7);
+        assertThat(TOTAL_STEPS).isEqualTo(STEP_GOAL);
+        assertThat(onboardingService.getStep(STEP_GOAL).getAnswerType()).isEqualTo("NUMBER");
+        assertThat(onboardingService.getStep(STEP_GOAL).getTotalSteps()).isEqualTo(7);
+    }
+
+    @Test
+    void 범위를_벗어난_단계_조회는_400_예외가_발생한다() {
+        assertThatThrownBy(() -> onboardingService.getStep(8))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("잘못된 단계입니다.");
+    }
+
+    @Test
+    void step6_조회시_주택_보유_질문과_3개_옵션을_반환한다() {
+        OnboardingStepResponse response = onboardingService.getStep(STEP_HOUSING);
+
+        assertThat(response.getStep()).isEqualTo(STEP_HOUSING);
+        assertThat(response.getAnswerType()).isEqualTo("CHIP");
+        assertThat(response.getQuestion()).isEqualTo("현재 주택을 소유하고 계신가요?");
+        assertThat(response.getOptions())
+                .extracting(OnboardingStepResponse.OptionDto::getValue)
+                .containsExactly("HOMELESS", "HOMEOWNER", "NOT_SPECIFIED");
+        assertThat(response.getOptions())
+                .extracting(OnboardingStepResponse.OptionDto::getLabel)
+                .containsExactly("무주택", "유주택", "선택 안 함");
+    }
+
+    @Test
+    void step6_답변_제출시_무주택이면_유저_housingStatus가_갱신되고_목표_금액_질문을_반환한다() {
         String userId = UUID.randomUUID().toString();
         User user = User.builder().id(userId).provider("kakao").providerId("provider-1").build();
 
         when(onboardingAnswerRepository.existsByUserIdAndStep(UUID.fromString(userId), STEP_REGION)).thenReturn(true);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+        OnboardingStepResponse response = onboardingService.submitAnswer(userId, answerRequest(STEP_HOUSING, "HOMELESS"));
+
+        assertThat(response.getStep()).isEqualTo(STEP_GOAL);
+        assertThat(response.getAnswerType()).isEqualTo("NUMBER");
+        assertThat(response.isComplete()).isFalse();
+        assertThat(user.getHousingStatus()).isEqualTo("HOMELESS");
+        verify(userRepository).save(user);
+        verify(goalService, never()).upsertFromOnboarding(any(), anyLong());
+    }
+
+    @Test
+    void step6_답변_제출시_유주택이면_HOMEOWNER로_저장된다() {
+        String userId = UUID.randomUUID().toString();
+        User user = User.builder().id(userId).provider("kakao").providerId("provider-1").build();
+
+        when(onboardingAnswerRepository.existsByUserIdAndStep(UUID.fromString(userId), STEP_REGION)).thenReturn(true);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+        onboardingService.submitAnswer(userId, answerRequest(STEP_HOUSING, "HOMEOWNER"));
+
+        assertThat(user.getHousingStatus()).isEqualTo("HOMEOWNER");
+    }
+
+    @Test
+    void step6_답변_제출시_선택_안_함이면_유저에는_null로_저장되고_답변에는_원문이_저장된다() {
+        String userId = UUID.randomUUID().toString();
+        User user = User.builder().id(userId).provider("kakao").providerId("provider-1").housingStatus("HOMEOWNER").build();
+
+        when(onboardingAnswerRepository.existsByUserIdAndStep(UUID.fromString(userId), STEP_REGION)).thenReturn(true);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+        onboardingService.submitAnswer(userId, answerRequest(STEP_HOUSING, "NOT_SPECIFIED"));
+
+        assertThat(user.getHousingStatus()).isNull();
+        ArgumentCaptor<OnboardingAnswer> captor = ArgumentCaptor.forClass(OnboardingAnswer.class);
+        verify(onboardingAnswerRepository).save(captor.capture());
+        assertThat(captor.getValue().getValue()).isEqualTo("NOT_SPECIFIED");
+        assertThat(captor.getValue().getStep()).isEqualTo(STEP_HOUSING);
+    }
+
+    @Test
+    void step6_답변_제출시_유효하지_않은_코드면_400_예외가_발생한다() {
+        String userId = UUID.randomUUID().toString();
+        User user = User.builder().id(userId).provider("kakao").providerId("provider-1").build();
+
+        when(onboardingAnswerRepository.existsByUserIdAndStep(UUID.fromString(userId), STEP_REGION)).thenReturn(true);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+        assertThatThrownBy(() -> onboardingService.submitAnswer(userId, answerRequest(STEP_HOUSING, "homeless")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("유효하지 않은 주택 보유 코드입니다");
+
+        assertThat(user.getHousingStatus()).isNull();
+        verify(userRepository, never()).save(any());
+    }
+
+    @Test
+    void step6_답변_제출시_목표_금액_값을_보내면_400_예외가_발생한다() {
+        String userId = UUID.randomUUID().toString();
+
+        when(onboardingAnswerRepository.existsByUserIdAndStep(UUID.fromString(userId), STEP_REGION)).thenReturn(true);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(
+                User.builder().id(userId).provider("kakao").providerId("provider-1").build()
+        ));
+
+        assertThatThrownBy(() -> onboardingService.submitAnswer(userId, answerRequest(STEP_HOUSING, "30000000")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("유효하지 않은 주택 보유 코드입니다");
+
+        verify(goalService, never()).upsertFromOnboarding(any(), anyLong());
+    }
+
+    @Test
+    void step7_답변_제출시_주택_단계를_완료하지_않았으면_예외가_발생한다() {
+        String userId = UUID.randomUUID().toString();
+
+        when(onboardingAnswerRepository.existsByUserIdAndStep(UUID.fromString(userId), STEP_HOUSING)).thenReturn(false);
+
+        assertThatThrownBy(() -> onboardingService.submitAnswer(userId, answerRequest(STEP_GOAL, "30000000")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("이전 온보딩 단계를 먼저 완료해주세요");
+
+        verify(goalService, never()).upsertFromOnboarding(any(), anyLong());
+    }
+
+    @Test
+    void step7_답변_제출시_목표가_생성되고_온보딩이_완료된다() {
+        String userId = UUID.randomUUID().toString();
+        User user = User.builder().id(userId).provider("kakao").providerId("provider-1").build();
+
+        when(onboardingAnswerRepository.existsByUserIdAndStep(UUID.fromString(userId), STEP_HOUSING)).thenReturn(true);
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
 
         OnboardingStepResponse response = onboardingService.submitAnswer(userId, answerRequest(STEP_GOAL, " 30000000 "));
@@ -387,10 +513,10 @@ class OnboardingServiceTest {
     }
 
     @Test
-    void step6_답변이_숫자가_아니면_400_예외가_발생하고_목표를_만들지_않는다() {
+    void step7_답변이_숫자가_아니면_400_예외가_발생하고_목표를_만들지_않는다() {
         String userId = UUID.randomUUID().toString();
 
-        when(onboardingAnswerRepository.existsByUserIdAndStep(UUID.fromString(userId), STEP_REGION)).thenReturn(true);
+        when(onboardingAnswerRepository.existsByUserIdAndStep(UUID.fromString(userId), STEP_HOUSING)).thenReturn(true);
 
         assertThatThrownBy(() -> onboardingService.submitAnswer(userId, answerRequest(STEP_GOAL, "3천만원")))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -401,10 +527,10 @@ class OnboardingServiceTest {
     }
 
     @Test
-    void step6_답변이_Long_범위를_넘는_자릿수면_상한_초과값으로_목표_검증에_넘긴다() {
+    void step7_답변이_Long_범위를_넘는_자릿수면_상한_초과값으로_목표_검증에_넘긴다() {
         String userId = UUID.randomUUID().toString();
 
-        when(onboardingAnswerRepository.existsByUserIdAndStep(UUID.fromString(userId), STEP_REGION)).thenReturn(true);
+        when(onboardingAnswerRepository.existsByUserIdAndStep(UUID.fromString(userId), STEP_HOUSING)).thenReturn(true);
         doThrow(new IllegalArgumentException("목표 금액은 50억 원 이하로 입력해주세요"))
                 .when(goalService).upsertFromOnboarding(UUID.fromString(userId), Long.MAX_VALUE);
 

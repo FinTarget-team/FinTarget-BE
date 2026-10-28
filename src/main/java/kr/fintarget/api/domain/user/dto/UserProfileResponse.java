@@ -1,5 +1,6 @@
 package kr.fintarget.api.domain.user.dto;
 import io.swagger.v3.oas.annotations.media.Schema;
+import kr.fintarget.api.domain.user.code.HousingStatus;
 import kr.fintarget.api.domain.user.code.IncomeBracket;
 import kr.fintarget.api.domain.user.entity.User;
 import lombok.Builder;
@@ -35,6 +36,10 @@ public class UserProfileResponse {
             types = {"string", "null"})
     private String incomeBracket;
 
+    @Schema(description = "주택 보유 여부 코드. 선택 안 함을 고른 사용자와 주택 단계를 아직 답하지 않은 사용자는 모두 NOT_SPECIFIED입니다 (null로 내려가지 않음).",
+            example = "HOMELESS", allowableValues = {"HOMELESS", "HOMEOWNER", "NOT_SPECIFIED"})
+    private String housingStatus;
+
     @Schema(description = "온보딩 전체 완료 여부", example = "true")
     private boolean onboardingCompleted;
 
@@ -50,6 +55,7 @@ public class UserProfileResponse {
                 .birthYear(user.getBirthYear())
                 .employmentType(user.getEmploymentType())
                 .incomeBracket(incomeBracket != null ? incomeBracket.getCode() : null)
+                .housingStatus(HousingStatus.responseCodeOf(user.getHousingStatus()))
                 .onboardingCompleted(user.isOnboardingCompleted())
                 .build();
     }

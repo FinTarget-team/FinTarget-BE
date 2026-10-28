@@ -110,8 +110,8 @@ Authorization: Bearer {accessToken}
   "message": "OK",
   "data": {
     "step": 1,
-    "totalSteps": 6,
-    "progress": 0.17,
+    "totalSteps": 7,
+    "progress": 0.14,
     "question": "사용할 닉네임을 입력해 주세요. (최대 20자)",
     "answerType": "TEXT",
     "options": [],
@@ -126,8 +126,8 @@ Authorization: Bearer {accessToken}
   "message": "OK",
   "data": {
     "step": 2,
-    "totalSteps": 6,
-    "progress": 0.33,
+    "totalSteps": 7,
+    "progress": 0.29,
     "question": "태어난 연도를 입력해 주세요. (예: 2000)",
     "answerType": "NUMBER",
     "options": [],
@@ -142,8 +142,8 @@ Authorization: Bearer {accessToken}
   "message": "OK",
   "data": {
     "step": 3,
-    "totalSteps": 6,
-    "progress": 0.5,
+    "totalSteps": 7,
+    "progress": 0.43,
     "question": "string",
     "answerType": "CHIP",
     "options": [
@@ -165,9 +165,10 @@ Authorization: Bearer {accessToken}
 ```
 - 1단계 `value`는 이름(닉네임)이며, 앞뒤 공백은 제거되어 저장되고 공백만 있거나 빈 문자열이거나 20자를 초과하면 400으로 거부됨
 - 2단계 `value`는 출생연도(ASCII 숫자 4자리 문자열, 1940년 이상 (올해-14)년 이하, 올해는 Asia/Seoul 기준)이며, 앞뒤 공백은 제거되고 형식이나 범위가 맞지 않으면 400으로 거부됨
-- 6단계 `value`는 목표 금액(원, 숫자 문자열, 1원 이상 50억 원 이하)
-- 6단계 제출 시 목표(Goal)가 자동 생성됨: `title` "내 목표", `currentAmount` 0, `deadline` 1년 후, `deadlineDefaulted` true
-- 6단계를 다시 제출하면 새로 만들지 않고 기존 목표의 `targetAmount`만 갱신
+- 6단계 `value`는 주택 보유 여부 코드(`HOMELESS` 무주택, `HOMEOWNER` 유주택, `NOT_SPECIFIED` 선택 안 함)이며, 그 외 값은 400으로 거부됨. `NOT_SPECIFIED`는 사용자 정보에 값 없음으로 저장되고 프로필 조회 시 `NOT_SPECIFIED`로 응답됨
+- 7단계 `value`는 목표 금액(원, 숫자 문자열, 1원 이상 50억 원 이하)
+- 7단계(마지막) 제출 시 온보딩이 완료되고 목표(Goal)가 자동 생성됨: `title` "내 목표", `currentAmount` 0, `deadline` 1년 후, `deadlineDefaulted` true
+- 7단계를 다시 제출하면 새로 만들지 않고 기존 목표의 `targetAmount`만 갱신
 
 ---
 
