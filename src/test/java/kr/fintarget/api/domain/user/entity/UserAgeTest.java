@@ -14,46 +14,46 @@ class UserAgeTest {
     }
 
     @Test
-    void 출생연도가_있으면_올해_빼기_출생연도_빼기_1로_계산한다() {
+    void 출생연도가_있으면_생일_전후_두_만_나이를_구간으로_계산한다() {
         User user = user().birthYear(2000).build();
 
-        assertThat(user.ageIn(Year.of(2026))).isEqualTo(25);
-        assertThat(user.ageIn(Year.of(2027))).isEqualTo(26);
+        assertThat(user.ageRangeIn(Year.of(2026))).isEqualTo(new User.AgeRange(25, 26));
+        assertThat(user.ageRangeIn(Year.of(2027))).isEqualTo(new User.AgeRange(26, 27));
     }
 
     @Test
     void 출생연도가_있으면_저장된_age보다_우선한다() {
         User user = user().age(40).birthYear(2000).build();
 
-        assertThat(user.ageIn(Year.of(2026))).isEqualTo(25);
+        assertThat(user.ageRangeIn(Year.of(2026))).isEqualTo(new User.AgeRange(25, 26));
     }
 
     @Test
-    void 출생연도가_없으면_저장된_age로_폴백한다() {
-        assertThat(user().age(25).build().ageIn(Year.of(2026))).isEqualTo(25);
-        assertThat(user().age(40).build().ageIn(Year.of(2026))).isEqualTo(40);
+    void 출생연도가_없으면_저장된_age로_한_점_구간을_만든다() {
+        assertThat(user().age(25).build().ageRangeIn(Year.of(2026))).isEqualTo(new User.AgeRange(25, 25));
+        assertThat(user().age(40).build().ageRangeIn(Year.of(2026))).isEqualTo(new User.AgeRange(40, 40));
     }
 
     @Test
     void 출생연도와_age가_모두_없으면_null이다() {
-        assertThat(user().build().getAge()).isNull();
+        assertThat(user().build().ageRange()).isNull();
     }
 
     @Test
-    void getAge는_Asia_Seoul_올해를_기준으로_계산한다() {
+    void ageRange는_Asia_Seoul_올해를_기준으로_계산한다() {
         User user = user().birthYear(2000).build();
-        int expected = Year.now(BirthYearValidator.ZONE).getValue() - 2000 - 1;
+        int thisYear = Year.now(BirthYearValidator.ZONE).getValue();
 
-        assertThat(user.getAge()).isEqualTo(expected);
+        assertThat(user.ageRange()).isEqualTo(new User.AgeRange(thisYear - 2000 - 1, thisYear - 2000));
     }
 
     @Test
-    void updateBirthYear로_출생연도를_변경한다() {
+    void updateBirthYear로_출생연도를_변경하면_구간도_바뀐다() {
         User user = user().age(25).build();
 
         user.updateBirthYear(1990);
 
         assertThat(user.getBirthYear()).isEqualTo(1990);
-        assertThat(user.ageIn(Year.of(2026))).isEqualTo(35);
+        assertThat(user.ageRangeIn(Year.of(2026))).isEqualTo(new User.AgeRange(35, 36));
     }
 }

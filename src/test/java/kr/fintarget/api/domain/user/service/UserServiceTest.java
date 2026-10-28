@@ -115,7 +115,7 @@ class UserServiceTest {
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("출생연도는 4자리 숫자로 입력해주세요");
         assertThat(user.getBirthYear()).isNull();
-        assertThat(user.getAge()).isEqualTo(25);
+        assertThat(user.ageRange()).isEqualTo(new User.AgeRange(25, 25));
     }
 
     @Test
@@ -139,7 +139,8 @@ class UserServiceTest {
         userService.updateProfile("user-1", updateRequest(null, null, null, "2000", null, null));
 
         assertThat(user.getBirthYear()).isEqualTo(2000);
-        assertThat(user.getAge()).isEqualTo(java.time.Year.now(java.time.ZoneId.of("Asia/Seoul")).getValue() - 2000 - 1);
+        int thisYear = java.time.Year.now(java.time.ZoneId.of("Asia/Seoul")).getValue();
+        assertThat(user.ageRange()).isEqualTo(new User.AgeRange(thisYear - 2000 - 1, thisYear - 2000));
     }
 
     @Test
@@ -270,7 +271,7 @@ class UserServiceTest {
 
         UserProfileResponse response = userService.updateProfile("user-1", request);
 
-        assertThat(user.getAge()).isEqualTo(25);
+        assertThat(user.ageRange()).isEqualTo(new User.AgeRange(25, 25));
         assertThat(user.getEmploymentType()).isEqualTo("EMPLOYED");
         assertThat(user.getIncome()).isEqualTo(4_500_000L);
         assertThat(response.getName()).isEqualTo("기존이름");

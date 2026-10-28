@@ -222,26 +222,31 @@ Authorization: Bearer {accessToken}
 
 ### 정책 목록 조회 (매칭)
 - **GET** `/api/policies`
+- 로그인 사용자(토큰)의 온보딩 정보로 조건에 맞는 정책을 반환함. 페이지네이션 없이 전체 목록을 반환
 - Query Parameters:
-    - `age` (필수): 나이 (int)
-    - `income` (필수): 월 소득 (long)
-    - `policyType` (optional): 정책 타입 (`SAVINGS` | `LOAN` | `HOUSING`)
-- 파라미터 누락 시 400 반환
+    - `policyType` (optional): 정책 유형 (`HOUSING` | `FINANCE_WELFARE` | `STARTUP` | `ETC`, 대소문자 구분 없음). 그 외 값은 400
+- 매칭 조건
+    - 나이: 출생연도가 있으면 만 나이 후보 [올해-출생연도-1, 올해-출생연도] 중 하나라도 정책 `minAge`~`maxAge`에 들면 포함 (null은 제한 없음). 출생연도 입력 전 사용자는 기존 연령대 값으로 비교
+    - 소득: 사용자 소득 구간의 대표값이 정책 `incomeLimit` 이하이면 포함 (null은 제한 없음)
+    - 지역: `regions`가 빈 배열(전국)이거나 사용자 거주 지역 코드가 `regions`에 포함되면 포함. 거주 지역 미입력 사용자는 전국 정책만
+    - 나이 또는 소득을 입력하지 않은 사용자는 빈 배열 (에러 아님)
 - Response: 배열
 ```json
 [
   {
     "policyId": "uuid",
-    "name": "청년도약계좌",
+    "name": "청년 월세 지원",
     "description": "string",
     "minAge": 19,
     "maxAge": 34,
-    "incomeLimit": 7500000,
-    "benefitAmount": 2400000,
-    "policyType": "SAVINGS"
+    "incomeLimit": null,
+    "benefitAmount": null,
+    "policyType": "HOUSING",
+    "regions": ["GYEONGNAM", "ULSAN"]
   }
 ]
 ```
+- `regions`: 신청 가능 지역 코드 목록 (사용자 `region`과 같은 17개 시/도 코드). 빈 배열이면 전국 정책. `/api/policies/my` 응답의 `policy`에도 같은 필드가 포함됨
 
 ### 내 정책 목록 조회
 - **GET** `/api/policies/my`

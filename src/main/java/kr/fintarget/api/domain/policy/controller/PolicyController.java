@@ -30,8 +30,11 @@ public class PolicyController {
 
     @Operation(
             summary = "나에게 맞는 정책 목록 조회",
-            description = "사용자의 나이/소득 조건에 맞는 정책 목록을 조회합니다. policyType을 지정하면 해당 유형으로 추가 필터링합니다 "
+            description = "사용자의 나이/소득/거주 지역 조건에 맞는 정책 목록을 조회합니다. policyType을 지정하면 해당 유형으로 추가 필터링합니다 "
                     + "(대소문자 구분 없이 HOUSING, FINANCE_WELFARE, STARTUP, ETC 중 하나여야 함). "
+                    + "나이는 출생연도로 계산한 만 나이 후보 두 개(올해-출생연도-1, 올해-출생연도) 중 하나라도 정책 나이 범위에 들면 포함하며, "
+                    + "출생연도 입력 전 사용자는 기존 연령대 값으로 비교합니다. "
+                    + "지역은 전국 정책과 사용자 거주 지역이 신청 가능 지역(regions)에 포함된 정책만 반환하며, 거주 지역을 입력하지 않은 사용자에게는 전국 정책만 반환합니다. "
                     + "온보딩에서 나이 또는 소득을 아직 입력하지 않은 사용자는 조건 매칭이 불가능하므로 빈 배열이 반환됩니다(에러 아님)."
     )
     @io.swagger.v3.oas.annotations.responses.ApiResponses({

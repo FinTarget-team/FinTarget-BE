@@ -28,7 +28,9 @@ public class User {
     private String email;
     private String region;
 
-    // 출생연도 입력 도입 전(#87)에 저장된 연령대 대표값(25/40). birthYear가 없을 때만 getAge()의 폴백으로 쓴다
+    // 출생연도 입력 도입 전(#87)에 저장된 연령대 대표값(25/40). birthYear가 없을 때만 ageRange()의 폴백으로 쓴다.
+    // getter를 만들지 않는다: 저장값을 그대로 읽으면 출생연도가 있는 사용자의 나이를 잘못 쓰게 되므로 ageRange()만 사용
+    @Getter(AccessLevel.NONE)
     private Integer age;
     private Integer birthYear;
     private Long income;
@@ -58,22 +60,29 @@ public class User {
     }
 
     /**
-     * 정책 매칭용 나이. birthYear가 있으면 올해(Asia/Seoul) 기준으로 계산하고, 없으면 저장된 age(25/40)를 반환한다.
-     * 계산식은 (올해 - 출생연도 - 1), 즉 올해 생일이 아직 지나지 않았다고 가정한 만 나이다.
-     * 월일을 받지 않으므로 올해 생일이 지난 사용자는 실제 만 나이보다 1살 적게 계산되며, 이 때문에
-     * - 최소 나이 경계: 올해 최소 나이가 되는 사용자는 생일이 지나도 제외된다 (예: 19세 이상 정책, 올해 19세가 되는 사용자)
-     * - 최대 나이 경계: 올해 최대 나이를 넘는 사용자는 생일이 지나도 통과된다 (예: 39세 이하 정책, 올해 40세가 되는 사용자)
-     * 정책 나이 범위와 비교하는 방식은 #99에서 바꾼다.
+     * 정책 매칭용 만 나이 구간 (양 끝 포함). 올해는 Asia/Seoul 기준이다.
+     * - birthYear가 있으면 [올해 - 출생연도 - 1, 올해 - 출생연도]. 월일을 받지 않아 생일 전후를 알 수 없으므로 두 값을 모두 후보로 둔다
+     * - birthYear가 없으면 저장된 age(25/40)로 [age, age]
+     * - 둘 다 없으면 null (나이 미입력)
+     * 정책 나이 범위와 이 구간이 겹치면 통과시키므로 경계 연도 출생자를 잘못 제외하지 않는다. 대신 생일에 따라 실제로는 대상이 아닌
+     * 경계 연도 출생자도 통과된다 (예: 39세 이하 정책에서 올해 40세가 되는 사용자는 생일이 지나도 통과, #99).
      */
-    public Integer getAge() {
-        return ageIn(Year.now(BirthYearValidator.ZONE));
+    public AgeRange ageRange() {
+        return ageRangeIn(Year.now(BirthYearValidator.ZONE));
     }
 
-    Integer ageIn(Year currentYear) {
-        if (birthYear == null) {
-            return age;
+    AgeRange ageRangeIn(Year currentYear) {
+        if (birthYear != null) {
+            int ageAfterBirthday = currentYear.getValue() - birthYear;
+            return new AgeRange(ageAfterBirthday - 1, ageAfterBirthday);
         }
-        return currentYear.getValue() - birthYear - 1;
+        if (age != null) {
+            return new AgeRange(age, age);
+        }
+        return null;
+    }
+
+    public record AgeRange(int lower, int upper) {
     }
 
     public void updateBirthYear(Integer birthYear) {
