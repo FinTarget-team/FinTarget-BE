@@ -25,7 +25,8 @@ public class UpdateProfileRequest {
             example = "EMPLOYED", allowableValues = {"EMPLOYED", "UNEMPLOYED", "STUDENT", "SELF_EMPLOYED"}, types = {"string", "null"})
     private String employmentType;
 
-    @Schema(description = "변경할 소득 구간 코드. null이면 기존 값을 유지합니다. 허용되지 않은 코드는 400으로 거부됩니다.",
-            example = "UNDER_2M", allowableValues = {"UNDER_2M", "200_300", "OVER_3M"}, types = {"string", "null"})
+    @Schema(description = "변경할 세전 월 소득 구간 코드. null이면 기존 값을 유지합니다. 허용되지 않은 코드(구버전 코드 포함)는 400으로 거부됩니다.",
+            example = "300_380", allowableValues = {"UNDER_150", "150_260", "260_300", "300_380", "380_410", "OVER_410"},
+            types = {"string", "null"})
     private String incomeBracket;
 }

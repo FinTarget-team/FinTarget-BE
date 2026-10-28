@@ -46,7 +46,7 @@ class UserServiceTest {
                 .providerId("kakao-1")
                 .region("SEOUL")
                 .age(40)
-                .income(3_500_000L)
+                .income(3_400_000L)
                 .employmentType("STUDENT")
                 .onboardingCompleted(true)
                 .build();
@@ -56,7 +56,7 @@ class UserServiceTest {
         UserProfileResponse response = userService.getProfile("user-1");
 
         assertThat(response.getAgeGroup()).isEqualTo("MIDDLE");
-        assertThat(response.getIncomeBracket()).isEqualTo("OVER_3M");
+        assertThat(response.getIncomeBracket()).isEqualTo("300_380");
         assertThat(response.getEmploymentType()).isEqualTo("STUDENT");
         assertThat(response.getRegion()).isEqualTo("SEOUL");
         assertThat(response.isOnboardingCompleted()).isTrue();
@@ -79,15 +79,15 @@ class UserServiceTest {
         User user = User.builder().id("user-1").provider("KAKAO").providerId("kakao-1").build();
         when(userRepository.findById("user-1")).thenReturn(Optional.of(user));
 
-        UpdateProfileRequest request = updateRequest(null, null, null, "MIDDLE", "STUDENT", "OVER_3M");
+        UpdateProfileRequest request = updateRequest(null, null, null, "MIDDLE", "STUDENT", "OVER_410");
 
         UserProfileResponse response = userService.updateProfile("user-1", request);
 
         assertThat(user.getAge()).isEqualTo(40);
-        assertThat(user.getIncome()).isEqualTo(3_500_000L);
+        assertThat(user.getIncome()).isEqualTo(4_500_000L);
         assertThat(user.getEmploymentType()).isEqualTo("STUDENT");
         assertThat(response.getAgeGroup()).isEqualTo("MIDDLE");
-        assertThat(response.getIncomeBracket()).isEqualTo("OVER_3M");
+        assertThat(response.getIncomeBracket()).isEqualTo("OVER_410");
         assertThat(response.getEmploymentType()).isEqualTo("STUDENT");
     }
 
@@ -128,6 +128,29 @@ class UserServiceTest {
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("유효하지 않은 소득 코드입니다");
         assertThat(user.getIncome()).isNull();
+    }
+
+    @Test
+    void incomeBracket이_구간_개편_전_코드면_400_예외가_발생하고_기존_값이_유지된다() {
+        User user = User.builder().id("user-1").provider("KAKAO").providerId("kakao-1").income(1_500_000L).build();
+        when(userRepository.findById("user-1")).thenReturn(Optional.of(user));
+
+        UpdateProfileRequest request = updateRequest(null, null, null, null, null, "UNDER_2M");
+
+        assertThatThrownBy(() -> userService.updateProfile("user-1", request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("유효하지 않은 소득 코드입니다");
+        assertThat(user.getIncome()).isEqualTo(1_500_000L);
+    }
+
+    @Test
+    void 구간_개편_전_소득이_저장된_사용자는_프로필_조회시_incomeBracket이_null이다() {
+        User user = User.builder().id("user-1").provider("KAKAO").providerId("kakao-1").income(1_500_000L).build();
+        when(userRepository.findById("user-1")).thenReturn(Optional.of(user));
+
+        UserProfileResponse response = userService.getProfile("user-1");
+
+        assertThat(response.getIncomeBracket()).isNull();
     }
 
     @Test
@@ -192,13 +215,13 @@ class UserServiceTest {
                 .build();
         when(userRepository.findById("user-1")).thenReturn(Optional.of(user));
 
-        UpdateProfileRequest request = updateRequest(null, null, null, null, null, "OVER_3M");
+        UpdateProfileRequest request = updateRequest(null, null, null, null, null, "OVER_410");
 
         UserProfileResponse response = userService.updateProfile("user-1", request);
 
         assertThat(user.getAge()).isEqualTo(25);
         assertThat(user.getEmploymentType()).isEqualTo("EMPLOYED");
-        assertThat(user.getIncome()).isEqualTo(3_500_000L);
+        assertThat(user.getIncome()).isEqualTo(4_500_000L);
         assertThat(response.getName()).isEqualTo("기존이름");
     }
 

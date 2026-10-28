@@ -70,12 +70,15 @@ public class OnboardingService {
                     .isComplete(false).build();
             case STEP_INCOME -> OnboardingStepResponse.builder()
                     .step(STEP_INCOME).totalSteps(TOTAL_STEPS).progress((double) STEP_INCOME / TOTAL_STEPS)
-                    .question("소득 수준에 맞는 청년 정책을 찾아드릴게요. 월 소득이 어느 정도인가요?")
+                    .question("소득 수준에 맞는 청년 정책을 찾아드릴게요. 세전 월 소득이 어느 정도인가요?")
                     .answerType("CHIP")
                     .options(List.of(
-                            OnboardingStepResponse.OptionDto.builder().label("200만원 미만").value("UNDER_2M").build(),
-                            OnboardingStepResponse.OptionDto.builder().label("200~300만원").value("200_300").build(),
-                            OnboardingStepResponse.OptionDto.builder().label("300만원 이상").value("OVER_3M").build()
+                            OnboardingStepResponse.OptionDto.builder().label("150만원 미만").value("UNDER_150").build(),
+                            OnboardingStepResponse.OptionDto.builder().label("150~260만원").value("150_260").build(),
+                            OnboardingStepResponse.OptionDto.builder().label("260~300만원").value("260_300").build(),
+                            OnboardingStepResponse.OptionDto.builder().label("300~380만원").value("300_380").build(),
+                            OnboardingStepResponse.OptionDto.builder().label("380~410만원").value("380_410").build(),
+                            OnboardingStepResponse.OptionDto.builder().label("410만원 이상").value("OVER_410").build()
                     ))
                     .isComplete(false).build();
             case STEP_REGION -> OnboardingStepResponse.builder()

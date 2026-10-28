@@ -5,6 +5,7 @@ import kr.fintarget.api.domain.onboarding.dto.OnboardingAnswerRequest;
 import kr.fintarget.api.domain.onboarding.dto.OnboardingStepResponse;
 import kr.fintarget.api.domain.onboarding.entity.OnboardingAnswer;
 import kr.fintarget.api.domain.onboarding.repository.OnboardingAnswerRepository;
+import kr.fintarget.api.domain.user.code.IncomeBracket;
 import kr.fintarget.api.domain.user.entity.User;
 import kr.fintarget.api.domain.user.repository.UserRepository;
 import org.junit.jupiter.api.Test;
@@ -15,6 +16,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.util.Arrays;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -248,6 +250,52 @@ class OnboardingServiceTest {
         assertThatThrownBy(() -> onboardingService.submitAnswer(userId, answerRequest(STEP_EMPLOYMENT, "FREELANCER")))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("유효하지 않은 고용 형태 코드입니다");
+
+        verify(userRepository, never()).save(any());
+    }
+
+    @Test
+    void step4_조회시_세전_월소득_질문과_6개_소득구간_옵션을_반환한다() {
+        OnboardingStepResponse response = onboardingService.getStep(STEP_INCOME);
+
+        assertThat(response.getStep()).isEqualTo(STEP_INCOME);
+        assertThat(response.getAnswerType()).isEqualTo("CHIP");
+        assertThat(response.getQuestion()).contains("세전 월 소득");
+        assertThat(response.getOptions())
+                .extracting(OnboardingStepResponse.OptionDto::getValue)
+                .containsExactly(Arrays.stream(IncomeBracket.values()).map(IncomeBracket::getCode).toArray(String[]::new));
+        assertThat(response.getOptions())
+                .extracting(OnboardingStepResponse.OptionDto::getLabel)
+                .containsExactly("150만원 미만", "150~260만원", "260~300만원", "300~380만원", "380~410만원", "410만원 이상");
+    }
+
+    @Test
+    void step4_답변_제출시_유효한_소득코드면_유저_income이_대표값으로_갱신되고_5단계_질문을_반환한다() {
+        String userId = UUID.randomUUID().toString();
+        User user = User.builder().id(userId).provider("kakao").providerId("provider-1").build();
+
+        when(onboardingAnswerRepository.existsByUserIdAndStep(UUID.fromString(userId), STEP_EMPLOYMENT)).thenReturn(true);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+        OnboardingStepResponse response = onboardingService.submitAnswer(userId, answerRequest(STEP_INCOME, "260_300"));
+
+        assertThat(response.getStep()).isEqualTo(STEP_REGION);
+        assertThat(user.getIncome()).isEqualTo(2_800_000L);
+        verify(userRepository).save(user);
+    }
+
+    @Test
+    void step4_답변_제출시_구간_개편_전_소득코드면_400_예외가_발생한다() {
+        String userId = UUID.randomUUID().toString();
+
+        when(onboardingAnswerRepository.existsByUserIdAndStep(UUID.fromString(userId), STEP_EMPLOYMENT)).thenReturn(true);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(
+                User.builder().id(userId).provider("kakao").providerId("provider-1").build()
+        ));
+
+        assertThatThrownBy(() -> onboardingService.submitAnswer(userId, answerRequest(STEP_INCOME, "UNDER_2M")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("유효하지 않은 소득 코드입니다");
 
         verify(userRepository, never()).save(any());
     }

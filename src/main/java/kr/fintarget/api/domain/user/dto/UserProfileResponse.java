@@ -31,8 +31,9 @@ public class UserProfileResponse {
             example = "EMPLOYED", allowableValues = {"EMPLOYED", "UNEMPLOYED", "STUDENT", "SELF_EMPLOYED"}, types = {"string", "null"})
     private String employmentType;
 
-    @Schema(description = "소득 구간 코드. 온보딩 3단계를 완료하지 않았으면 null입니다.",
-            example = "UNDER_2M", allowableValues = {"UNDER_2M", "200_300", "OVER_3M"}, types = {"string", "null"})
+    @Schema(description = "세전 월 소득 구간 코드. 온보딩 4단계를 완료하지 않았거나 구간 개편 전에 저장된 값이면 null입니다.",
+            example = "300_380", allowableValues = {"UNDER_150", "150_260", "260_300", "300_380", "380_410", "OVER_410"},
+            types = {"string", "null"})
     private String incomeBracket;
 
     @Schema(description = "온보딩 전체 완료 여부", example = "true")

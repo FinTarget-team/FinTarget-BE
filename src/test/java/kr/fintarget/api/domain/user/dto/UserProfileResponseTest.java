@@ -17,7 +17,7 @@ class UserProfileResponseTest {
                 .email("user@example.com")
                 .region("SEOUL")
                 .age(25)
-                .income(2_500_000L)
+                .income(2_050_000L)
                 .employmentType("EMPLOYED")
                 .onboardingCompleted(true)
                 .build();
@@ -31,7 +31,7 @@ class UserProfileResponseTest {
         assertThat(response.getProvider()).isEqualTo("KAKAO");
         assertThat(response.getAgeGroup()).isEqualTo("YOUTH");
         assertThat(response.getEmploymentType()).isEqualTo("EMPLOYED");
-        assertThat(response.getIncomeBracket()).isEqualTo("200_300");
+        assertThat(response.getIncomeBracket()).isEqualTo("150_260");
         assertThat(response.isOnboardingCompleted()).isTrue();
     }
 
