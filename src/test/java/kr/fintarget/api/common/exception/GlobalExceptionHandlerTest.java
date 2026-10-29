@@ -1,6 +1,7 @@
 package kr.fintarget.api.common.exception;
 
 import kr.fintarget.api.common.ApiResponse;
+import kr.fintarget.api.domain.ai.chat.service.AiChatNotFoundException;
 import kr.fintarget.api.domain.ai.client.AiCallFailedException;
 import kr.fintarget.api.domain.ai.client.AiClientException;
 import kr.fintarget.api.domain.ai.client.AiUnavailableException;
@@ -14,6 +15,15 @@ import static org.assertj.core.api.Assertions.assertThat;
 class GlobalExceptionHandlerTest {
 
     private final GlobalExceptionHandler handler = new GlobalExceptionHandler();
+
+    @Test
+    void AiChatNotFoundException은_404로_변환된다() {
+        ResponseEntity<ApiResponse<?>> response = handler.handleAiChatNotFound(AiChatNotFoundException.conversation());
+
+        assertThat(response.getStatusCode().value()).isEqualTo(404);
+        assertThat(response.getBody().getStatus()).isEqualTo(404);
+        assertThat(response.getBody().getMessage()).isEqualTo(AiChatNotFoundException.CONVERSATION_NOT_FOUND);
+    }
 
     @Test
     void NaverOAuthException은_401로_변환된다() {

@@ -1,5 +1,6 @@
 package kr.fintarget.api.common.exception;
 import kr.fintarget.api.common.ApiResponse;
+import kr.fintarget.api.domain.ai.chat.service.AiChatNotFoundException;
 import kr.fintarget.api.domain.ai.client.AiCallFailedException;
 import kr.fintarget.api.domain.ai.client.AiUnavailableException;
 import kr.fintarget.api.domain.auth.KakaoOAuthException;
@@ -14,6 +15,10 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ApiResponse<?>> handleIllegalArgument(IllegalArgumentException e) {
         return ResponseEntity.badRequest().body(ApiResponse.error(400, e.getMessage()));
+    }
+    @ExceptionHandler(AiChatNotFoundException.class)
+    public ResponseEntity<ApiResponse<?>> handleAiChatNotFound(AiChatNotFoundException e) {
+        return ResponseEntity.status(404).body(ApiResponse.error(404, e.getMessage()));
     }
     @ExceptionHandler(NaverOAuthException.class)
     public ResponseEntity<ApiResponse<?>> handleNaverOAuth(NaverOAuthException e) {
