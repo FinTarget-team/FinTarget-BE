@@ -35,3 +35,17 @@ kinfa:
   api:
     key: ${KINFA_API_KEY}
     base-url: ${KINFA_BASE_URL}
+# OpenAI (#114). 항목이 없어도 코드 기본값으로 기동되며, api-key가 비어 있으면 AI 기능만 비활성(호출 시 503)
+openai:
+  api-key: ${OPENAI_API_KEY:}
+  base-url: https://api.openai.com/v1
+  model:
+    default: ${OPENAI_MODEL_DEFAULT:gpt-6-luna}
+    premium: ${OPENAI_MODEL_PREMIUM:gpt-6.1-sol}
+  reasoning-effort: low      # gpt-6.1-sol은 none, minimal 미지원
+  max-output-tokens: 4000    # 추론 토큰 포함
+  connect-timeout: 3s
+  read-timeout: 30s
+  total-timeout: 45s         # 첫 시도부터의 누적 시간 상한. 넘으면 재시도하지 않음
+  max-retries: 2             # 429(호출 한도), 5xx, 연결 실패만 재시도
+  retry-backoff: 1s

@@ -1,5 +1,7 @@
 package kr.fintarget.api.common.exception;
 import kr.fintarget.api.common.ApiResponse;
+import kr.fintarget.api.domain.ai.client.AiCallFailedException;
+import kr.fintarget.api.domain.ai.client.AiUnavailableException;
 import kr.fintarget.api.domain.auth.KakaoOAuthException;
 import kr.fintarget.api.domain.auth.NaverOAuthException;
 import org.springframework.http.ResponseEntity;
@@ -20,6 +22,15 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(KakaoOAuthException.class)
     public ResponseEntity<ApiResponse<?>> handleKakaoOAuth(KakaoOAuthException e) {
         return ResponseEntity.status(401).body(ApiResponse.error(401, e.getMessage()));
+    }
+    // 메시지는 사용자에게 보여도 되는 고정 문구 (OpenAI 응답 내용을 담지 않음)
+    @ExceptionHandler(AiUnavailableException.class)
+    public ResponseEntity<ApiResponse<?>> handleAiUnavailable(AiUnavailableException e) {
+        return ResponseEntity.status(503).body(ApiResponse.error(503, e.getMessage()));
+    }
+    @ExceptionHandler(AiCallFailedException.class)
+    public ResponseEntity<ApiResponse<?>> handleAiCallFailed(AiCallFailedException e) {
+        return ResponseEntity.status(502).body(ApiResponse.error(502, e.getMessage()));
     }
     @ExceptionHandler(IllegalStateException.class)
     public ResponseEntity<ApiResponse<?>> handleIllegalState(IllegalStateException e) {
