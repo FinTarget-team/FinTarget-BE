@@ -51,6 +51,7 @@ services:
       KINFA_API_KEY: ${KINFA_API_KEY:-}
       KINFA_BASE_URL: ${KINFA_BASE_URL:-}
       ADMIN_API_KEY: ${ADMIN_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
 
 volumes:
   db-data:
