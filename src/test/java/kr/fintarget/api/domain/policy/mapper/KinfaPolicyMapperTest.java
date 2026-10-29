@@ -59,7 +59,8 @@ class KinfaPolicyMapperTest {
                 realItem.maxRdptTrm(), realItem.rdptMthd(), "청년창업", realItem.trgt(),
                 realItem.instCtg(), realItem.ofrInstNm(), realItem.rsdAreaPamtEqltIstm(),
                 realItem.suprTgtDtlCond(), realItem.age(), realItem.incm(), realItem.jnMthd(),
-                realItem.prdExisYn(), realItem.prdCtg(), realItem.prdNm()
+                realItem.prdExisYn(), realItem.prdCtg(), realItem.prdNm(),
+                realItem.crdtSc(), realItem.cnpl(), realItem.rltSite(), realItem.etcRefSbjc(), realItem.mgmDln()
         );
 
         Policy policy = KinfaPolicyMapper.toPolicy(startupItem);
@@ -88,7 +89,7 @@ class KinfaPolicyMapperTest {
                 null, null, null, null,
                 null, "기관", rsdAreaPamtEqltIstm,
                 null, null, null, null,
-                null, null, null
+                null, null, null, null, null, null, null, null
         );
     }
 
