@@ -61,10 +61,14 @@ public class SimulationService {
             userPolicy = userPolicyRepository.findByUserPolicyIdAndUserId(request.userPolicyId(), userId)
                     .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 유저 정책입니다."));
 
-            long monthlyBenefit = userPolicy.getPolicy().getBenefitAmount() / 12;
-            long totalMonthlySaving = request.monthlySaving() + monthlyBenefit;
-            MonteCarloResult policyResult = runMonteCarlo(remaining, totalMonthlySaving, monthlyRate, monthsToDeadline);
-            policyDate = LocalDate.now().plusMonths(policyResult.p50Months());
+            // 혜택 금액이 없는 정책(온통청년 전체, 금액 환산이 안 되는 혜택)은 정책 반영 계산만 건너뛰고 policyCompletionDate를 null로 둔다
+            Long benefitAmount = userPolicy.getPolicy().getBenefitAmount();
+            if (benefitAmount != null) {
+                long monthlyBenefit = benefitAmount / 12;
+                long totalMonthlySaving = request.monthlySaving() + monthlyBenefit;
+                MonteCarloResult policyResult = runMonteCarlo(remaining, totalMonthlySaving, monthlyRate, monthsToDeadline);
+                policyDate = LocalDate.now().plusMonths(policyResult.p50Months());
+            }
         }
 
         Simulation simulation = new Simulation(
