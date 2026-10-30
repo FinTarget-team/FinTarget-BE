@@ -8,10 +8,12 @@ import kr.fintarget.api.domain.policy.entity.UserPolicy;
 import kr.fintarget.api.domain.policy.repository.UserPolicyRepository;
 import kr.fintarget.api.domain.simulation.dto.SimulationRequest;
 import kr.fintarget.api.domain.simulation.dto.SimulationResponse;
+import kr.fintarget.api.domain.simulation.entity.Simulation;
 import kr.fintarget.api.domain.simulation.repository.SimulationRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -25,6 +27,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -134,6 +137,32 @@ class SimulationServiceTest {
         SimulationResponse response = simulationService.runSimulation(USER_ID, request);
 
         assertThat(response.policyCompletionDate()).isBeforeOrEqualTo(response.expectedCompletionDate());
+    }
+
+    @Test
+    void 정책_혜택_금액이_없으면_정책_완료일만_null이고_기본_결과는_정상_계산된다() {
+        Goal goal = new Goal(USER_ID, "정책 활용 목표", 5_000_000L, 0L, LocalDate.now().plusMonths(36));
+        when(goalRepository.findByGoalIdAndUserId(any(), eq(USER_ID)))
+                .thenReturn(Optional.of(goal));
+
+        UUID userPolicyId = UUID.randomUUID();
+        Policy policy = Policy.create("청년 월세 지원", "설명", null, null, null, null, PolicyType.HOUSING, "전국", null, null);
+        UserPolicy userPolicy = new UserPolicy(USER_ID, policy, UserPolicy.UserPolicyStatus.APPLIED);
+        when(userPolicyRepository.findByUserPolicyIdAndUserId(userPolicyId, USER_ID))
+                .thenReturn(Optional.of(userPolicy));
+
+        SimulationRequest request = new SimulationRequest(UUID.randomUUID(), 100_000L, userPolicyId, null);
+        SimulationResponse response = simulationService.runSimulation(USER_ID, request);
+
+        assertThat(response.policyCompletionDate()).isNull();
+        assertThat(response.expectedCompletionDate()).isNotNull();
+        assertThat(response.optimisticCompletionDate()).isNotNull();
+        assertThat(response.pessimisticCompletionDate()).isNotNull();
+        assertThat(response.successProbability()).isNotNull();
+
+        ArgumentCaptor<Simulation> captor = ArgumentCaptor.forClass(Simulation.class);
+        verify(simulationRepository).save(captor.capture());
+        assertThat(captor.getValue().getUserPolicy()).isSameAs(userPolicy);
     }
 
     @Test

@@ -16,7 +16,7 @@ public record SimulationResponse(
     @Schema(description = "몬테카를로 시뮬레이션 중앙값(50th percentile) 기준 예상 달성일", example = "2028-03-15")
     LocalDate expectedCompletionDate,
     @Schema(
-            description = "정책 혜택을 반영한 예상 달성일. 요청에 userPolicyId를 보내지 않았다면 null입니다.",
+            description = "정책 혜택을 반영한 예상 달성일. 요청에 userPolicyId를 보내지 않았거나, 정책의 benefitAmount가 null(금액으로 환산되지 않는 혜택)이면 null입니다.",
             example = "2027-11-20",
             types = {"string", "null"}
     )
