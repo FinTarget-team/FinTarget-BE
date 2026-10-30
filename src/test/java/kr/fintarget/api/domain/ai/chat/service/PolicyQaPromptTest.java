@@ -2,6 +2,8 @@ package kr.fintarget.api.domain.ai.chat.service;
 
 import org.junit.jupiter.api.Test;
 
+import java.io.UncheckedIOException;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -31,5 +33,23 @@ class PolicyQaPromptTest {
     @Test
     void 자리표시자가_없는_템플릿은_거부한다() {
         assertThatThrownBy(() -> new PolicyQaPrompt("{{policy}} 만 있음")).isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
+    void 버전을_지정해_읽으면_기본_생성자와_같은_프롬프트를_만든다() {
+        PolicyDocument document = new PolicyDocument("정책명: 청년 월세", false);
+
+        PolicyQaPrompt prompt = PolicyQaPrompt.ofVersion(PolicyQaPrompt.VERSION);
+
+        assertThat(prompt.version()).isEqualTo(PolicyQaPrompt.VERSION);
+        assertThat(new PolicyQaPrompt().version()).isEqualTo(PolicyQaPrompt.VERSION);
+        assertThat(prompt.render(document, PROFILE)).isEqualTo(new PolicyQaPrompt().render(document, PROFILE));
+    }
+
+    @Test
+    void 버전_형식이_아니거나_파일이_없으면_거부한다() {
+        assertThatThrownBy(() -> PolicyQaPrompt.ofVersion("../application")).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> PolicyQaPrompt.ofVersion(null)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> PolicyQaPrompt.ofVersion("policy-qa-v999")).isInstanceOf(UncheckedIOException.class);
     }
 }
