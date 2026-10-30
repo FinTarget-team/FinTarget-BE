@@ -56,7 +56,7 @@ public class AiChatService {
         List<AiMessage> messages = new ArrayList<>(recentHistory(context.messages()));
         messages.add(AiMessage.user(question));
 
-        // 모델은 설정의 기본 등급(openai.model.default)만 쓴다. 상위 등급 승급 기준은 #126에서 정한다
+        // 모델은 설정의 기본 등급(openai.model.default)만 쓴다. 승급 기준은 docs/ai/eval-results-2026-10.md (#126), 구현은 별도 이슈
         AiTextResult result = aiTextClient.generate(
                 new AiTextRequest(prompt.render(document, profile), messages, AiModelTier.DEFAULT));
 
