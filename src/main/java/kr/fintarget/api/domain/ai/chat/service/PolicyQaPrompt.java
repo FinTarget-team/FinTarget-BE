@@ -6,6 +6,7 @@ import org.springframework.stereotype.Component;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
+import java.util.regex.Pattern;
 
 /**
  * 정책 AI 질문 시스템 프롬프트. 본문은 src/main/resources/prompts/{VERSION}.md에 두고,
@@ -19,18 +20,39 @@ public class PolicyQaPrompt {
 
     private static final String POLICY_PLACEHOLDER = "{{policy}}";
     private static final String PROFILE_PLACEHOLDER = "{{profile}}";
+    private static final Pattern VERSION_PATTERN = Pattern.compile("policy-qa-v\\d+");
 
+    private final String version;
     private final String template;
 
     public PolicyQaPrompt() {
-        this(load("prompts/" + VERSION + ".md"));
+        this(VERSION, load(VERSION));
     }
 
     PolicyQaPrompt(String template) {
+        this(VERSION, template);
+    }
+
+    private PolicyQaPrompt(String version, String template) {
         if (!template.contains(POLICY_PLACEHOLDER) || !template.contains(PROFILE_PLACEHOLDER)) {
-            throw new IllegalStateException("프롬프트 템플릿에 {{policy}}, {{profile}} 자리가 없습니다: " + VERSION);
+            throw new IllegalStateException("프롬프트 템플릿에 {{policy}}, {{profile}} 자리가 없습니다: " + version);
         }
+        this.version = version;
         this.template = template;
+    }
+
+    /**
+     * 지정한 버전의 프롬프트 파일을 읽는다. 버전별 답변 비교 평가(#126)용이며, 운영 경로는 기본 생성자(VERSION)만 쓴다.
+     */
+    public static PolicyQaPrompt ofVersion(String version) {
+        if (version == null || !VERSION_PATTERN.matcher(version).matches()) {
+            throw new IllegalArgumentException("프롬프트 버전 형식이 아닙니다: " + version);
+        }
+        return new PolicyQaPrompt(version, load(version));
+    }
+
+    public String version() {
+        return version;
     }
 
     public String render(PolicyDocument document, UserProfileSummary profile) {
@@ -40,7 +62,8 @@ public class PolicyQaPrompt {
                 .replace(POLICY_PLACEHOLDER, document.text());
     }
 
-    private static String load(String path) {
+    private static String load(String version) {
+        String path = "prompts/" + version + ".md";
         try {
             return new ClassPathResource(path).getContentAsString(StandardCharsets.UTF_8);
         } catch (IOException e) {
