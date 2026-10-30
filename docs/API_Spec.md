@@ -174,31 +174,42 @@ Authorization: Bearer {accessToken}
 
 ## 4. 목표 (Goal)
 
+> 사용자당 목표는 1개입니다. 그래서 목표 API는 경로에 ID 없이 로그인 사용자의 목표를 대상으로 동작합니다.
+> 이 섹션의 모든 응답은 공통 형식 `{ "status", "message", "data" }`로 감싸서 내려옵니다.
+
 ### 목표 조회
 - **GET** `/api/goals`
-- Response: 목표 없으면 `data: null`, 있으면 아래 형식
+- Response (200): 목표가 없으면 `data: null`(에러 아님), 있으면 아래 형식
 ```json
 {
-  "goalId": "uuid",
-  "title": "string",
-  "targetAmount": 100000000,
-  "currentAmount": 5000000,
-  "deadline": "2027-12-31",
-  "deadlineDefaulted": false,
-  "status": "ACTIVE",
-  "createdAt": "datetime",
-  "updatedAt": "datetime",
-  "progressRate": 5.0,
-  "dday": 567
+  "status": 200,
+  "message": "OK",
+  "data": {
+    "goalId": "uuid",
+    "title": "전세 자금 마련",
+    "targetAmount": 100000000,
+    "currentAmount": 5000000,
+    "deadline": "2027-12-31",
+    "deadlineDefaulted": false,
+    "status": "ACTIVE",
+    "createdAt": "2026-10-01T09:00:00",
+    "updatedAt": "2026-10-15T15:30:00",
+    "progressRate": 5.0,
+    "dday": 427
+  }
 }
 ```
-> `status` 값: `ACTIVE` | `COMPLETED` | `ABANDONED`
-> `dday`: 양수=남은 일수, 0=오늘, 음수=기한 초과
-> `deadlineDefaulted`: 온보딩 자동 생성 시 채운 기본 마감일(생성일 + 1년)이면 `true`. 목표 수정에서 마감일을 바꾸면 `false`. `true`일 때는 시뮬레이션 성공 확률을 노출하지 않음
-> `targetAmount`: 1원 이상 50억 원 이하 (생성/수정 공통)
+
+| 필드 | 설명 |
+|---|---|
+| `status` | `ACTIVE` \| `COMPLETED` \| `ABANDONED` |
+| `progressRate` | 달성률(%) = `currentAmount / targetAmount * 100`. 초과 달성 시 100보다 클 수 있음 |
+| `dday` | 마감일까지 남은 일수. 양수=남음, 0=오늘, 음수=기한 초과 |
+| `deadlineDefaulted` | 온보딩 자동 생성 시 채운 기본 마감일(생성일 + 1년)이면 `true`. 목표 수정을 한 번이라도 하면 `false`. `true`일 때는 시뮬레이션 성공 확률을 노출하지 않는 것을 권장 |
 
 ### 목표 생성
 - **POST** `/api/goals`
+- 온보딩을 마치면 목표가 자동으로 생성되므로(3. 온보딩 참고), 일반적인 흐름에서는 생성 대신 **목표 수정**을 사용합니다.
 - Request Body:
 ```json
 {
@@ -208,17 +219,44 @@ Authorization: Bearer {accessToken}
   "deadline": "2027-12-31"
 }
 ```
+- Response (201): `"status": 201`, `"message": "Created"`, `data`는 목표 조회와 같은 형식
 
 ### 목표 수정
 - **PUT** `/api/goals`
-- Request Body: 목표 생성과 동일
+- Request Body: 목표 생성과 동일 (네 필드를 모두 보내야 하며, 부분 수정은 지원하지 않음)
+- Response (200): `data`는 수정된 목표 (목표 조회와 같은 형식)
 
 ### 목표 삭제
 - **DELETE** `/api/goals`
+- 목표에 연결된 **시뮬레이션 기록도 함께 삭제**됩니다.
+- Response (200): `data: null`
+
+### 요청 필드 규칙 (생성·수정 공통)
+
+| 필드 | 필수 | 규칙 |
+|---|---|---|
+| `title` | O | 문자열 |
+| `targetAmount` | O | 1원 이상 50억 원 이하 |
+| `currentAmount` | O | 현재까지 모은 금액(원) |
+| `deadline` | O | `yyyy-MM-dd` |
+
+> `title`, `currentAmount`, `deadline`은 현재 서버에서 누락 검증을 하지 않아, 빠지면 400이 아니라 500이 발생할 수 있습니다. 반드시 모두 보내 주세요.
+
+### 에러 응답
+
+| 상황 | 상태 | 메시지 |
+|---|---|---|
+| `targetAmount` 누락, 0 이하 | 400 | `목표 금액은 0보다 커야 합니다` |
+| `targetAmount` 50억 원 초과 | 400 | `목표 금액은 50억 원 이하로 입력해주세요` |
+| 목표가 이미 있는데 생성 | 409 | `이미 목표가 존재합니다.` |
+| 목표가 없는데 수정·삭제 | 400 | `목표가 존재하지 않습니다.` |
 
 ---
 
 ## 5. 정책 (Policy)
+
+> 정책 데이터는 온통청년(청년 정책)과 서민금융진흥원(KINFA, 서민 금융상품) 공공 API에서 가져와 **매일 03:00(KST)**에 동기화합니다.
+> 이 섹션의 모든 응답은 공통 형식 `{ "status", "message", "data" }`로 감싸서 내려옵니다.
 
 ### 정책 목록 조회 (매칭)
 - **GET** `/api/policies`
@@ -230,37 +268,66 @@ Authorization: Bearer {accessToken}
     - 소득: 사용자 소득 구간의 대표값이 정책 `incomeLimit` 이하이면 포함 (null은 제한 없음)
     - 지역: `regions`가 빈 배열(전국)이거나 사용자 거주 지역 코드가 `regions`에 포함되면 포함. 거주 지역 미입력 사용자는 전국 정책만
     - 나이 또는 소득을 입력하지 않은 사용자는 빈 배열 (에러 아님)
-- Response: 배열
+- Response (200):
 ```json
-[
-  {
-    "policyId": "uuid",
-    "name": "청년 월세 지원",
-    "description": "string",
-    "minAge": 19,
-    "maxAge": 34,
-    "incomeLimit": null,
-    "benefitAmount": null,
-    "policyType": "HOUSING",
-    "regions": ["GYEONGNAM", "ULSAN"]
-  }
-]
+{
+  "status": 200,
+  "message": "OK",
+  "data": [
+    {
+      "policyId": "uuid",
+      "name": "청년 월세 지원",
+      "description": "string",
+      "minAge": 19,
+      "maxAge": 34,
+      "incomeLimit": null,
+      "benefitAmount": null,
+      "policyType": "HOUSING",
+      "regions": ["GYEONGNAM", "ULSAN"]
+    }
+  ]
+}
 ```
-- `regions`: 신청 가능 지역 코드 목록 (사용자 `region`과 같은 17개 시/도 코드). 빈 배열이면 전국 정책. `/api/policies/my` 응답의 `policy`에도 같은 필드가 포함됨
+
+| 필드 | 설명 |
+|---|---|
+| `minAge`, `maxAge` | 지원 대상 나이. `null`이면 해당 방향 제한 없음 |
+| `incomeLimit` | 소득 상한(원). `null`이면 소득 제한 없음 |
+| `benefitAmount` | 지원 금액(원). 현물·서비스처럼 금액으로 환산되지 않는 혜택이면 `null` |
+| `policyType` | `HOUSING`(주거) \| `FINANCE_WELFARE`(금융·복지) \| `STARTUP`(창업) \| `ETC`(기타) |
+| `regions` | 신청 가능 지역 코드 목록 (사용자 `region`과 같은 17개 시/도 코드). 빈 배열이면 전국 정책 |
+
+- 에러: `policyType`이 허용값이 아니면 400 `유효하지 않은 정책 유형입니다: {입력값}`
 
 ### 내 정책 목록 조회
 - **GET** `/api/policies/my`
-- Response: 배열
+- 사용자가 관심·신청·포기로 등록한 정책 목록. 없으면 빈 배열
+- Response (200):
 ```json
-[
-  {
-    "userPolicyId": "uuid",
-    "policy": { },
-    "status": "APPLIED"
-  }
-]
+{
+  "status": 200,
+  "message": "OK",
+  "data": [
+    {
+      "userPolicyId": "uuid",
+      "policy": {
+        "policyId": "uuid",
+        "name": "청년 월세 지원",
+        "description": "string",
+        "minAge": 19,
+        "maxAge": 34,
+        "incomeLimit": null,
+        "benefitAmount": null,
+        "policyType": "HOUSING",
+        "regions": []
+      },
+      "status": "INTEREST"
+    }
+  ]
+}
 ```
-> `status` 값: `APPLIED` | `INTEREST` | `ABANDONED`
+> `policy`는 정책 목록 조회의 항목과 같은 형식입니다.
+> `status` 값: `APPLIED`(신청) | `INTEREST`(관심) | `ABANDONED`(포기)
 
 ### 내 정책 추가
 - **POST** `/api/policies/my`
@@ -268,33 +335,35 @@ Authorization: Bearer {accessToken}
 ```json
 {
   "policyId": "uuid",
-  "status": "APPLIED"
+  "status": "INTEREST"
 }
 ```
+- Response (201): `"status": 201`, `"message": "Created"`, `data`는 내 정책 목록의 항목 하나
+- `userPolicyId`는 시뮬레이션 실행 시 정책 혜택을 반영할 때 사용합니다(6. 시뮬레이션 참고).
+
+| 상황 | 상태 | 메시지 |
+|---|---|---|
+| 존재하지 않는 `policyId` | 400 | `존재하지 않는 정책입니다.` |
+| 이미 등록한 정책 | 409 | `이미 등록된 정책입니다.` |
+
+> `status`는 반드시 `APPLIED` \| `INTEREST` \| `ABANDONED` 중 하나를 대문자로 보내 주세요. 그 외 값이나 누락은 현재 400(서버 내부 메시지) 또는 500으로 응답될 수 있습니다.
 
 ### 내 정책 삭제
 - **DELETE** `/api/policies/my/{userPolicyId}`
 - Path Parameter: `userPolicyId` (uuid)
+- Response (200): `data: null`
+
+| 상황 | 상태 | 메시지 |
+|---|---|---|
+| 존재하지 않는 `userPolicyId` | 400 | `존재하지 않는 정책입니다.` |
+| 다른 사용자의 정책 | 409 | `본인의 정책만 삭제할 수 있습니다.` |
 
 ---
 
 ## 6. 시뮬레이션 (Simulation)
 
-### 시뮬레이션 목록 조회
-- **GET** `/api/simulations`
-- Response: 배열
-```json
-[
-  {
-    "simulationId": "uuid",
-    "goalId": "uuid",
-    "monthlySaving": 500000,
-    "expectedCompletionDate": "2027-12-31",
-    "policyCompletionDate": "2027-06-30",
-    "createdAt": "datetime"
-  }
-]
-```
+> 목표의 남은 금액(`targetAmount - currentAmount`)을 월 저축액과 연이율(월 복리)로 모으는 데 걸리는 기간을 계산합니다. 매달 저축액이 평균 대비 약 ±20% 변동한다고 가정해 **1만 회 몬테카를로 시뮬레이션**을 돌리고, 결과를 저장합니다.
+> 이 섹션의 모든 응답은 공통 형식 `{ "status", "message", "data" }`로 감싸서 내려옵니다.
 
 ### 시뮬레이션 실행
 - **POST** `/api/simulations`
@@ -307,6 +376,37 @@ Authorization: Bearer {accessToken}
   "annualInterestRate": 0.03
 }
 ```
+- Response (200):
+```json
+{
+  "status": 200,
+  "message": "OK",
+  "data": {
+    "simulationId": "uuid",
+    "goalId": "uuid",
+    "monthlySaving": 500000,
+    "expectedCompletionDate": "2028-03-15",
+    "policyCompletionDate": "2027-11-20",
+    "optimisticCompletionDate": "2027-09-10",
+    "pessimisticCompletionDate": "2028-08-01",
+    "successProbability": 0.73,
+    "createdAt": "2026-10-30T10:00:00"
+  }
+}
+```
+
+| 필드 | 설명 |
+|---|---|
+| `expectedCompletionDate` | 예상 달성일 (중앙값, 50번째 백분위) |
+| `optimisticCompletionDate` | 낙관적 시나리오 달성일 (10번째 백분위, 가장 빠른 쪽) |
+| `pessimisticCompletionDate` | 비관적 시나리오 달성일 (90번째 백분위, 가장 늦은 쪽) |
+| `policyCompletionDate` | 정책 혜택을 반영한 예상 달성일(중앙값). 정책의 `benefitAmount`(연간)를 12로 나눠 월 저축액에 더해 계산. 요청에 `userPolicyId`를 보내지 않았으면 `null` |
+| `successProbability` | 목표 마감일까지 목표 금액을 달성할 확률 (0.0~1.0) |
+
+> 목표의 `deadlineDefaulted`가 `true`면 마감일이 사용자가 정한 날짜가 아니므로, `successProbability`는 화면에 노출하지 않는 것을 권장합니다.
+> 낙관·비관 달성일과 성공 확률이 추가되기 전에 저장된 시뮬레이션 기록은 세 값이 `null`일 수 있습니다.
+> 현재 `benefitAmount`가 `null`인 정책(금액으로 환산되지 않는 혜택)을 `userPolicyId`로 보내면 서버 오류(500)가 발생합니다. 수정 전까지는 `benefitAmount`가 있는 정책만 보내 주세요.
+
 - 요청 필드 검증 규칙:
 
 | 필드 | 필수 | 규칙 | 실패 시 메시지 |
@@ -334,49 +434,103 @@ Authorization: Bearer {accessToken}
 }
 ```
 
+### 시뮬레이션 목록 조회
+- **GET** `/api/simulations`
+- 로그인 사용자의 모든 시뮬레이션 기록. 없으면 빈 배열. 정렬 순서는 보장하지 않으므로 필요하면 `createdAt`으로 정렬해 주세요.
+- Response (200): `data`는 시뮬레이션 실행 응답의 `data`와 같은 형식의 배열
+
 ### 목표별 시뮬레이션 조회
 - **GET** `/api/simulations/goal/{goalId}`
 - Path Parameter: `goalId` (uuid)
+- 해당 목표의 본인 시뮬레이션 기록. 없거나 타인 목표면 빈 배열 (에러 아님)
+- Response (200): 시뮬레이션 목록 조회와 같은 형식
 
 ---
 
 ## 7. 지출 (Expense)
 
-### 지출 전체 조회
-- **GET** `/api/expenses`
-- Response: 배열
+> 지출 내역은 클라이언트(앱)가 수집해 서버로 동기화하고, 서버는 조회·통계와 넛지(과소비 알림) 계산에 사용합니다.
+> 이 섹션의 모든 응답은 공통 형식 `{ "status", "message", "data" }`로 감싸서 내려옵니다.
+
+### 지출 동기화
+- **POST** `/api/expenses/sync`
+- Request Body: 배열 (빈 배열이면 아무것도 하지 않음)
 ```json
 [
   {
-    "expenseId": "uuid",
     "amount": 50000,
     "category": "FOOD",
-    "description": "string",
-    "spentAt": "2026-06-12",
-    "createdAt": "datetime"
+    "description": "점심",
+    "spentAt": "2026-10-12"
   }
 ]
+```
+
+| 필드 | 필수 | 설명 |
+|---|---|---|
+| `amount` | O | 지출 금액(원) |
+| `category` | O | 카테고리 문자열. 서버는 값 목록을 제한하지 않고 받은 그대로 저장·집계함 |
+| `description` | X | 메모 |
+| `spentAt` | O | 지출일 `yyyy-MM-dd` |
+
+- **중복 방지**: `category`, `amount`, `spentAt`, `description` 네 값이 모두 같은 지출은 이미 저장돼 있으면 건너뜁니다. 같은 목록을 여러 번 보내도 중복 저장되지 않으므로 재시도해도 안전합니다.
+- Response (200): `data: null`
+
+> 필수 필드가 빠지면 현재 400이 아니라 500이 발생할 수 있습니다. 필수 필드는 반드시 보내 주세요.
+
+### 지출 전체 조회
+- **GET** `/api/expenses`
+- 없으면 빈 배열. 정렬 순서는 보장하지 않으므로 필요하면 `spentAt`으로 정렬해 주세요.
+- Response (200):
+```json
+{
+  "status": 200,
+  "message": "OK",
+  "data": [
+    {
+      "expenseId": "uuid",
+      "amount": 50000,
+      "category": "FOOD",
+      "description": "점심",
+      "spentAt": "2026-10-12",
+      "createdAt": "2026-10-12T21:00:00"
+    }
+  ]
+}
 ```
 
 ### 기간별 지출 조회
 - **GET** `/api/expenses/period`
 - Query Parameters:
-    - `start` (필수): 시작일 (yyyy-MM-dd)
-    - `end` (필수): 종료일 (yyyy-MM-dd)
+    - `start` (필수): 시작일 (`yyyy-MM-dd`)
+    - `end` (필수): 종료일 (`yyyy-MM-dd`)
+- `start`와 `end` 당일을 **모두 포함**합니다.
+- Response (200): 지출 전체 조회와 같은 형식
 
-### 지출 동기화
-- **POST** `/api/expenses/sync`
-- Request Body: 배열
+### 카테고리별 지출 통계
+- **GET** `/api/expenses/stats`
+- Query Parameters:
+    - `start` (필수): 시작일 (`yyyy-MM-dd`)
+    - `end` (필수): 종료일 (`yyyy-MM-dd`)
+- `start`와 `end` 당일을 **모두 포함**합니다.
+- Response (200):
 ```json
-[
-  {
-    "amount": 50000,
-    "category": "FOOD",
-    "description": "string",
-    "spentAt": "2026-06-12"
+{
+  "status": 200,
+  "message": "OK",
+  "data": {
+    "totalAmount": 320000,
+    "byCategory": [
+      { "category": "FOOD", "amount": 200000 },
+      { "category": "TRANSPORT", "amount": 120000 }
+    ]
   }
-]
+}
 ```
+- `byCategory`: 기간 내 지출이 없는 카테고리는 포함되지 않습니다. 정렬 순서는 보장하지 않습니다. 기간 내 지출이 없으면 `totalAmount: 0`, `byCategory: []`
+- 에러: `start`가 `end`보다 늦으면 400 `시작일이 종료일보다 늦을 수 없습니다.`
+
+> 기간별 조회와 통계에서 `start`·`end`가 빠지거나 날짜 형식이 틀리면, 현재 400이 아니라 500이 발생할 수 있습니다.
 
 ---
 
