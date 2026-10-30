@@ -5,6 +5,7 @@
 build
 docs
 *.md
+!src/main/resources/prompts/*.md
 .env
 .env.*
 !.env.example
