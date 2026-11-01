@@ -1,0 +1,117 @@
+package kr.fintarget.api.domain.goal.controller;
+
+import kr.fintarget.api.common.exception.GlobalExceptionHandler;
+import kr.fintarget.api.domain.goal.service.GoalService;
+import kr.fintarget.api.security.CustomAuthenticationEntryPoint;
+import kr.fintarget.api.security.JwtFilter;
+import kr.fintarget.api.security.JwtUtil;
+import kr.fintarget.api.security.SecurityConfig;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.context.annotation.Import;
+import org.springframework.http.MediaType;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.ResultActions;
+
+import java.util.List;
+import java.util.UUID;
+
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+/**
+ * 목표 생성·수정 요청의 입력 검증을 확인한다.
+ * 인증은 검증 대상이 아니므로 시큐리티 필터를 끄고 인증 사용자를 직접 넣는다.
+ */
+@WebMvcTest(GoalController.class)
+@AutoConfigureMockMvc(addFilters = false)
+@Import({GlobalExceptionHandler.class, SecurityConfig.class, JwtFilter.class, CustomAuthenticationEntryPoint.class})
+class GoalControllerValidationTest {
+
+    private static final String USER_ID = UUID.randomUUID().toString();
+
+    @Autowired
+    private MockMvc mockMvc;
+
+    @MockitoBean
+    private GoalService goalService;
+
+    @MockitoBean
+    private JwtUtil jwtUtil;
+
+    @BeforeEach
+    void setUp() {
+        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(USER_ID, null, List.of()));
+    }
+
+    @AfterEach
+    void tearDown() {
+        SecurityContextHolder.clearContext();
+    }
+
+    private static final String VALID = "{\"title\": \"내 집 마련\", \"targetAmount\": 50000000, \"currentAmount\": 0, \"deadline\": \"2028-12-31\"}";
+
+    private ResultActions create(String body) throws Exception {
+        return mockMvc.perform(post("/api/goals").contentType(MediaType.APPLICATION_JSON).content(body));
+    }
+
+    private void expectCreateBadRequest(String body, String message) throws Exception {
+        create(body)
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.message").value(message));
+        verify(goalService, never()).createGoal(any(), any());
+    }
+
+    @Test
+    void 올바른_요청은_목표를_생성한다() throws Exception {
+        create(VALID).andExpect(status().isCreated());
+        verify(goalService).createGoal(any(), any());
+    }
+
+    @Test
+    void 제목이_없으면_400() throws Exception {
+        expectCreateBadRequest("{\"targetAmount\": 50000000, \"currentAmount\": 0, \"deadline\": \"2028-12-31\"}", "목표 제목을 입력해주세요.");
+    }
+
+    @Test
+    void 제목이_공백이면_400() throws Exception {
+        expectCreateBadRequest("{\"title\": \"  \", \"targetAmount\": 50000000, \"currentAmount\": 0, \"deadline\": \"2028-12-31\"}", "목표 제목을 입력해주세요.");
+    }
+
+    @Test
+    void 현재_모은_금액이_없으면_400() throws Exception {
+        expectCreateBadRequest("{\"title\": \"내 집 마련\", \"targetAmount\": 50000000, \"deadline\": \"2028-12-31\"}", "현재 모은 금액을 입력해주세요.");
+    }
+
+    @Test
+    void 현재_모은_금액이_음수면_400() throws Exception {
+        expectCreateBadRequest("{\"title\": \"내 집 마련\", \"targetAmount\": 50000000, \"currentAmount\": -1, \"deadline\": \"2028-12-31\"}", "현재 모은 금액은 0 이상이어야 합니다.");
+    }
+
+    @Test
+    void 기한이_없으면_400() throws Exception {
+        expectCreateBadRequest("{\"title\": \"내 집 마련\", \"targetAmount\": 50000000, \"currentAmount\": 0}", "목표 기한을 입력해주세요.");
+    }
+
+    @Test
+    void 수정_요청도_같은_규칙으로_검증한다() throws Exception {
+        mockMvc.perform(put("/api/goals").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"title\": \"내 집 마련\", \"targetAmount\": 50000000, \"currentAmount\": 0}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("목표 기한을 입력해주세요."));
+        verify(goalService, never()).updateGoal(any(), any());
+    }
+}

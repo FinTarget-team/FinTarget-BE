@@ -205,7 +205,7 @@ Authorization: Bearer {accessToken}
 | `status` | `ACTIVE` \| `COMPLETED` \| `ABANDONED` |
 | `progressRate` | 달성률(%) = `currentAmount / targetAmount * 100`. 초과 달성 시 100보다 클 수 있음 |
 | `dday` | 마감일까지 남은 일수. 양수=남음, 0=오늘, 음수=기한 초과 |
-| `deadlineDefaulted` | 온보딩 자동 생성 시 채운 기본 마감일(생성일 + 1년)이면 `true`. 목표 수정을 한 번이라도 하면 `false`. `true`일 때는 시뮬레이션 성공 확률을 노출하지 않는 것을 권장 |
+| `deadlineDefaulted` | 온보딩 자동 생성 시 채운 기본 마감일(생성일 + 1년)이면 `true`. 목표 수정에서 **마감일을 바꾸면** `false` (제목·금액만 수정하면 `true` 유지). `true`일 때는 시뮬레이션 성공 확률을 노출하지 않는 것을 권장 |
 
 ### 목표 생성
 - **POST** `/api/goals`
@@ -235,19 +235,21 @@ Authorization: Bearer {accessToken}
 
 | 필드 | 필수 | 규칙 |
 |---|---|---|
-| `title` | O | 문자열 |
+| `title` | O | 공백만으로 된 문자열 불가 |
 | `targetAmount` | O | 1원 이상 50억 원 이하 |
-| `currentAmount` | O | 현재까지 모은 금액(원) |
+| `currentAmount` | O | 현재까지 모은 금액(원). 0 이상 |
 | `deadline` | O | `yyyy-MM-dd` |
-
-> `title`, `currentAmount`, `deadline`은 현재 서버에서 누락 검증을 하지 않아, 빠지면 400이 아니라 500이 발생할 수 있습니다. 반드시 모두 보내 주세요.
 
 ### 에러 응답
 
 | 상황 | 상태 | 메시지 |
 |---|---|---|
+| `title` 누락, 공백 | 400 | `목표 제목을 입력해주세요.` |
 | `targetAmount` 누락, 0 이하 | 400 | `목표 금액은 0보다 커야 합니다` |
 | `targetAmount` 50억 원 초과 | 400 | `목표 금액은 50억 원 이하로 입력해주세요` |
+| `currentAmount` 누락 | 400 | `현재 모은 금액을 입력해주세요.` |
+| `currentAmount` 음수 | 400 | `현재 모은 금액은 0 이상이어야 합니다.` |
+| `deadline` 누락 | 400 | `목표 기한을 입력해주세요.` |
 | 목표가 이미 있는데 생성 | 409 | `이미 목표가 존재합니다.` |
 | 목표가 없는데 수정·삭제 | 400 | `목표가 존재하지 않습니다.` |
 
@@ -343,10 +345,13 @@ Authorization: Bearer {accessToken}
 
 | 상황 | 상태 | 메시지 |
 |---|---|---|
+| `policyId` 누락 | 400 | `정책을 선택해주세요.` |
+| `status` 누락, 공백 | 400 | `정책 상태를 입력해주세요.` |
+| `status`가 허용값이 아님 | 400 | `유효하지 않은 정책 상태입니다. (APPLIED, INTEREST, ABANDONED 중 하나)` |
 | 존재하지 않는 `policyId` | 400 | `존재하지 않는 정책입니다.` |
 | 이미 등록한 정책 | 409 | `이미 등록된 정책입니다.` |
 
-> `status`는 반드시 `APPLIED` \| `INTEREST` \| `ABANDONED` 중 하나를 대문자로 보내 주세요. 그 외 값이나 누락은 현재 400(서버 내부 메시지) 또는 500으로 응답될 수 있습니다.
+> `status`는 `APPLIED` \| `INTEREST` \| `ABANDONED` 중 하나이며, 대소문자와 앞뒤 공백은 구분하지 않습니다.
 
 ### 내 정책 삭제
 - **DELETE** `/api/policies/my/{userPolicyId}`
@@ -355,8 +360,9 @@ Authorization: Bearer {accessToken}
 
 | 상황 | 상태 | 메시지 |
 |---|---|---|
-| 존재하지 않는 `userPolicyId` | 400 | `존재하지 않는 정책입니다.` |
-| 다른 사용자의 정책 | 409 | `본인의 정책만 삭제할 수 있습니다.` |
+| 존재하지 않거나 다른 사용자의 `userPolicyId` | 400 | `존재하지 않는 정책입니다.` |
+
+> 다른 사용자의 정책 ID로 요청해도 없는 정책과 같은 응답을 주어, 그 정책의 존재 여부를 알 수 없게 합니다.
 
 ---
 
@@ -468,15 +474,23 @@ Authorization: Bearer {accessToken}
 
 | 필드 | 필수 | 설명 |
 |---|---|---|
-| `amount` | O | 지출 금액(원) |
-| `category` | O | 카테고리 문자열. 서버는 값 목록을 제한하지 않고 받은 그대로 저장·집계함 |
+| `amount` | O | 지출 금액(원). 0보다 커야 함 |
+| `category` | O | 카테고리 문자열(공백만으로 된 문자열 불가). 서버는 값 목록을 제한하지 않고 받은 그대로 저장·집계함 |
 | `description` | X | 메모 |
 | `spentAt` | O | 지출일 `yyyy-MM-dd` |
 
 - **중복 방지**: `category`, `amount`, `spentAt`, `description` 네 값이 모두 같은 지출은 이미 저장돼 있으면 건너뜁니다. 같은 목록을 여러 번 보내도 중복 저장되지 않으므로 재시도해도 안전합니다.
 - Response (200): `data: null`
 
-> 필수 필드가 빠지면 현재 400이 아니라 500이 발생할 수 있습니다. 필수 필드는 반드시 보내 주세요.
+- 목록 중 **한 항목이라도** 규칙에 맞지 않으면 전체를 저장하지 않고 400으로 응답합니다(메시지는 첫 번째로 발견된 문제 하나).
+
+| 상황 | 상태 | 메시지 |
+|---|---|---|
+| `amount` 누락 | 400 | `지출 금액을 입력해주세요.` |
+| `amount` 0 이하 | 400 | `지출 금액은 0보다 커야 합니다.` |
+| `category` 누락, 공백 | 400 | `지출 카테고리를 입력해주세요.` |
+| `spentAt` 누락 | 400 | `지출 날짜를 입력해주세요.` |
+| 목록에 `null` 항목 | 400 | `지출 내역에 빈 항목(null)이 있습니다.` |
 
 ### 지출 전체 조회
 - **GET** `/api/expenses`
@@ -506,6 +520,7 @@ Authorization: Bearer {accessToken}
     - `end` (필수): 종료일 (`yyyy-MM-dd`)
 - `start`와 `end` 당일을 **모두 포함**합니다.
 - Response (200): 지출 전체 조회와 같은 형식
+- 에러: `start`가 `end`보다 늦으면 400 `시작일이 종료일보다 늦을 수 없습니다.`
 
 ### 카테고리별 지출 통계
 - **GET** `/api/expenses/stats`

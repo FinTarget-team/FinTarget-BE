@@ -11,6 +11,7 @@ import kr.fintarget.api.domain.policy.dto.PolicyResponse;
 import kr.fintarget.api.domain.policy.dto.UserPolicyCreateRequest;
 import kr.fintarget.api.domain.policy.dto.UserPolicyResponse;
 import kr.fintarget.api.domain.policy.service.PolicyService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -132,7 +133,7 @@ public class PolicyController {
             ),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(
                     responseCode = "400",
-                    description = "policyId에 해당하는 정책이 존재하지 않거나, status 값이 허용된 값(APPLIED, INTEREST, ABANDONED)이 아님",
+                    description = "policyId·status 누락, status가 허용된 값(APPLIED, INTEREST, ABANDONED, 대소문자 무관)이 아님, 또는 policyId에 해당하는 정책이 존재하지 않음",
                     content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE, examples = {
                             @ExampleObject(name = "존재하지 않는 정책", value = """
                                     {
@@ -144,7 +145,14 @@ public class PolicyController {
                             @ExampleObject(name = "허용되지 않는 status 값 (예시: \\\"PENDING\\\"을 보낸 경우)", value = """
                                     {
                                       "status": 400,
-                                      "message": "No enum constant kr.fintarget.api.domain.policy.entity.UserPolicy.UserPolicyStatus.PENDING",
+                                      "message": "유효하지 않은 정책 상태입니다. (APPLIED, INTEREST, ABANDONED 중 하나)",
+                                      "data": null
+                                    }
+                                    """),
+                            @ExampleObject(name = "status 누락", value = """
+                                    {
+                                      "status": 400,
+                                      "message": "정책 상태를 입력해주세요.",
                                       "data": null
                                     }
                                     """)
@@ -180,7 +188,7 @@ public class PolicyController {
     @PostMapping("/my")
     public ResponseEntity<ApiResponse<UserPolicyResponse>> createUserPolicy(
             @AuthenticationPrincipal String userId,
-            @RequestBody UserPolicyCreateRequest request) {
+            @Valid @RequestBody UserPolicyCreateRequest request) {
         UserPolicyResponse response = policyService.createUserPolicy(UUID.fromString(userId), request);
         return ResponseEntity.status(201).body(ApiResponse.created(response));
     }
@@ -197,7 +205,7 @@ public class PolicyController {
             ),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(
                     responseCode = "400",
-                    description = "userPolicyId에 해당하는 스크랩이 존재하지 않음",
+                    description = "userPolicyId에 해당하는 스크랩이 없거나 다른 사용자의 스크랩임 (존재 여부를 드러내지 않도록 같은 응답)",
                     content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE, examples = {
                             @ExampleObject(name = "존재하지 않는 정책", value = """
                                     {
@@ -216,19 +224,6 @@ public class PolicyController {
                                     {
                                       "status": 401,
                                       "message": "인증이 필요합니다. 토큰을 확인해주세요.",
-                                      "data": null
-                                    }
-                                    """)
-                    })
-            ),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(
-                    responseCode = "409",
-                    description = "본인이 등록하지 않은 다른 사용자의 정책 스크랩을 삭제하려 함",
-                    content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE, examples = {
-                            @ExampleObject(name = "소유권 없음", value = """
-                                    {
-                                      "status": 409,
-                                      "message": "본인의 정책만 삭제할 수 있습니다.",
                                       "data": null
                                     }
                                     """)

@@ -10,6 +10,7 @@ import kr.fintarget.api.domain.goal.dto.GoalCreateRequest;
 import kr.fintarget.api.domain.goal.dto.GoalUpdateRequest;
 import kr.fintarget.api.domain.goal.dto.GoalResponse;
 import kr.fintarget.api.domain.goal.service.GoalService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -35,6 +36,26 @@ public class GoalController {
                     responseCode = "201",
                     description = "목표 생성 성공",
                     useReturnTypeSchema = true
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "400",
+                    description = "입력값 검증 실패 (title·currentAmount·deadline 누락, currentAmount 음수, targetAmount 범위 초과 등)",
+                    content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE, examples = {
+                            @ExampleObject(name = "제목 누락", value = """
+                                    {
+                                      "status": 400,
+                                      "message": "목표 제목을 입력해주세요.",
+                                      "data": null
+                                    }
+                                    """),
+                            @ExampleObject(name = "현재 모은 금액 음수", value = """
+                                    {
+                                      "status": 400,
+                                      "message": "현재 모은 금액은 0 이상이어야 합니다.",
+                                      "data": null
+                                    }
+                                    """)
+                    })
             ),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(
                     responseCode = "401",
@@ -66,7 +87,7 @@ public class GoalController {
     @PostMapping
     public ResponseEntity<ApiResponse<GoalResponse>> createGoal(
             @AuthenticationPrincipal String userId,
-            @RequestBody GoalCreateRequest request) {
+            @Valid @RequestBody GoalCreateRequest request) {
         GoalResponse response = goalService.createGoal(UUID.fromString(userId), request);
         return ResponseEntity.status(201).body(ApiResponse.created(response));
     }
@@ -114,7 +135,7 @@ public class GoalController {
             ),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(
                     responseCode = "400",
-                    description = "수정할 목표가 존재하지 않음",
+                    description = "수정할 목표가 존재하지 않거나, 입력값 검증 실패 (규칙은 목표 생성과 동일)",
                     content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE, examples = {
                             @ExampleObject(name = "목표 없음", value = """
                                     {
@@ -142,7 +163,7 @@ public class GoalController {
     @PutMapping
     public ResponseEntity<ApiResponse<GoalResponse>> updateGoal(
             @AuthenticationPrincipal String userId,
-            @RequestBody GoalUpdateRequest request) {
+            @Valid @RequestBody GoalUpdateRequest request) {
         return ResponseEntity.ok(ApiResponse.ok(goalService.updateGoal(UUID.fromString(userId), request)));
     }
 

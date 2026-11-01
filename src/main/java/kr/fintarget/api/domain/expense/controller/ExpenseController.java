@@ -11,6 +11,8 @@ import kr.fintarget.api.domain.expense.dto.ExpenseResponse;
 import kr.fintarget.api.domain.expense.dto.ExpenseStatsResponse;
 import kr.fintarget.api.domain.expense.dto.ExpenseSyncRequest;
 import kr.fintarget.api.domain.expense.service.ExpenseService;
+import jakarta.validation.ConstraintViolation;
+import jakarta.validation.Validator;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.MediaType;
@@ -29,6 +31,7 @@ import java.util.UUID;
 public class ExpenseController {
 
     private final ExpenseService expenseService;
+    private final Validator validator;
 
     @Operation(
             summary = "지출 내역 동기화",
@@ -42,6 +45,26 @@ public class ExpenseController {
                     responseCode = "200",
                     description = "동기화 완료. data는 항상 null",
                     useReturnTypeSchema = true
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "400",
+                    description = "항목 중 하나라도 검증 실패 (amount·category·spentAt 누락, amount 0 이하, null 항목). 이때 목록 전체를 저장하지 않음",
+                    content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE, examples = {
+                            @ExampleObject(name = "지출 날짜 누락", value = """
+                                    {
+                                      "status": 400,
+                                      "message": "지출 날짜를 입력해주세요.",
+                                      "data": null
+                                    }
+                                    """),
+                            @ExampleObject(name = "금액 0 이하", value = """
+                                    {
+                                      "status": 400,
+                                      "message": "지출 금액은 0보다 커야 합니다.",
+                                      "data": null
+                                    }
+                                    """)
+                    })
             ),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(
                     responseCode = "401",
@@ -61,6 +84,7 @@ public class ExpenseController {
     public ResponseEntity<ApiResponse<Void>> syncExpenses(
             @AuthenticationPrincipal String userId,
             @RequestBody List<ExpenseSyncRequest> requests) {
+        validateSyncRequests(requests);
         expenseService.syncExpenses(UUID.fromString(userId), requests);
         return ResponseEntity.ok(ApiResponse.ok(null));
     }
@@ -106,6 +130,19 @@ public class ExpenseController {
                     responseCode = "200",
                     description = "기간 내 지출 내역 목록 조회 성공",
                     useReturnTypeSchema = true
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "400",
+                    description = "start가 end보다 늦음",
+                    content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE, examples = {
+                            @ExampleObject(name = "잘못된 기간", value = """
+                                    {
+                                      "status": 400,
+                                      "message": "시작일이 종료일보다 늦을 수 없습니다.",
+                                      "data": null
+                                    }
+                                    """)
+                    })
             ),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(
                     responseCode = "401",
@@ -181,5 +218,21 @@ public class ExpenseController {
         return ResponseEntity.ok(
                 ApiResponse.ok(expenseService.getExpenseStats(UUID.fromString(userId), start, end))
         );
+    }
+
+    // 목록 원소에 @Valid를 붙이면 Spring이 HandlerMethodValidationException을 던지는데, 공통 예외 처리에 매핑이 없어 500이 된다.
+    // 그래서 항목별로 직접 검증해 다른 API와 같은 400 응답(IllegalArgumentException)으로 맞춘다
+    private void validateSyncRequests(List<ExpenseSyncRequest> requests) {
+        for (ExpenseSyncRequest request : requests) {
+            if (request == null) {
+                throw new IllegalArgumentException("지출 내역에 빈 항목(null)이 있습니다.");
+            }
+            validator.validate(request).stream()
+                    .findFirst()
+                    .map(ConstraintViolation::getMessage)
+                    .ifPresent(message -> {
+                        throw new IllegalArgumentException(message);
+                    });
+        }
     }
 }
