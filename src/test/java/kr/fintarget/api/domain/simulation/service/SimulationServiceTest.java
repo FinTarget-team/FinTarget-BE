@@ -2,7 +2,9 @@ package kr.fintarget.api.domain.simulation.service;
 
 import kr.fintarget.api.domain.goal.entity.Goal;
 import kr.fintarget.api.domain.goal.repository.GoalRepository;
+import kr.fintarget.api.domain.policy.client.dto.KinfaItem;
 import kr.fintarget.api.domain.policy.entity.Policy;
+import kr.fintarget.api.domain.policy.mapper.KinfaPolicyMapper;
 import kr.fintarget.api.domain.policy.entity.PolicyType;
 import kr.fintarget.api.domain.policy.entity.UserPolicy;
 import kr.fintarget.api.domain.policy.repository.UserPolicyRepository;
@@ -163,6 +165,33 @@ class SimulationServiceTest {
         ArgumentCaptor<Simulation> captor = ArgumentCaptor.forClass(Simulation.class);
         verify(simulationRepository).save(captor.capture());
         assertThat(captor.getValue().getUserPolicy()).isSameAs(userPolicy);
+    }
+
+    // 매퍼를 거쳐 만든 KINFA 정책(대출 상품)이 시뮬레이션에서 저축 혜택으로 계산되지 않는지 확인한다 (#151)
+    @Test
+    void KINFA_대출_정책은_정상_실행되고_정책_완료일만_null이다() {
+        Goal goal = new Goal(USER_ID, "전세 자금 목표", 5_000_000L, 0L, LocalDate.now().plusMonths(36));
+        when(goalRepository.findByGoalIdAndUserId(any(), eq(USER_ID)))
+                .thenReturn(Optional.of(goal));
+
+        UUID userPolicyId = UUID.randomUUID();
+        Policy kinfaPolicy = KinfaPolicyMapper.toPolicy(new KinfaItem(
+                "202609", "1", "버팀목 전세자금대출", "2억원", "변동금리", "연 2.5%", "10년", "-", "-",
+                "원리금균등분할상환", "주거", "무주택 세대주", "기금", "주택도시기금", "전국",
+                "지원조건", "없음", "없음", "은행 문의", "Y", "1", "대출상품", null, null, null, null, null
+        ));
+        UserPolicy userPolicy = new UserPolicy(USER_ID, kinfaPolicy, UserPolicy.UserPolicyStatus.APPLIED);
+        when(userPolicyRepository.findByUserPolicyIdAndUserId(userPolicyId, USER_ID))
+                .thenReturn(Optional.of(userPolicy));
+
+        SimulationRequest request = new SimulationRequest(UUID.randomUUID(), 100_000L, userPolicyId, null);
+        SimulationResponse response = simulationService.runSimulation(USER_ID, request);
+
+        // 2억 한도가 benefitAmount로 들어가면 월 1,667만원 저축으로 계산돼 목표가 즉시 달성된 것처럼 보인다
+        assertThat(kinfaPolicy.getBenefitAmount()).isNull();
+        assertThat(response.policyCompletionDate()).isNull();
+        assertThat(response.expectedCompletionDate()).isNotNull();
+        assertThat(response.successProbability()).isNotNull();
     }
 
     @Test

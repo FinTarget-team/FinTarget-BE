@@ -20,7 +20,9 @@ public record PolicyResponse(
     Integer maxAge,
     @Schema(description = "지원 대상 소득 상한(원). null이면 정형화된 소득 상한이 없다는 뜻이며, 소득 제한이 없다는 뜻은 아닙니다. 소득 조건은 incomeCondition을 참고하세요.", example = "30000000", types = {"integer", "null"})
     Long incomeLimit,
-    @Schema(description = "지급 혜택 금액(원). 금액으로 환산되지 않는 혜택(현물/서비스 등)이거나 원문에서 금액을 읽지 못하면 null입니다. 지원 내용은 supportContent를 참고하세요.", example = "2400000", types = {"integer", "null"})
+    @Schema(description = "지급 혜택 금액(원). 금액으로 환산되지 않는 혜택(현물/서비스 등)이거나 원문에서 금액을 읽지 못하면 null입니다. "
+            + "KINFA(서민금융) 정책은 전부 대출 상품이라 항상 null이며, 대출 한도는 supportContent의 \"대출 한도\" 줄에 있습니다. "
+            + "지원 내용은 supportContent를 참고하세요.", example = "2400000", types = {"integer", "null"})
     Long benefitAmount,
     @Schema(description = "나이 조건 원문 (현재 KINFA 정책만 값이 있음). 원문이 없으면 null입니다. minAge·maxAge가 null일 때 표시용입니다.", example = "19세 이상 34세 이하", types = {"string", "null"})
     String ageCondition,

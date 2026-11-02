@@ -299,7 +299,7 @@ Authorization: Bearer {accessToken}
 | `minAge`, `maxAge` | 지원 대상 나이. `null`이면 해당 방향 제한 없음. 단, KINFA 정책은 나이를 숫자로 저장하지 않아 항상 `null`이며, 나이 조건은 `ageCondition` 참고 |
 | `ageCondition` | 나이 조건 원문 (현재 KINFA 정책만 값이 있음). 원본이 조건 없음을 명시하면 `연령 무관`. 원문이 없으면 `null`. 표시 순서: `minAge`·`maxAge` → `ageCondition` → 둘 다 없으면 "제한 없음" |
 | `incomeLimit` | 소득 상한(원). `null`이면 정형화된 소득 상한이 없다는 뜻이며, 소득 제한이 없다는 뜻은 아님 (현재 모든 정책이 `null`). 소득 조건은 `incomeCondition` 참고 |
-| `benefitAmount` | 지원 금액(원). 현물·서비스처럼 금액으로 환산되지 않는 혜택이거나 원문에서 금액을 읽지 못하면 `null` (온통청년 정책은 항상 `null`). 지원 내용은 `supportContent` 참고 |
+| `benefitAmount` | 지원 금액(원). 현물·서비스처럼 금액으로 환산되지 않는 혜택이거나 원문에서 금액을 읽지 못하면 `null` (온통청년 정책은 항상 `null`). **KINFA 정책도 전부 대출 상품이라 항상 `null`** — 대출 한도는 받는 혜택이 아니라 빌리는 한도이므로 저축액으로 환산하지 않는다. 한도는 `supportContent`의 `대출 한도: ...` 줄 참고 |
 | `incomeCondition` | 소득 조건 원문. 원본이 조건 없음을 명시하면 `소득 무관`, 온통청년 연소득 조건은 `연소득 N만원 이하` 형식. 원문이 없으면 `null`(정보 없음). 숫자 값(`incomeLimit`)이 없을 때 표시용 |
 | `supportContent` | 지원 내용 원문. KINFA 정책은 `대출 한도: ...`, `금리: ...`처럼 "라벨: 값" 줄을 줄바꿈(`\n`)으로 묶은 값. 원문이 없으면 `null`. 숫자 값(`benefitAmount`)이 없을 때 표시용 |
 | `policyType` | `HOUSING`(주거) \| `FINANCE_WELFARE`(금융·복지) \| `STARTUP`(창업) \| `ETC`(기타) |
@@ -469,9 +469,11 @@ Authorization: Bearer {accessToken}
 > 낙관·비관 달성일과 성공 확률이 추가되기 전에 저장된 시뮬레이션 기록은 세 값이 `null`일 수 있습니다.
 > `policyCompletionDate`가 `null`인 경우
 > - 요청에 `userPolicyId`를 보내지 않은 경우
-> - 보낸 정책의 `benefitAmount`가 `null`인 경우 (온통청년 정책 전체, 현물·서비스처럼 금액으로 환산되지 않는 혜택). 이때도 요청은 성공(200)하고 나머지 결과는 정상으로 계산됩니다.
+> - 보낸 정책의 `benefitAmount`가 `null`인 경우 (온통청년 정책 전체, KINFA 정책 전체, 현물·서비스처럼 금액으로 환산되지 않는 혜택). 이때도 요청은 성공(200)하고 나머지 결과는 정상으로 계산됩니다.
 >
-> 프론트는 정책 목록의 `benefitAmount`로 정책 반영 달성일이 나올지 미리 알 수 있습니다.
+> **현재 저장된 정책은 사실상 전부 `benefitAmount`가 `null`이므로 `policyCompletionDate`는 대부분 `null`로 내려갑니다.**
+> 프론트는 정책 목록의 `benefitAmount`로 정책 반영 달성일이 나올지 미리 알 수 있으니, `null`일 때 정책 반영 달성일 영역을 숨기거나
+> "이 정책은 저축 달성일에 반영되지 않습니다" 같은 안내로 대체해야 합니다.
 
 - 요청 필드 검증 규칙:
 
