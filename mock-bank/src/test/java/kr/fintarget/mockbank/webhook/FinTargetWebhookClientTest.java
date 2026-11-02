@@ -45,7 +45,7 @@ class FinTargetWebhookClientTest {
     private static List<WebhookTransactionPayload> payloads() {
         return List.of(
                 new WebhookTransactionPayload(TX_1, USER_ID, 12_000L, "식비", "김밥천국", LocalDate.of(2026, 11, 2)),
-                new WebhookTransactionPayload(TX_2, USER_ID, 4_500L, "카페", null, LocalDate.of(2026, 11, 1)));
+                new WebhookTransactionPayload(TX_2, USER_ID, 4_500L, "생활", null, LocalDate.of(2026, 11, 1)));
     }
 
     @Test

@@ -520,6 +520,14 @@ Authorization: Bearer {accessToken}
 > 지출 내역은 클라이언트(앱)가 수집해 서버로 동기화하고, 서버는 조회·통계와 넛지(과소비 알림) 계산에 사용합니다.
 > 이 섹션의 모든 응답은 공통 형식 `{ "status", "message", "data" }`로 감싸서 내려옵니다.
 
+### 카테고리 값
+앱(iOS)과 가상 금융 서버(mock-bank)는 아래 6개 한글 값을 그대로 `category`로 보냅니다.
+
+`식비`, `교통`, `쇼핑`, `문화/여가`, `생활`, `기타`
+
+- 서버는 값 목록을 제한하지 않고 받은 문자열을 그대로 저장·집계합니다. 다른 표기(예: `FOOD`, `문화생활`)를 섞어 보내면 같은 지출이 다른 카테고리로 나뉘어 통계와 이상 지출 넛지가 틀어지므로, 위 6개 값만 사용해 주세요.
+- 조회·통계 응답의 `category`도 저장된 값 그대로 내려옵니다.
+
 ### 지출 동기화
 - **POST** `/api/expenses/sync`
 - Request Body: 배열 (빈 배열이면 아무것도 하지 않음)
@@ -527,7 +535,7 @@ Authorization: Bearer {accessToken}
 [
   {
     "amount": 50000,
-    "category": "FOOD",
+    "category": "식비",
     "description": "점심",
     "spentAt": "2026-10-12"
   }
@@ -537,7 +545,7 @@ Authorization: Bearer {accessToken}
 | 필드 | 필수 | 설명 |
 |---|---|---|
 | `amount` | O | 지출 금액(원). 0보다 커야 함 |
-| `category` | O | 카테고리 문자열(공백만으로 된 문자열 불가). 서버는 값 목록을 제한하지 않고 받은 그대로 저장·집계함 |
+| `category` | O | 카테고리 문자열(공백만으로 된 문자열 불가). [카테고리 값](#카테고리-값) 6개 중 하나 사용 |
 | `description` | X | 메모 |
 | `spentAt` | O | 지출일 `yyyy-MM-dd` |
 
@@ -566,7 +574,7 @@ Authorization: Bearer {accessToken}
     {
       "expenseId": "uuid",
       "amount": 50000,
-      "category": "FOOD",
+      "category": "식비",
       "description": "점심",
       "spentAt": "2026-10-12",
       "createdAt": "2026-10-12T21:00:00"
@@ -598,8 +606,8 @@ Authorization: Bearer {accessToken}
   "data": {
     "totalAmount": 320000,
     "byCategory": [
-      { "category": "FOOD", "amount": 200000 },
-      { "category": "TRANSPORT", "amount": 120000 }
+      { "category": "식비", "amount": 200000 },
+      { "category": "교통", "amount": 120000 }
     ]
   }
 }
@@ -635,7 +643,7 @@ Authorization: Bearer {accessToken}
 | `transactionId` | O | 가상 금융 서버의 거래 ID(UUID). 결과를 짝지어 돌려주는 데만 쓰며 저장하지 않음 |
 | `userId` | O | 핀타겟 사용자 ID(UUID). 존재하는 사용자여야 함 |
 | `amount` | O | 지출 금액(원). 0보다 커야 함 |
-| `category` | O | 카테고리 문자열(공백만으로 된 문자열 불가) |
+| `category` | O | 카테고리 문자열(공백만으로 된 문자열 불가). [카테고리 값](#카테고리-값) 6개 중 하나 사용 |
 | `description` | X | 가맹점명 등 메모 |
 | `spentAt` | O | 지출일 `yyyy-MM-dd` |
 
