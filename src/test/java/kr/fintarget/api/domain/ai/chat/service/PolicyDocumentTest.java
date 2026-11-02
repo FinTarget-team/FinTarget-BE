@@ -31,8 +31,8 @@ class PolicyDocumentTest {
         assertThat(document.text())
                 .startsWith("정책명: 청년 월세 지원")
                 .contains("제공 기관 데이터: 온통청년", "신청 가능 지역: 서울, 경기", "나이 범위(정형 값): 만 19세 ~ 만 34세",
-                        "[정책 설명]\n청년 월세를 지원하는 사업", "[자격 조건]\n무주택 청년", "[참고 링크]\nhttps://example.com/ref")
-                .doesNotContain("[소득 조건]", "[심사 방법]");
+                        "[정책 설명]\n청년 월세를 지원하는 사업", "[자격 조건]\n무주택 청년")
+                .doesNotContain("[소득 조건]", "[심사 방법]", "[참고 링크]", "https://");
         assertThat(document.text().indexOf("[지원 내용]")).isLessThan(document.text().indexOf("[제출 서류]"));
         assertThat(document.text().indexOf("[제출 서류]")).isLessThan(document.text().indexOf("[신청 기간]"));
         assertThat(document.sourceLimited()).isFalse();
@@ -66,6 +66,32 @@ class PolicyDocumentTest {
                 .build();
 
         assertThat(PolicyDocument.of(youthCenter("짧은 설명", shortText)).sourceLimited()).isTrue();
+    }
+
+    @Test
+    void 링크_컬럼은_넣지_않고_원문_본문의_URL도_지운다() {
+        PolicyText text = PolicyText.builder()
+                .supportContent(LONG_SUPPORT)
+                .applyMethod("온라인 신청(https://apply.example.com) 후 서류 제출")
+                .contactInfo("문의처: 1588-0000\n관련 사이트: https://www.example.go.kr")
+                .etcNote("https://only-url.example.com")
+                .referenceUrl("https://example.com/ref")
+                .applyUrl("https://apply.example.com")
+                .build();
+
+        PolicyDocument document = PolicyDocument.of(youthCenter("청년 월세를 지원하는 사업", text));
+
+        assertThat(document.text())
+                .contains("[신청 방법]\n온라인 신청 후 서류 제출", "[문의처]\n문의처: 1588-0000")
+                .doesNotContain("http", "www.", "관련 사이트", "[기타 참고 사항]", "[참고 링크]", "[신청 링크]");
+    }
+
+    @Test
+    void 링크_컬럼만_있어도_원문_컬럼이_있는_것으로_본다() {
+        // 링크를 프롬프트에서 빼기 전(#147)과 원문 부족 판정이 같아야 한다
+        PolicyText linksOnly = PolicyText.builder().applyUrl("https://apply.example.com").build();
+
+        assertThat(PolicyDocument.of(youthCenter("나".repeat(100), linksOnly)).sourceLimited()).isFalse();
     }
 
     @Test

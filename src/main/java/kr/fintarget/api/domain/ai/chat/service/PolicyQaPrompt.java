@@ -16,7 +16,7 @@ import java.util.regex.Pattern;
 @Component
 public class PolicyQaPrompt {
 
-    public static final String VERSION = "policy-qa-v1";
+    public static final String VERSION = "policy-qa-v2";
 
     private static final String POLICY_PLACEHOLDER = "{{policy}}";
     private static final String PROFILE_PLACEHOLDER = "{{profile}}";

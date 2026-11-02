@@ -37,9 +37,13 @@ public record PolicyDocument(String text, boolean sourceLimited) {
     private static final List<Block> INFO_BLOCKS = List.of(
             new Block("신청 기간", PolicyText::getApplyPeriod),
             new Block("사업 기간", PolicyText::getBusinessPeriod),
-            new Block("문의처", PolicyText::getContactInfo),
-            new Block("참고 링크", PolicyText::getReferenceUrl),
-            new Block("신청 링크", PolicyText::getApplyUrl));
+            new Block("문의처", PolicyText::getContactInfo));
+
+    // 링크 컬럼은 프롬프트에 넣지 않는다 (#147). 모델이 URL을 답변에 옮기거나 만들어내지 않도록 하고,
+    // 신청 링크는 응답의 applyUrl로 따로 내려준다. 원문 부족 판정(anyTextColumn)에는 그대로 센다
+    private static final List<Function<PolicyText, String>> LINK_COLUMNS = List.of(
+            PolicyText::getReferenceUrl,
+            PolicyText::getApplyUrl);
 
     public static PolicyDocument of(Policy policy) {
         boolean kinfa = KinfaPolicyMapper.SOURCE.equals(policy.getSource());
@@ -54,6 +58,7 @@ public record PolicyDocument(String text, boolean sourceLimited) {
             document.append("나이 범위(정형 값): ").append(ageLabel(policy.getMinAge(), policy.getMaxAge())).append('\n');
         }
 
+        // 원문 본문 안의 URL(신청 방법, 문의처의 관련 사이트 등)도 지운다 (#147). 원문 부족 판정은 지우기 전 길이로 한다
         int bodyLength = 0;
         if (hasText(policy.getDescription())) {
             appendBlock(document, kinfa ? "지원 대상 상세 조건" : "정책 설명", policy.getDescription());
@@ -76,14 +81,22 @@ public record PolicyDocument(String text, boolean sourceLimited) {
                     anyTextColumn = true;
                 }
             }
+            if (LINK_COLUMNS.stream().anyMatch(column -> hasText(column.apply(text)))) {
+                anyTextColumn = true;
+            }
         }
 
         boolean sourceLimited = !anyTextColumn || bodyLength < LIMITED_SOURCE_LENGTH;
         return new PolicyDocument(document.toString().strip(), sourceLimited);
     }
 
+    // URL을 지우고 남은 내용이 없으면 블록째 뺀다
     private static void appendBlock(StringBuilder document, String label, String value) {
-        document.append("\n[").append(label).append("]\n").append(value.strip()).append('\n');
+        String withoutUrls = AiAnswerFormatter.removeUrls(value.strip());
+        if (withoutUrls == null) {
+            return;
+        }
+        document.append("\n[").append(label).append("]\n").append(withoutUrls).append('\n');
     }
 
     private static String regionLabel(Policy policy) {
