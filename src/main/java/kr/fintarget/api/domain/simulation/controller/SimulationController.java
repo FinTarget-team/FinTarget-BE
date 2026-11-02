@@ -32,8 +32,10 @@ public class SimulationController {
             description = "월 저축액, (선택) 연이율, (선택) 반영할 정책을 바탕으로 1만 회 몬테카를로 시뮬레이션을 실행해 "
                     + "목표 달성 예상일(중앙값/낙관/비관)과 목표 마감일까지의 달성 확률을 계산하고, 그 결과를 저장한 뒤 반환합니다. "
                     + "annualInterestRate를 생략하면 연 3%(0.03)가 기본으로 적용됩니다. "
-                    + "userPolicyId를 함께 보내면 해당 정책의 혜택 금액을 월 저축액에 더해 반영한 예상 달성일도 함께 계산됩니다. "
-                    + "단, 정책의 benefitAmount가 null이면(온통청년·KINFA 정책 전체) policyCompletionDate는 null이고 나머지 결과만 반환됩니다."
+                    + "userPolicyId를 함께 보내면 정책의 혜택 금액(월 지급액·지원 기간·1회 지급액)을 반영한 예상 달성일과 달성 확률도 계산합니다. "
+                    + "정책 반영 계산은 지원 기간이 끝나는 시점과 1회 지급을 반영하려고 한 달씩 진행하며, 정책을 안 보내면 기존 공식을 그대로 씁니다. "
+                    + "정책에 금액으로 환산된 혜택이 없으면(대출·현물·서비스 정책, 혜택 금액이 아직 정리되지 않은 정책) "
+                    + "policyCompletionDate와 policySuccessProbability는 null이고 나머지 결과만 반환됩니다."
     )
     @io.swagger.v3.oas.annotations.responses.ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(

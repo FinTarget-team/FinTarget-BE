@@ -60,6 +60,10 @@ public class Policy {
     @Embedded
     private PolicyText text;
 
+    // 시뮬레이션에 반영할 현금 지원 혜택 (#163). 아직 채워지지 않은 정책은 null이다
+    @Embedded
+    private PolicyBenefit benefit;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
@@ -133,7 +137,24 @@ public class Policy {
         return codes.contains(userRegion.trim());
     }
 
-    // 외부 API에서 다시 받아온 값으로 내용을 갱신한다 (externalId/source는 식별자라 유지)
+    /**
+     * 시뮬레이션에 반영할 현금 지원 혜택이 있는지 (#163).
+     * 혜택이 아직 채워지지 않은 정책(benefit=null)과 금액으로 환산되지 않는 정책을 함께 걸러낸다.
+     */
+    public boolean hasBenefitForSimulation() {
+        return benefit != null && benefit.hasAny();
+    }
+
+    // 원문에서 추출·정리한 혜택 금액을 채운다 (#163 입력 형식, #162 추출 작업에서 호출)
+    public void updateBenefit(PolicyBenefit benefit) {
+        this.benefit = benefit;
+    }
+
+    /**
+     * 외부 API에서 다시 받아온 값으로 내용을 갱신한다 (externalId/source는 식별자라 유지).
+     * benefit은 소스 응답이 아니라 원문 추출로 채우는 값이라 동기화가 덮지 않는다 — 덮으면 매일 03:00
+     * 재동기화마다 추출 결과가 사라진다. 혜택 갱신은 updateBenefit으로만 한다 (#163)
+     */
     public void updateFrom(Policy fetched) {
         this.name = fetched.name;
         this.description = fetched.description;
