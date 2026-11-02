@@ -66,7 +66,9 @@ main() {
 
   if wait_healthy; then
     echo "배포 성공: $(git log --oneline -1 "$current")"
+    # 서버 디스크가 작아(19GB) 빌드할 때마다 쌓이는 이미지·빌드 캐시를 정리한다. 최근 하루치 캐시는 다음 빌드 속도를 위해 남긴다
     docker image prune -f >/dev/null || true
+    docker builder prune -f --filter until=24h >/dev/null || true
     exit 0
   fi
 

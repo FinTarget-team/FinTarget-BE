@@ -744,7 +744,8 @@ Authorization: Bearer {accessToken}
 
 ## 참고 사항
 
-- 스웨거 UI: `http://localhost:8080/swagger-ui.html`
-- 스웨거 JSON: `http://localhost:8080/v3/api-docs`
+- 운영 서버 주소: `http://54.180.93.46:8080` (HTTPS 미적용)
+- 스웨거 UI: `{서버 주소}/swagger-ui.html`
+- 스웨거 JSON: `{서버 주소}/v3/api-docs`
 - JWT 토큰 만료 시간: 1시간 (3600초)
-- 카카오 로그인 시 매번 신규 유저 생성되는 버그 수정 예정 (이슈 #10)
+- 서버 기준 시간대: 한국 시간(Asia/Seoul). 목표 D-day, 넛지의 "오늘"·"이번 달"은 한국 날짜 기준으로 계산합니다.
