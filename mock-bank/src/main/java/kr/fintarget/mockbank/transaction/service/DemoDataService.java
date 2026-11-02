@@ -12,6 +12,7 @@ import java.time.LocalDate;
 import java.time.YearMonth;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -37,8 +38,11 @@ public class DemoDataService {
     private static final long SURGE_MAX_AMOUNT = 60_000;
     private static final List<String> SURGE_MERCHANTS = List.of("배달의민족", "쿠팡이츠", "아웃백스테이크하우스", "회식 고깃집", "애슐리퀸즈", "빕스");
     private static final int MAX_ATTEMPTS = 1_000;
+    // 랜덤 거래가 식비 외 카테고리 넛지(1.5배)를 만들지 않도록, 이번 달 합계를 이전 월평균의 1.2배 이하로 제한한다 (#168)
+    public static final double RANDOM_CATEGORY_CAP_RATIO = 1.2;
 
     private final TransactionRepository transactionRepository;
+    private final NudgeForecastService nudgeForecastService;
     private final Clock clock;
     private final RandomGenerator random;
 
@@ -68,21 +72,52 @@ public class DemoDataService {
 
     /**
      * 이번 달 1일 ~ 오늘 사이 날짜로 카테고리·금액이 랜덤인 거래 10건을 만든다.
+     * 식비 외 카테고리는 이번 달 합계가 이전 월평균의 1.2배를 넘지 않게 해, "식비 급증" 외의 넛지가 생기지 않게 한다.
+     * 넣을 수 있는 식비 외 카테고리가 없으면 식비로 만든다. 이전 달 기록이 없는 카테고리는 메인 서버도 넛지를 만들지 않으므로 제한하지 않는다.
      */
     @Transactional
     public List<Transaction> generateRandom(UUID userId) {
         LocalDate today = LocalDate.now(clock);
         LocalDate monthStart = today.withDayOfMonth(1);
         Set<TransactionKey> usedKeys = loadKeys(userId, monthStart, today);
-        ExpenseCategory[] categories = ExpenseCategory.values();
+        Map<String, NudgeForecastService.CategoryStats> stats = new HashMap<>(nudgeForecastService.categoryStats(userId));
 
         List<Transaction> created = new ArrayList<>();
         for (int i = 0; i < RANDOM_COUNT; i++) {
-            ExpenseCategory category = categories[random.nextInt(categories.length)];
-            created.add(newUniqueTransaction(userId, category, category.minAmount(), category.maxAmount(),
-                    category.merchants(), monthStart, today, usedKeys));
+            Transaction transaction = newRandomTransactionWithinCap(userId, stats, monthStart, today, usedKeys);
+            created.add(transaction);
+            stats.compute(transaction.getCategory(), (category, current) -> current == null
+                    ? new NudgeForecastService.CategoryStats(category, transaction.getAmount(), 0, 0)
+                    : current.plusCurrent(transaction.getAmount()));
         }
         return transactionRepository.saveAll(created);
+    }
+
+    private Transaction newRandomTransactionWithinCap(UUID userId, Map<String, NudgeForecastService.CategoryStats> stats,
+                                                      LocalDate from, LocalDate to, Set<TransactionKey> usedKeys) {
+        List<ExpenseCategory> candidates = new ArrayList<>(List.of(ExpenseCategory.values()));
+        while (!candidates.isEmpty()) {
+            ExpenseCategory category = candidates.get(random.nextInt(candidates.size()));
+            long maxAmount = category == ExpenseCategory.FOOD
+                    ? category.maxAmount()
+                    : Math.min(category.maxAmount(), remainingUnderCap(stats.get(category.label())));
+            if (maxAmount >= category.minAmount()) {
+                return newUniqueTransaction(userId, category, category.minAmount(), maxAmount,
+                        category.merchants(), from, to, usedKeys);
+            }
+            candidates.remove(category);
+        }
+        // 식비는 항상 후보에 남으므로 여기까지 오지 않는다
+        throw new IllegalStateException("랜덤 거래를 만들 카테고리가 없습니다.");
+    }
+
+    // 이번 달에 더 써도 이전 월평균의 1.2배를 넘지 않는 금액 (100원 단위로 내림)
+    private static long remainingUnderCap(NudgeForecastService.CategoryStats stats) {
+        if (stats == null || !stats.hasPastAverage()) {
+            return Long.MAX_VALUE;
+        }
+        long cap = (long) Math.floor(stats.pastAverage() * RANDOM_CATEGORY_CAP_RATIO);
+        return Math.max(0, (cap - stats.currentTotal()) / 100 * 100);
     }
 
     /**
