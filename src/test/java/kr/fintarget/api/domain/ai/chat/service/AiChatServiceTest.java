@@ -19,6 +19,7 @@ import kr.fintarget.api.domain.policy.entity.PolicyType;
 import kr.fintarget.api.domain.policy.repository.PolicyRepository;
 import kr.fintarget.api.domain.user.entity.User;
 import kr.fintarget.api.domain.user.repository.UserRepository;
+import kr.fintarget.api.domain.user.validation.BirthYearValidator;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -261,6 +262,49 @@ class AiChatServiceTest {
     }
 
     @Test
+    void 답변의_마크다운과_URL을_지우고_정리된_답변을_저장한다() {
+        doReturn(new AiTextResult(
+                "**신청할 수 있습니다.**\n* [신청 링크](https://apply.example.com)에서 신청", "gpt-6.1-sol", 100, 20, 5)).when(aiTextClient).generate(any());
+
+        AiChatResponse response = service.ask(userId, policyId, "신청할 수 있나요?", null);
+
+        assertThat(response.answer()).isEqualTo("신청할 수 있습니다.\n- 신청 링크에서 신청");
+        assertThat(messageRepository.findByConversationIdOrderBySeqAsc(response.conversationId()))
+                .extracting(AiConversationMessage::getContent)
+                .containsExactly("신청할 수 있나요?", "신청할 수 있습니다.\n- 신청 링크에서 신청");
+    }
+
+    @Test
+    void 이전에_마크다운으로_저장된_답변도_정리해서_보낸다() {
+        // #147 이전에 저장된 답변
+        UUID conversationId = store.saveTurn(userId, policyId, null, "첫 질문", "**굵은 답변** https://example.com",
+                LocalDateTime.now(BirthYearValidator.ZONE), Duration.ofHours(24)).getConversationId();
+
+        service.ask(userId, policyId, "둘째 질문", conversationId);
+
+        assertThat(lastRequest().messages()).containsExactly(
+                AiMessage.user("첫 질문"), AiMessage.assistant("굵은 답변"), AiMessage.user("둘째 질문"));
+    }
+
+    @Test
+    void 정책의_신청_URL을_applyUrl로_내려주고_없거나_URL이_아니면_null이다() {
+        UUID withUrl = policyRepository.save(Policy.create("신청 URL 있는 정책", "설명", null, null, null, null,
+                PolicyType.ETC, null, "P-4", "YOUTH_CENTER",
+                PolicyText.builder().supportContent("지원".repeat(60)).applyUrl("https://apply.example.com").build()))
+                .getPolicyId();
+        UUID notUrl = policyRepository.save(Policy.create("신청 URL이 안내 문구인 정책", "설명", null, null, null, null,
+                PolicyType.ETC, null, "P-5", "YOUTH_CENTER",
+                PolicyText.builder().supportContent("지원".repeat(60)).applyUrl("주민센터 방문 신청").build()))
+                .getPolicyId();
+
+        assertThat(service.ask(userId, withUrl, "q", null).applyUrl()).isEqualTo("https://apply.example.com");
+        assertThat(service.ask(userId, policyId, "q", null).applyUrl()).isNull();
+        assertThat(service.ask(userId, limitedPolicyId, "q", null).applyUrl()).isNull();
+        assertThat(service.ask(userId, notUrl, "q", null).applyUrl()).isNull();
+        assertThat(lastRequest().systemPrompt()).doesNotContain("[신청 링크]");
+    }
+
+    @Test
     void AI_호출_중에_같은_대화에_다른_질문이_저장되면_409() {
         UUID conversationId = service.ask(userId, policyId, "q1", null).conversationId();
         // AI 응답을 기다리는 사이 다른 요청이 같은 대화에 턴을 저장한 상황
@@ -313,7 +357,7 @@ class AiChatServiceTest {
         service.ask(userId, policyId, "비밀-질문-본문", null);
 
         assertThat(output.getAll())
-                .contains("정책 AI 질문 응답", "promptVersion=policy-qa-v1", "inputTokens=100", "outputTokens=20")
+                .contains("정책 AI 질문 응답", "promptVersion=policy-qa-v2", "inputTokens=100", "outputTokens=20")
                 .doesNotContain("비밀-질문-본문", "답변: 비밀");
     }
 }

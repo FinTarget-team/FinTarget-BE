@@ -88,7 +88,7 @@ class AiChatControllerTest {
     @Test
     void 질문하면_대화_ID_답변_남은_질문_수를_반환한다() throws Exception {
         when(aiChatService.ask(USER_ID, POLICY_ID, "신청할 수 있나요?", null))
-                .thenReturn(new AiChatResponse(CONVERSATION_ID, "답변", 9, false));
+                .thenReturn(new AiChatResponse(CONVERSATION_ID, "답변", 9, false, "https://apply.example.com"));
 
         ask("{\"question\":\"  신청할 수 있나요?  \"}")
                 .andExpect(status().isOk())
@@ -96,13 +96,14 @@ class AiChatControllerTest {
                 .andExpect(jsonPath("$.data.conversationId").value(CONVERSATION_ID.toString()))
                 .andExpect(jsonPath("$.data.answer").value("답변"))
                 .andExpect(jsonPath("$.data.remainingTurns").value(9))
-                .andExpect(jsonPath("$.data.sourceLimited").value(false));
+                .andExpect(jsonPath("$.data.sourceLimited").value(false))
+                .andExpect(jsonPath("$.data.applyUrl").value("https://apply.example.com"));
     }
 
     @Test
     void conversationId를_넘기면_대화를_이어간다() throws Exception {
         when(aiChatService.ask(USER_ID, POLICY_ID, "q", CONVERSATION_ID))
-                .thenReturn(new AiChatResponse(CONVERSATION_ID, "a", 8, false));
+                .thenReturn(new AiChatResponse(CONVERSATION_ID, "a", 8, false, null));
 
         ask("{\"question\":\"q\",\"conversationId\":\"" + CONVERSATION_ID + "\"}")
                 .andExpect(status().isOk())
@@ -126,7 +127,7 @@ class AiChatControllerTest {
         verifyNoInteractions(aiChatService);
 
         when(aiChatService.ask(eq(USER_ID), eq(POLICY_ID), any(), isNull()))
-                .thenReturn(new AiChatResponse(CONVERSATION_ID, "a", 9, false));
+                .thenReturn(new AiChatResponse(CONVERSATION_ID, "a", 9, false, null));
         ask("{\"question\":\"" + "가".repeat(500) + "\"}").andExpect(status().isOk());
     }
 

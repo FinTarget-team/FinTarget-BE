@@ -367,6 +367,53 @@ Authorization: Bearer {accessToken}
 | 존재하지 않는 `userPolicyId` | 400 | `존재하지 않는 정책입니다.` |
 | 다른 사용자의 정책 | 409 | `본인의 정책만 삭제할 수 있습니다.` |
 
+### 정책 AI 질문
+- **POST** `/api/policies/{policyId}/ai-chat`
+- 정책 1건의 저장된 원문과 사용자 정보(나이·소득 구간, 거주 지역, 주택 보유 여부, 취업 상태)를 근거로 답함. 원문에 없는 내용은 답하지 않음
+- 한 대화에서 질문은 10개까지, 마지막 질문 후 24시간이 지나면 대화가 만료됨. 응답까지 수 초 이상 걸릴 수 있음
+- Request Body:
+```json
+{
+  "question": "무주택 직장인인데 신청할 수 있나요?",
+  "conversationId": null
+}
+```
+- Response (200):
+```json
+{
+  "status": 200,
+  "message": "OK",
+  "data": {
+    "conversationId": "uuid",
+    "answer": "원문 기준으로 만 19~34세 무주택 청년이면 신청 대상에 해당할 수 있습니다.\n- 최종 자격은 담당 기관에서 확인해야 합니다.",
+    "remainingTurns": 9,
+    "sourceLimited": false,
+    "applyUrl": "https://young.busan.go.kr/index.nm?menuCd=271"
+  }
+}
+```
+
+| 필드 | 설명 |
+|---|---|
+| `question` | 필수. 공백 제외 1자 이상, 500자 이하 |
+| `conversationId` | 요청: 생략하면 새 대화, 응답의 값을 넣으면 이어서 질문 |
+| `answer` | 일반 텍스트 답변. 마크다운 문법과 URL은 들어가지 않음. 결론을 먼저 쓰고, 추가 설명은 줄바꿈(`\n`) 뒤 `- `로 시작하는 항목(최대 4개)으로 나뉨 |
+| `remainingTurns` | 이 대화에서 남은 질문 수 |
+| `sourceLimited` | 저장된 원문이 부족해 답변이 부정확할 수 있음. `true`면 첫 답변 끝에 안내 문구가 붙음 |
+| `applyUrl` | 정책 데이터에 저장된 신청 URL ("신청하러 가기" 버튼용). 답변 내용과 관계없이 항상 같은 값. 신청 URL이 없거나 http(s) 주소가 아니면 `null` (KINFA 정책은 항상 `null`) |
+
+| 상황 | 상태 |
+|---|---|
+| 질문이 비었거나 500자를 넘음 | 400 |
+| 정책이 없음, 대화가 없거나 만료됨 (다른 사용자·다른 정책의 대화 포함) | 404 |
+| 대화의 질문 수 상한 도달, 같은 대화에 동시에 질문 | 409 |
+| AI 응답을 가져오지 못함 | 502 |
+| AI 기능을 지금 사용할 수 없음 | 503 |
+
+### 정책 AI 대화 종료
+- **DELETE** `/api/ai-chat/{conversationId}`
+- 대화와 질문·답변 기록을 삭제함. Response (200): `data: null`. 대화가 없거나 다른 사용자의 대화면 404
+
 ---
 
 ## 6. 시뮬레이션 (Simulation)
