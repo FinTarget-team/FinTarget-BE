@@ -26,15 +26,14 @@ public class LocalExpenseScheduler {
 
     private record AmountRange(long min, long max) {}
 
+    // iOS 앱(AddExpenseView)과 mock-bank가 쓰는 6개 카테고리 (#165)
     private static final Map<String, AmountRange> CATEGORY_AMOUNT_RANGES = Map.of(
             "식비", new AmountRange(5_000, 30_000),
             "교통", new AmountRange(1_000, 5_000),
-            "카페", new AmountRange(3_000, 10_000),
             "쇼핑", new AmountRange(10_000, 150_000),
-            "문화생활", new AmountRange(10_000, 50_000),
-            "통신", new AmountRange(30_000, 60_000),
-            "의료", new AmountRange(5_000, 50_000),
-            "구독", new AmountRange(5_000, 20_000)
+            "문화/여가", new AmountRange(5_000, 50_000),
+            "생활", new AmountRange(5_000, 60_000),
+            "기타", new AmountRange(3_000, 50_000)
     );
 
     private static final List<String> CATEGORIES = List.copyOf(CATEGORY_AMOUNT_RANGES.keySet());
