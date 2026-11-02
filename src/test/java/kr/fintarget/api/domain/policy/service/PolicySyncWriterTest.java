@@ -59,6 +59,19 @@ class PolicySyncWriterTest {
         verify(policyRepository).save(any(Policy.class));
     }
 
+    // 이미 저장된 KINFA 정책의 benefit_amount(대출 한도가 잘못 들어간 값)는 다음 동기화 때 null로 덮여야 한다 (#151)
+    @Test
+    void 기존_정책의_benefitAmount는_새로_받아온_null로_갱신된다() {
+        Policy existing = stored("A", "대출상품");
+        ReflectionTestUtils.setField(existing, "benefitAmount", 200_000_000L);
+        when(policyRepository.findByExternalIdAndSource("A", SOURCE)).thenReturn(Optional.of(existing));
+        when(policyRepository.findBySource(SOURCE)).thenReturn(List.of(existing));
+
+        policySyncWriter.apply(SOURCE, List.of(policy("A", "대출상품")));
+
+        assertThat(existing.getBenefitAmount()).isNull();
+    }
+
     @Test
     void 목록에서_빠진_정책은_삭제하되_사용자가_신청한_정책은_남긴다() {
         Policy kept = stored("A", "유지");

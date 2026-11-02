@@ -12,18 +12,11 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 @Slf4j
 public class KinfaPolicyMapper {
 
     public static final String SOURCE = "KINFA";
-
-    // snq는 기준연월(basYm)마다 다시 매겨지는 순번이라 같은 snq가 다른 상품을 가리킬 수 있고,
-    // basYm을 붙이면 같은 상품이 달마다 중복 저장된다. 월 안에서 고유하고 월이 바뀌어도 유지되는
-    // 제공기관명 + 상품명 조합을 상품 식별자로 쓴다 (2026-10 실데이터 기준 검증).
-    private static final Pattern MANWON_PATTERN = Pattern.compile("([\\d,]+)\\s*만원");
 
     // KINFA rsdAreaPamtEqltIstm 값 중 "지역 제한 없음"을 뜻하는 표현들
     private static final Set<String> NATIONWIDE_VALUES = Set.of("전국", "전국(농어촌)");
@@ -67,7 +60,11 @@ public class KinfaPolicyMapper {
                 null, // age 필드가 관측된 값("없음") 외의 형식이 검증되지 않아 파싱하지 않음
                 null, // age 필드가 관측된 값("없음") 외의 형식이 검증되지 않아 파싱하지 않음
                 null, // incm 필드가 관측된 값("없음") 외의 형식이 검증되지 않아 파싱하지 않음
-                parseManwon(item.lnLmt()),
+                // KINFA는 전부 대출 상품이고 lnLmt는 "받을 수 있는 혜택"이 아니라 "빌릴 수 있는 한도"다 (#151).
+                // 이 값을 benefitAmount로 저장하면 시뮬레이션이 12로 나눠 월 저축 여력에 더해버려
+                // (2억 한도 → 월 1,667만원 저축) 목표 달성이 비현실적으로 쉬워 보인다.
+                // 대출 한도는 PolicyText.supportContent의 "대출 한도" 줄로만 노출한다
+                null,
                 resolvePolicyType(item.usge()),
                 resolveRegion(item.rsdAreaPamtEqltIstm(), item.finPrdNm()),
                 toExternalId(item),
@@ -114,6 +111,9 @@ public class KinfaPolicyMapper {
         return "없음".equals(cleaned) ? PolicyTextCleaner.AGE_NO_LIMIT : cleaned;
     }
 
+    // snq는 기준연월(basYm)마다 다시 매겨지는 순번이라 같은 snq가 다른 상품을 가리킬 수 있고,
+    // basYm을 붙이면 같은 상품이 달마다 중복 저장된다. 월 안에서 고유하고 월이 바뀌어도 유지되는
+    // 제공기관명 + 상품명 조합을 상품 식별자로 쓴다 (2026-10 실데이터 기준 검증).
     public static String toExternalId(KinfaItem item) {
         return item.ofrInstNm() + "|" + item.finPrdNm();
     }
@@ -196,21 +196,5 @@ public class KinfaPolicyMapper {
             codes.add(foundByPosition.get(position).getCode());
         }
         return String.join(",", codes);
-    }
-
-    private static Long parseManwon(String value) {
-        if (value == null || value.isBlank()) {
-            return null;
-        }
-        Matcher matcher = MANWON_PATTERN.matcher(value);
-        if (!matcher.find()) {
-            return null;
-        }
-        try {
-            long manwon = Long.parseLong(matcher.group(1).replace(",", ""));
-            return manwon * 10_000;
-        } catch (NumberFormatException e) {
-            return null;
-        }
     }
 }

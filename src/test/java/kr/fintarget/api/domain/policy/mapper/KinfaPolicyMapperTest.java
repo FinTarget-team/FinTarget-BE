@@ -43,11 +43,22 @@ class KinfaPolicyMapperTest {
         assertThat(policy.getMinAge()).isNull();
         assertThat(policy.getMaxAge()).isNull();
         assertThat(policy.getIncomeLimit()).isNull();
-        assertThat(policy.getBenefitAmount()).isEqualTo(35_000_000L);
+        assertThat(policy.getBenefitAmount()).isNull();
         assertThat(policy.getPolicyType()).isEqualTo(PolicyType.FINANCE_WELFARE);
         assertThat(policy.getRegion()).isNull();
         assertThat(policy.getExternalId()).isEqualTo("14개 취급은행|새희망홀씨Ⅱ");
         assertThat(policy.getSource()).isEqualTo("KINFA");
+    }
+
+    @Test
+    void 대출_한도는_benefitAmount가_아니라_supportContent로만_노출된다() throws Exception {
+        KinfaItem item = parseItem();
+
+        Policy policy = KinfaPolicyMapper.toPolicy(item);
+
+        // 대출 한도를 benefitAmount로 저장하면 시뮬레이션이 월 저축 여력으로 더해버린다 (#151)
+        assertThat(policy.getBenefitAmount()).isNull();
+        assertThat(policy.getText().getSupportContent()).contains("대출 한도: 3500만원");
     }
 
     @Test
