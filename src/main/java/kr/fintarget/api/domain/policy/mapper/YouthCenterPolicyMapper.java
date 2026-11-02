@@ -18,6 +18,11 @@ public class YouthCenterPolicyMapper {
 
     public static final String SOURCE = "YOUTH_CENTER";
 
+    // 소득 조건 구분 코드 (earnCndSeCd, 온통청년 API 코드정의서 0043)
+    private static final String EARN_CODE_NONE = "0043001";
+    private static final String EARN_CODE_ANNUAL = "0043002";
+    private static final String EARN_CODE_ETC = "0043003";
+
     // zipCd(법정동코드) 앞 2자리 시/도 prefix → Region 변환표.
     // 근거 확인됨: 30 대전, 41 경기, 43 충북, 47 경북, 52 전북
     // 코드표 확인 필요(추정): 그 외 전부(아래 개별 주석 참고)
@@ -71,7 +76,7 @@ public class YouthCenterPolicyMapper {
                 .supportContent(PolicyTextCleaner.clean(item.plcySprtCn()))
                 .eligibilityDetail(PolicyTextCleaner.clean(item.addAplyQlfcCndCn()))
                 .exclusionCriteria(PolicyTextCleaner.clean(item.ptcpPrpTrgtCn()))
-                .incomeCondition(PolicyTextCleaner.clean(item.earnEtcCn()))
+                .incomeCondition(incomeCondition(item))
                 .applyMethod(PolicyTextCleaner.clean(item.plcyAplyMthdCn()))
                 .screeningMethod(PolicyTextCleaner.clean(item.srngMthdCn()))
                 .requiredDocuments(PolicyTextCleaner.clean(item.sbmsnDcmntCn()))
@@ -81,6 +86,70 @@ public class YouthCenterPolicyMapper {
                 .applyUrl(PolicyTextCleaner.clean(item.aplyUrlAddr()))
                 .etcNote(PolicyTextCleaner.clean(item.etcMttrCn()))
                 .build();
+    }
+
+    /**
+     * 소득 조건: 구분 코드(earnCndSeCd)로 표시용 문구를 만든다 (#150). earnEtcCn은 구분이 "기타"일 때만 와서
+     * 이 값만 쓰면 무관·연소득 정책이 null(앱의 "정보없음")이 된다.
+     * - 0043001(무관): "소득 무관"
+     * - 0043002(연소득): "연소득 N만원 이하" 등 금액 문구. earnEtcCn이 있으면 다음 줄에 붙인다.
+     *   금액이 모두 0이거나 숫자가 아니면 earnEtcCn으로 대체하고 WARN 로그
+     * - 0043003(기타): earnEtcCn 원문
+     * - 코드가 없으면 earnEtcCn 원문, 모르는 코드면 earnEtcCn 원문 + WARN 로그
+     * 원본에 값이 없는 정책을 "소득 무관"으로 보이게 하지 않도록, 무관 문구는 0043001일 때만 쓴다.
+     */
+    static String incomeCondition(YouthCenterPolicyItem item) {
+        String etc = PolicyTextCleaner.clean(item.earnEtcCn());
+        String code = PolicyTextCleaner.clean(item.earnCndSeCd());
+        if (code == null) {
+            return etc;
+        }
+        switch (code) {
+            case EARN_CODE_NONE:
+                return PolicyTextCleaner.INCOME_NO_LIMIT;
+            case EARN_CODE_ANNUAL:
+                String amount = annualIncomeRange(item);
+                if (amount == null) {
+                    log.warn("온통청년 소득 조건이 연소득인데 금액이 없어 기타 문구로 저장: plcyNo={}, earnMinAmt={}, earnMaxAmt={}",
+                            item.plcyNo(), item.earnMinAmt(), item.earnMaxAmt());
+                    return etc;
+                }
+                return PolicyTextCleaner.joinLines(amount, etc);
+            case EARN_CODE_ETC:
+                return etc;
+            default:
+                log.warn("온통청년 소득 조건 구분 코드가 알 수 없는 값이어서 기타 문구로 저장: plcyNo={}, earnCndSeCd={}",
+                        item.plcyNo(), code);
+                return etc;
+        }
+    }
+
+    // 연소득 최소·최대 금액(만원) → "연소득 N만원 이상 M만원 이하" / "연소득 M만원 이하" / "연소득 N만원 이상". 둘 다 0이면 null
+    private static String annualIncomeRange(YouthCenterPolicyItem item) {
+        long min = parseManwon(item.earnMinAmt());
+        long max = parseManwon(item.earnMaxAmt());
+        if (min > 0 && max > 0) {
+            return "연소득 %,d만원 이상 %,d만원 이하".formatted(min, max);
+        }
+        if (max > 0) {
+            return "연소득 %,d만원 이하".formatted(max);
+        }
+        if (min > 0) {
+            return "연소득 %,d만원 이상".formatted(min);
+        }
+        return null;
+    }
+
+    // 빈 값·숫자가 아닌 값은 0(금액 없음)으로 본다. 온통청년은 금액이 없는 정책에 "0"을 보낸다
+    private static long parseManwon(String value) {
+        if (value == null || value.isBlank()) {
+            return 0;
+        }
+        try {
+            return Long.parseLong(value.trim().replace(",", ""));
+        } catch (NumberFormatException e) {
+            return 0;
+        }
     }
 
     /**

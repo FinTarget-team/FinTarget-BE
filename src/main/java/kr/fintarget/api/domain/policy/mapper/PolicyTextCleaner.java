@@ -9,8 +9,12 @@ import java.util.stream.Collectors;
 /**
  * 정책 원문 텍스트 정제 (#113).
  * "없음", "해당 없음" 같은 표현은 조건이 없다는 원문 정보이므로 그대로 둔다.
+ * (소득 조건만 예외로, 소스가 "조건 없음"을 명시하면 매퍼가 소스 간 같은 표시 문구 INCOME_NO_LIMIT로 바꾼다. #150)
  */
 public final class PolicyTextCleaner {
+
+    // 소스가 소득 조건이 없다고 명시한 정책의 소득 조건 표시 문구 (온통청년 0043001, KINFA "없음")
+    public static final String INCOME_NO_LIMIT = "소득 무관";
 
     private PolicyTextCleaner() {
     }
