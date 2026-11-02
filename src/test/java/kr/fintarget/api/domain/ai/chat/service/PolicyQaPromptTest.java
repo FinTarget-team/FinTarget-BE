@@ -27,7 +27,7 @@ class PolicyQaPromptTest {
         String v2 = new PolicyQaPrompt().render(new PolicyDocument("정책명: 청년 월세", false), PROFILE);
         String v1 = PolicyQaPrompt.ofVersion("policy-qa-v1").render(new PolicyDocument("정책명: 청년 월세", false), PROFILE);
 
-        assertThat(v2).contains("링크와 URL은 답변에 쓰지 않습니다", "\"- \"로 시작하는 항목", "항목은 최대 4개",
+        assertThat(v2).contains("링크와 URL은 답변에 쓰지 않습니다", "\"- \"로 시작하는 항목", "항목은 최대 3개",
                 "마크다운 문법을 쓰지 않습니다", "사용자가 물은 것에만 답합니다");
         assertThat(v1).contains("신청 링크가 있으면 함께 안내합니다").doesNotContain("마크다운");
     }
