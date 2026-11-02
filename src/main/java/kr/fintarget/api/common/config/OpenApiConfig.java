@@ -27,6 +27,12 @@ public class OpenApiConfig {
                                         .type(SecurityScheme.Type.APIKEY)
                                         .in(SecurityScheme.In.HEADER)
                         )
+                        .addSecuritySchemes("bankWebhookKey",
+                                new SecurityScheme()
+                                        .name("X-Bank-Webhook-Key")
+                                        .type(SecurityScheme.Type.APIKEY)
+                                        .in(SecurityScheme.In.HEADER)
+                        )
                 );
     }
 }

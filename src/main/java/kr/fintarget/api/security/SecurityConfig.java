@@ -19,6 +19,9 @@ public class SecurityConfig {
     @Value("${ADMIN_API_KEY:}")
     private String adminApiKey;
 
+    @Value("${BANK_WEBHOOK_KEY:}")
+    private String bankWebhookKey;
+
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
@@ -29,10 +32,12 @@ public class SecurityConfig {
                         .requestMatchers("/auth/**").permitAll()
                         .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html").permitAll()
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
+                        .requestMatchers("/api/webhooks/**").hasRole(BankWebhookKeyFilter.ROLE)
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
-                .addFilterAfter(new AdminApiKeyFilter(adminApiKey), JwtFilter.class);
+                .addFilterAfter(new AdminApiKeyFilter(adminApiKey), JwtFilter.class)
+                .addFilterAfter(new BankWebhookKeyFilter(bankWebhookKey), JwtFilter.class);
         return http.build();
     }
 }
