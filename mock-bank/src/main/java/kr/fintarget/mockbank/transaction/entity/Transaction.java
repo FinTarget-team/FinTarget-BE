@@ -51,4 +51,8 @@ public class Transaction {
         this.spentAt = spentAt;
         this.webhookStatus = WebhookStatus.PENDING;
     }
+
+    public void changeWebhookStatus(WebhookStatus webhookStatus) {
+        this.webhookStatus = webhookStatus;
+    }
 }

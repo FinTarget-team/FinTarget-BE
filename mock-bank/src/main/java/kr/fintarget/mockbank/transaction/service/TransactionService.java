@@ -1,6 +1,7 @@
 package kr.fintarget.mockbank.transaction.service;
 
 import kr.fintarget.mockbank.transaction.entity.Transaction;
+import kr.fintarget.mockbank.transaction.entity.WebhookStatus;
 import kr.fintarget.mockbank.transaction.repository.TransactionRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -8,6 +9,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -27,4 +29,23 @@ public class TransactionService {
     public List<Transaction> getRecentTransactions() {
         return transactionRepository.findTop20ByOrderByCreatedAtDesc();
     }
+
+    // 핀타겟으로 아직 전달되지 않은 거래(미전송·실패)
+    @Transactional(readOnly = true)
+    public List<Transaction> getUnsentTransactions() {
+        return transactionRepository.findByWebhookStatusInOrderByCreatedAtAsc(UNSENT_STATUSES);
+    }
+
+    @Transactional(readOnly = true)
+    public long countUnsentTransactions() {
+        return transactionRepository.countByWebhookStatusIn(UNSENT_STATUSES);
+    }
+
+    @Transactional
+    public void updateWebhookStatuses(Map<UUID, WebhookStatus> statuses) {
+        transactionRepository.findAllById(statuses.keySet())
+                .forEach(transaction -> transaction.changeWebhookStatus(statuses.get(transaction.getId())));
+    }
+
+    private static final List<WebhookStatus> UNSENT_STATUSES = List.of(WebhookStatus.PENDING, WebhookStatus.FAILED);
 }

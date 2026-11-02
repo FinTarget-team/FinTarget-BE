@@ -47,7 +47,7 @@ public class DemoDataService {
      * 메인 서버는 "그 카테고리 지출이 있었던 달 수"로 평균을 내므로 빠지는 달·카테고리가 없어야 한다.
      */
     @Transactional
-    public int generateBaseline(UUID userId) {
+    public List<Transaction> generateBaseline(UUID userId) {
         YearMonth currentMonth = YearMonth.now(clock);
         YearMonth firstMonth = currentMonth.minusMonths(BASELINE_MONTHS);
         Set<TransactionKey> usedKeys = loadKeys(userId, firstMonth.atDay(1), currentMonth.minusMonths(1).atEndOfMonth());
@@ -63,15 +63,14 @@ public class DemoDataService {
                 }
             }
         }
-        transactionRepository.saveAll(created);
-        return created.size();
+        return transactionRepository.saveAll(created);
     }
 
     /**
      * 이번 달 1일 ~ 오늘 사이 날짜로 카테고리·금액이 랜덤인 거래 10건을 만든다.
      */
     @Transactional
-    public int generateRandom(UUID userId) {
+    public List<Transaction> generateRandom(UUID userId) {
         LocalDate today = LocalDate.now(clock);
         LocalDate monthStart = today.withDayOfMonth(1);
         Set<TransactionKey> usedKeys = loadKeys(userId, monthStart, today);
@@ -83,8 +82,7 @@ public class DemoDataService {
             created.add(newUniqueTransaction(userId, category, category.minAmount(), category.maxAmount(),
                     category.merchants(), monthStart, today, usedKeys));
         }
-        transactionRepository.saveAll(created);
-        return created.size();
+        return transactionRepository.saveAll(created);
     }
 
     /**
@@ -122,11 +120,13 @@ public class DemoDataService {
             created.add(transaction);
             currentTotal += transaction.getAmount();
         }
-        transactionRepository.saveAll(created);
-        return new SurgeResult(created.size(), Math.ceilDiv(pastTotal, (long) pastMonthlyTotals.size()), currentTotal);
+        return new SurgeResult(transactionRepository.saveAll(created), Math.ceilDiv(pastTotal, (long) pastMonthlyTotals.size()), currentTotal);
     }
 
-    public record SurgeResult(int createdCount, long pastMonthlyAverage, long currentMonthTotal) {
+    public record SurgeResult(List<Transaction> created, long pastMonthlyAverage, long currentMonthTotal) {
+        public int createdCount() {
+            return created.size();
+        }
     }
 
     private Transaction newUniqueTransaction(UUID userId, ExpenseCategory category, long minAmount, long maxAmount,

@@ -1,8 +1,11 @@
 package kr.fintarget.mockbank.transaction.controller;
 
 import kr.fintarget.mockbank.config.SecurityConfig;
+import kr.fintarget.mockbank.transaction.entity.Transaction;
 import kr.fintarget.mockbank.transaction.service.DemoDataService;
 import kr.fintarget.mockbank.transaction.service.TransactionService;
+import kr.fintarget.mockbank.webhook.DeliveryResult;
+import kr.fintarget.mockbank.webhook.WebhookDeliveryService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -16,6 +19,7 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 
@@ -26,6 +30,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
@@ -61,6 +66,9 @@ class TransactionPageControllerTest {
 
     @MockitoBean
     private DemoDataService demoDataService;
+
+    @MockitoBean
+    private WebhookDeliveryService webhookDeliveryService;
 
     private MockHttpServletRequestBuilder payment(String userId, String amount, String category, String spentAt) {
         return post("/transactions")
@@ -101,13 +109,33 @@ class TransactionPageControllerTest {
     }
 
     @Test
-    void 정상_입력이면_저장하고_입력한_사용자로_화면에_돌아간다() throws Exception {
+    void 정상_입력이면_저장하고_핀타겟으로_보낸_뒤_입력한_사용자로_화면에_돌아간다() throws Exception {
+        Transaction saved = mock(Transaction.class);
+        given(transactionService.create(UUID.fromString(USER_ID), 12_000L, "식비", "김밥천국", TODAY)).willReturn(saved);
+        given(webhookDeliveryService.deliver(List.of(saved))).willReturn(new DeliveryResult(1, 0, 0, null));
+
         mockMvc.perform(validPayment())
                 .andExpect(status().is3xxRedirection())
                 .andExpect(redirectedUrl("/?userId=" + USER_ID))
-                .andExpect(flash().attribute("message", containsString("결제가 발생했습니다")));
+                .andExpect(flash().attribute("message", containsString("결제가 발생했습니다")))
+                .andExpect(flash().attribute("message", containsString("저장 1건")))
+                .andExpect(flash().attributeCount(1));
 
-        verify(transactionService).create(UUID.fromString(USER_ID), 12_000L, "식비", "김밥천국", TODAY);
+        verify(webhookDeliveryService).deliver(List.of(saved));
+    }
+
+    @Test
+    void 핀타겟_전송에_실패하면_실패_사유와_재전송_안내를_보여준다() throws Exception {
+        Transaction saved = mock(Transaction.class);
+        given(transactionService.create(any(), anyLong(), anyString(), any(), any())).willReturn(saved);
+        given(webhookDeliveryService.deliver(List.of(saved)))
+                .willReturn(new DeliveryResult(0, 0, 1, "핀타겟 서버에 연결하지 못했습니다. 서버 주소와 실행 여부를 확인해 주세요."));
+
+        mockMvc.perform(validPayment())
+                .andExpect(redirectedUrl("/?userId=" + USER_ID))
+                .andExpect(flash().attribute("message", containsString("실패 1건")))
+                .andExpect(flash().attribute("error", containsString("핀타겟 서버에 연결하지 못했습니다")))
+                .andExpect(flash().attribute("error", containsString("재전송")));
     }
 
     @Test
@@ -176,12 +204,15 @@ class TransactionPageControllerTest {
 
     @Test
     void 기준선_버튼은_생성_건수를_알려준다() throws Exception {
-        given(demoDataService.generateBaseline(UUID.fromString(USER_ID))).willReturn(60);
+        List<Transaction> created = Collections.nCopies(60, mock(Transaction.class));
+        given(demoDataService.generateBaseline(UUID.fromString(USER_ID))).willReturn(created);
+        given(webhookDeliveryService.deliver(created)).willReturn(new DeliveryResult(58, 2, 0, null));
 
         mockMvc.perform(post("/demo/baseline").with(httpBasic("test-operator", "test-password")).with(csrf())
                         .param("userId", USER_ID))
                 .andExpect(redirectedUrl("/?userId=" + USER_ID))
-                .andExpect(flash().attribute("message", containsString("60건")));
+                .andExpect(flash().attribute("message", containsString("기준선 거래 60건")))
+                .andExpect(flash().attribute("message", containsString("핀타겟 전송 60건 중 저장 58건, 중복 2건")));
     }
 
     @Test
@@ -193,5 +224,47 @@ class TransactionPageControllerTest {
                         .param("userId", USER_ID))
                 .andExpect(redirectedUrl("/?userId=" + USER_ID))
                 .andExpect(flash().attribute("error", containsString("기준선을 먼저 생성해 주세요")));
+    }
+
+    @Test
+    void 식비_급증이_이미_충족돼_만든_거래가_없으면_전송하지_않는다() throws Exception {
+        given(demoDataService.generateFoodSurge(UUID.fromString(USER_ID)))
+                .willReturn(new DemoDataService.SurgeResult(List.of(), 30_900, 76_100));
+
+        mockMvc.perform(post("/demo/food-surge").with(httpBasic("test-operator", "test-password")).with(csrf())
+                        .param("userId", USER_ID))
+                .andExpect(flash().attribute("message", containsString("새로 생성하지 않았습니다")));
+
+        verify(webhookDeliveryService, never()).deliver(any());
+    }
+
+    @Test
+    void 재전송_버튼은_미전송_실패_거래를_다시_보낸다() throws Exception {
+        given(webhookDeliveryService.resendUnsent()).willReturn(new DeliveryResult(3, 1, 0, null));
+
+        mockMvc.perform(post("/webhooks/resend").with(httpBasic("test-operator", "test-password")).with(csrf())
+                        .param("userId", USER_ID))
+                .andExpect(redirectedUrl("/?userId=" + USER_ID))
+                .andExpect(flash().attribute("message", containsString("다시 보냈습니다")))
+                .andExpect(flash().attribute("message", containsString("저장 3건, 중복 1건")));
+    }
+
+    @Test
+    void 재전송할_거래가_없으면_안내만_보여준다() throws Exception {
+        given(webhookDeliveryService.resendUnsent()).willReturn(DeliveryResult.EMPTY);
+
+        mockMvc.perform(post("/webhooks/resend").with(httpBasic("test-operator", "test-password")).with(csrf()))
+                .andExpect(redirectedUrl("/"))
+                .andExpect(flash().attribute("message", "다시 보낼 미전송·실패 거래가 없습니다."));
+    }
+
+    @Test
+    void 화면에_재전송_버튼과_미전송_건수가_보인다() throws Exception {
+        given(transactionService.getRecentTransactions()).willReturn(List.of());
+        given(transactionService.countUnsentTransactions()).willReturn(4L);
+
+        mockMvc.perform(get("/").with(httpBasic("test-operator", "test-password")))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("미전송·실패 거래 재전송 (4건)")));
     }
 }

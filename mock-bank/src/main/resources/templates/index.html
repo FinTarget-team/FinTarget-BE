@@ -40,7 +40,7 @@
 <body>
 <main>
     <h1>Mock Bank</h1>
-    <p class="sub">핀타겟 시연용 가상 금융 서버 · 거래를 발생시켜 핀타겟으로 전달합니다 (웹훅 전송은 다음 단계)</p>
+    <p class="sub">핀타겟 시연용 가상 금융 서버 · 거래를 발생시켜 핀타겟으로 전달합니다</p>
 
     <div class="flash ok" th:if="${message}" th:text="${message}"></div>
     <div class="flash err" th:if="${error}" th:text="${error}"></div>
@@ -90,9 +90,16 @@
                 <button type="submit" th:formaction="@{/demo/food-surge}" formnovalidate>③ 식비 급증</button>
             </div>
             <p class="demo-note">
-                위에 입력한 사용자 UUID로 생성합니다.
+                위에 입력한 사용자 UUID로 생성하고, 만든 거래는 바로 핀타겟으로 보냅니다.
                 ① 지난 3개월 매달 모든 카테고리 · ② 이번 달 1일~오늘 · ③ 이번 달 식비를 이전 월평균의 2배 이상으로
             </p>
+
+            <h2 style="margin-top: 20px;">핀타겟 전송</h2>
+            <div class="actions">
+                <button type="submit" th:formaction="@{/webhooks/resend}" formnovalidate
+                        th:text="|미전송·실패 거래 재전송 (${unsentCount}건)|">미전송·실패 거래 재전송</button>
+            </div>
+            <p class="demo-note">PENDING·FAILED 거래를 다시 보냅니다. 핀타겟이 중복을 판정하므로 여러 번 눌러도 지출이 중복 저장되지 않습니다.</p>
         </form>
     </section>
 
