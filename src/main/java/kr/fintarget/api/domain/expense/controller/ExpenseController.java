@@ -122,8 +122,7 @@ public class ExpenseController {
     @Operation(
             summary = "기간별 지출 내역 조회",
             description = "start~end 기간에 해당하는 지출 내역을 조회합니다. "
-                    + "start가 end보다 늦은 값이 들어와도 별도 검증 없이 빈 배열이 반환됩니다 "
-                    + "(같은 파라미터를 쓰는 카테고리별 통계 조회(/stats)와 달리 400으로 거부하지 않습니다)."
+                    + "start가 end보다 늦으면 400으로 거부됩니다 (카테고리별 통계 조회(/stats)와 동일)."
     )
     @io.swagger.v3.oas.annotations.responses.ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(
