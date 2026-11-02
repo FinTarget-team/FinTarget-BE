@@ -6,6 +6,7 @@ import kr.fintarget.mockbank.transaction.ExpenseCategory;
 import kr.fintarget.mockbank.transaction.dto.TransactionForm;
 import kr.fintarget.mockbank.transaction.entity.Transaction;
 import kr.fintarget.mockbank.transaction.service.DemoDataService;
+import kr.fintarget.mockbank.transaction.service.NudgeForecastService;
 import kr.fintarget.mockbank.transaction.service.TransactionService;
 import kr.fintarget.mockbank.webhook.DeliveryResult;
 import kr.fintarget.mockbank.webhook.WebhookDeliveryService;
@@ -37,6 +38,7 @@ public class TransactionPageController {
     private final TransactionService transactionService;
     private final DemoDataService demoDataService;
     private final WebhookDeliveryService webhookDeliveryService;
+    private final NudgeForecastService nudgeForecastService;
     private final Clock clock;
 
     @GetMapping("/")
@@ -48,7 +50,7 @@ public class TransactionPageController {
             form.setSpentAt(LocalDate.now(clock));
             model.addAttribute("form", form);
         }
-        return renderIndex(model);
+        return renderIndex(model, userId);
     }
 
     @PostMapping("/transactions")
@@ -63,7 +65,7 @@ public class TransactionPageController {
         }
         if (bindingResult.hasErrors()) {
             response.setStatus(HttpStatus.BAD_REQUEST.value());
-            return renderIndex(model);
+            return renderIndex(model, form.getUserId());
         }
 
         UUID userId = UUID.fromString(form.getUserId().trim());
@@ -162,7 +164,12 @@ public class TransactionPageController {
         return "redirect:/";
     }
 
-    private String renderIndex(Model model) {
+    private String renderIndex(Model model, String rawUserId) {
+        // 입력한 사용자 기준으로 메인 서버가 만들 이상 지출 넛지를 미리 보여준다 (#168)
+        parseUserId(rawUserId).ifPresent(userId -> {
+            model.addAttribute("forecastUserId", userId);
+            model.addAttribute("nudgeForecast", nudgeForecastService.forecast(userId));
+        });
         model.addAttribute("categories", ExpenseCategory.labels());
         model.addAttribute("transactions", transactionService.getRecentTransactions());
         model.addAttribute("unsentCount", transactionService.countUnsentTransactions());

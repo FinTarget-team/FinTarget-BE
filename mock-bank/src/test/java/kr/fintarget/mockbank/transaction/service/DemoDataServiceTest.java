@@ -35,9 +35,13 @@ class DemoDataServiceTest {
 
     private final UUID userId = UUID.randomUUID();
 
+    private NudgeForecastService forecastAt(LocalDate today) {
+        return new NudgeForecastService(transactionRepository, Clock.fixed(today.atStartOfDay(SEOUL).plusHours(12).toInstant(), SEOUL));
+    }
+
     private DemoDataService serviceAt(LocalDate today, long seed) {
         Clock clock = Clock.fixed(today.atStartOfDay(SEOUL).plusHours(12).toInstant(), SEOUL);
-        return new DemoDataService(transactionRepository, clock, new Random(seed));
+        return new DemoDataService(transactionRepository, new NudgeForecastService(transactionRepository, clock), clock, new Random(seed));
     }
 
     @Test
@@ -160,5 +164,69 @@ class DemoDataServiceTest {
 
         assertThatThrownBy(() -> service.generateFoodSurge(userId))
                 .isInstanceOf(IllegalStateException.class);
+    }
+
+    // ===== 랜덤 거래가 식비 외 넛지를 만들지 않음 (#168) =====
+
+    @Test
+    void 기준선_후_랜덤을_여러_번_눌러도_식비_외_카테고리는_이전_월평균의_1_2배_이하다() {
+        for (long seed = 100; seed < 130; seed++) {
+            transactionRepository.deleteAll();
+            DemoDataService service = serviceAt(TODAY, seed);
+            service.generateBaseline(userId);
+            for (int i = 0; i < 3; i++) {
+                service.generateRandom(userId);
+            }
+
+            long finalSeed = seed;
+            assertThat(forecastAt(TODAY).forecast(userId))
+                    .filteredOn(f -> !f.category().equals(FOOD) && f.ratio() != null)
+                    .allSatisfy(f -> assertThat(f.ratio())
+                            .as("seed %d, %s", finalSeed, f.category())
+                            .isLessThanOrEqualTo(DemoDataService.RANDOM_CATEGORY_CAP_RATIO));
+        }
+    }
+
+    @Test
+    void 이번_달_1일에도_식비_외_카테고리는_1_2배를_넘지_않는다() {
+        LocalDate firstDay = LocalDate.of(2026, 11, 1);
+        for (long seed = 200; seed < 220; seed++) {
+            transactionRepository.deleteAll();
+            DemoDataService service = serviceAt(firstDay, seed);
+            service.generateBaseline(userId);
+            service.generateRandom(userId);
+
+            assertThat(transactionRepository.findAll())
+                    .filteredOn(t -> YearMonth.from(t.getSpentAt()).equals(YearMonth.of(2026, 11)))
+                    .hasSize(DemoDataService.RANDOM_COUNT)
+                    .allSatisfy(t -> assertThat(t.getSpentAt()).isEqualTo(firstDay));
+            assertThat(forecastAt(firstDay).forecast(userId))
+                    .filteredOn(f -> !f.category().equals(FOOD) && f.ratio() != null)
+                    .allSatisfy(f -> assertThat(f.ratio()).isLessThanOrEqualTo(DemoDataService.RANDOM_CATEGORY_CAP_RATIO));
+        }
+    }
+
+    @Test
+    void 시연_순서대로_누르면_넛지_대상은_식비_하나뿐이다() {
+        for (long seed = 300; seed < 330; seed++) {
+            transactionRepository.deleteAll();
+            DemoDataService service = serviceAt(TODAY, seed);
+            service.generateBaseline(userId);
+            service.generateRandom(userId);
+            service.generateFoodSurge(userId);
+
+            assertThat(forecastAt(TODAY).forecast(userId))
+                    .filteredOn(NudgeForecastService.CategoryForecast::nudge)
+                    .extracting(NudgeForecastService.CategoryForecast::category)
+                    .as("seed %d", seed)
+                    .containsExactly(FOOD);
+        }
+    }
+
+    @Test
+    void 기준선이_없으면_랜덤은_제한_없이_10건을_만든다() {
+        List<Transaction> created = serviceAt(TODAY, 9).generateRandom(userId);
+
+        assertThat(created).hasSize(DemoDataService.RANDOM_COUNT);
     }
 }

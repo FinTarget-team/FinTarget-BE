@@ -13,6 +13,8 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID> 
 
     List<Transaction> findTop20ByOrderByCreatedAtDesc();
 
+    List<Transaction> findByFinTargetUserId(UUID finTargetUserId);
+
     List<Transaction> findByFinTargetUserIdAndSpentAtBetween(UUID finTargetUserId, LocalDate start, LocalDate end);
 
     List<Transaction> findByFinTargetUserIdAndCategoryAndSpentAtBefore(UUID finTargetUserId, String category, LocalDate before);

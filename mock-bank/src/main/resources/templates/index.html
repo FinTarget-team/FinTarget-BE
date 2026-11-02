@@ -35,6 +35,7 @@
         .badge.DUPLICATE { background: #ddf4ff; color: var(--accent); }
         .badge.FAILED { background: #ffebe9; color: var(--danger); }
         .empty { color: var(--muted); text-align: center; padding: 16px; }
+        tr.nudge td { background: #fff8c5; font-weight: 600; }
     </style>
 </head>
 <body>
@@ -101,6 +102,40 @@
             </div>
             <p class="demo-note">PENDING·FAILED 거래를 다시 보냅니다. 핀타겟이 중복을 판정하므로 여러 번 눌러도 지출이 중복 저장되지 않습니다.</p>
         </form>
+    </section>
+
+    <section th:if="${forecastUserId != null}">
+        <h2>이번 달 넛지 예상</h2>
+        <p class="demo-note" style="margin: 0 0 8px;">
+            <span th:text="|${#strings.substring(forecastUserId.toString(), 0, 8)}… 사용자의 mock-bank 거래 기준|"></span>.
+            이번 달 합계가 이전 월평균(이전 달 합계 ÷ 지출이 있었던 달 수)의 1.5배 이상이면 핀타겟이 이상 지출 넛지를 만듭니다.
+            핀타겟에 이 사용자의 다른 지출이 있으면 결과가 다를 수 있습니다.
+        </p>
+        <div class="table-wrap">
+            <table>
+                <thead>
+                <tr>
+                    <th>카테고리</th>
+                    <th>이번 달</th>
+                    <th>이전 월평균</th>
+                    <th>배율</th>
+                    <th>넛지</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr th:each="f : ${nudgeForecast}" th:classappend="${f.nudge()} ? 'nudge'">
+                    <td th:text="${f.category()}"></td>
+                    <td class="num" th:text="${#numbers.formatInteger(f.currentTotal(), 1, 'COMMA')} + '원'"></td>
+                    <td class="num" th:text="${f.pastAverage() != null} ? ${#numbers.formatInteger(f.pastAverage(), 1, 'COMMA')} + '원' : '이전 기록 없음'"></td>
+                    <td class="num" th:text="${f.ratio() != null} ? ${#numbers.formatDecimal(f.ratio(), 1, 2)} + '배' : '-'"></td>
+                    <td th:text="${f.nudge()} ? '넛지 대상' : '-'"></td>
+                </tr>
+                <tr th:if="${#lists.isEmpty(nudgeForecast)}">
+                    <td colspan="5" class="empty">이번 달 거래가 없습니다.</td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
     </section>
 
     <section>

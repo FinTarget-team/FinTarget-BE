@@ -3,6 +3,7 @@ package kr.fintarget.mockbank.transaction.controller;
 import kr.fintarget.mockbank.config.SecurityConfig;
 import kr.fintarget.mockbank.transaction.entity.Transaction;
 import kr.fintarget.mockbank.transaction.service.DemoDataService;
+import kr.fintarget.mockbank.transaction.service.NudgeForecastService;
 import kr.fintarget.mockbank.transaction.service.TransactionService;
 import kr.fintarget.mockbank.webhook.DeliveryResult;
 import kr.fintarget.mockbank.webhook.WebhookDeliveryService;
@@ -69,6 +70,9 @@ class TransactionPageControllerTest {
 
     @MockitoBean
     private WebhookDeliveryService webhookDeliveryService;
+
+    @MockitoBean
+    private NudgeForecastService nudgeForecastService;
 
     private MockHttpServletRequestBuilder payment(String userId, String amount, String category, String spentAt) {
         return post("/transactions")
@@ -266,5 +270,32 @@ class TransactionPageControllerTest {
         mockMvc.perform(get("/").with(httpBasic("test-operator", "test-password")))
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString("미전송·실패 거래 재전송 (4건)")));
+    }
+
+    @Test
+    void 사용자를_입력하면_이번_달_넛지_예상_표를_보여준다() throws Exception {
+        given(transactionService.getRecentTransactions()).willReturn(List.of());
+        given(nudgeForecastService.forecast(UUID.fromString(USER_ID))).willReturn(List.of(
+                new NudgeForecastService.CategoryForecast("식비", 109_700, 49_767L, 2.2042, true),
+                new NudgeForecastService.CategoryForecast("교통", 4_300, 4_300L, 1.0, false),
+                new NudgeForecastService.CategoryForecast("쇼핑", 87_000, null, null, false)));
+
+        mockMvc.perform(get("/").param("userId", USER_ID).with(httpBasic("test-operator", "test-password")))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("이번 달 넛지 예상")))
+                .andExpect(content().string(containsString("109,700원")))
+                .andExpect(content().string(containsString("2.20배")))
+                .andExpect(content().string(containsString("넛지 대상")))
+                .andExpect(content().string(containsString("이전 기록 없음")));
+    }
+
+    @Test
+    void 사용자를_입력하지_않으면_넛지_예상_표를_보여주지_않는다() throws Exception {
+        given(transactionService.getRecentTransactions()).willReturn(List.of());
+
+        mockMvc.perform(get("/").with(httpBasic("test-operator", "test-password")))
+                .andExpect(status().isOk())
+                .andExpect(content().string(not(containsString("이번 달 넛지 예상"))));
+        verify(nudgeForecastService, never()).forecast(any());
     }
 }
