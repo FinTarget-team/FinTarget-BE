@@ -22,8 +22,60 @@ class PolicyTextMappingTest {
         return new YouthCenterPolicyItem(
                 "YC-1", "정책명", null, explnCn, "주거", null, sprtCn, null, null,
                 "19", "39", "N", aplyYmd, refUrl, aplyUrl, null, null, null, null,
-                addQlfc, ptcpPrp, aplyMthd, srngMthd, sbmsnDcmnt, etcMttr, bizBgng, bizEnd, bizEtc, earnEtc
+                addQlfc, ptcpPrp, aplyMthd, srngMthd, sbmsnDcmnt, etcMttr, bizBgng, bizEnd, bizEtc, earnEtc,
+                null, null, null
         );
+    }
+
+    private YouthCenterPolicyItem youthCenterIncomeItem(String earnCndSeCd, String earnMinAmt, String earnMaxAmt,
+                                                        String earnEtc) {
+        return new YouthCenterPolicyItem(
+                "YC-1", "정책명", null, null, "주거", null, null, null, null,
+                "19", "39", "N", null, null, null, null, null, null, null,
+                null, null, null, null, null, null, null, null, null, earnEtc,
+                earnCndSeCd, earnMinAmt, earnMaxAmt
+        );
+    }
+
+    private String youthCenterIncome(String earnCndSeCd, String earnMinAmt, String earnMaxAmt, String earnEtc) {
+        return YouthCenterPolicyMapper.toPolicy(youthCenterIncomeItem(earnCndSeCd, earnMinAmt, earnMaxAmt, earnEtc))
+                .getText().getIncomeCondition();
+    }
+
+    @Test
+    void 온통청년_소득_무관_코드는_소득_무관으로_저장한다() {
+        assertThat(youthCenterIncome("0043001", "0", "0", "")).isEqualTo("소득 무관");
+    }
+
+    @Test
+    void 온통청년_연소득_코드는_금액_문구로_저장한다() {
+        assertThat(youthCenterIncome("0043002", "0", "7000", "")).isEqualTo("연소득 7,000만원 이하");
+        assertThat(youthCenterIncome("0043002", "2000", "5000", null)).isEqualTo("연소득 2,000만원 이상 5,000만원 이하");
+        assertThat(youthCenterIncome("0043002", "1200", "0", null)).isEqualTo("연소득 1,200만원 이상");
+    }
+
+    @Test
+    void 온통청년_연소득_코드에_기타_문구가_있으면_다음_줄에_붙인다() {
+        assertThat(youthCenterIncome("0043002", "0", "5000", "신혼부부는 7,500만원 이하"))
+                .isEqualTo("연소득 5,000만원 이하\n신혼부부는 7,500만원 이하");
+    }
+
+    @Test
+    void 온통청년_연소득_코드인데_금액이_없으면_기타_문구로_대체하고_없으면_null이다() {
+        assertThat(youthCenterIncome("0043002", "0", "0", "중위소득 100% 이하")).isEqualTo("중위소득 100% 이하");
+        assertThat(youthCenterIncome("0043002", "", "abc", null)).isNull();
+    }
+
+    @Test
+    void 온통청년_기타_코드는_기타_문구_원문을_저장한다() {
+        assertThat(youthCenterIncome("0043003", "0", "0", "기준 중위소득 150% 이하")).isEqualTo("기준 중위소득 150% 이하");
+    }
+
+    @Test
+    void 온통청년_소득_구분_코드가_없거나_알_수_없으면_기타_문구를_저장하고_없으면_null이다() {
+        assertThat(youthCenterIncome(null, null, null, "중위소득 150% 이하")).isEqualTo("중위소득 150% 이하");
+        assertThat(youthCenterIncome("0043999", "0", "0", "확인 필요")).isEqualTo("확인 필요");
+        assertThat(youthCenterIncome(null, null, null, null)).isNull();
     }
 
     @Test
@@ -151,9 +203,29 @@ class PolicyTextMappingTest {
         assertThat(text.getSupportContent()).isEqualTo("대출 한도: 3500만원\n상환 방법: 원(리)금균등분할상환");
         assertThat(text.getEligibilityDetail()).isNull();
         assertThat(text.getContactInfo()).isNull();
-        assertThat(text.getIncomeCondition()).isEqualTo("없음");
-        assertThat(text.getAgeCondition()).isEqualTo("없음");
+        // 소득·나이 조건의 "없음"은 표시 문구로 통일한다 (#150)
+        assertThat(text.getIncomeCondition()).isEqualTo("소득 무관");
+        assertThat(text.getAgeCondition()).isEqualTo("연령 무관");
         assertThat(text.getEtcNote()).isNull();
+    }
+
+    @Test
+    void KINFA_소득_조건은_없음만_소득_무관으로_바꾸고_문장은_원문_빈_값은_null이다() {
+        assertThat(KinfaPolicyMapper.incomeCondition(" 없음 ")).isEqualTo("소득 무관");
+        assertThat(KinfaPolicyMapper.incomeCondition("3인가구 기준 중위소득 이하")).isEqualTo("3인가구 기준 중위소득 이하");
+        assertThat(KinfaPolicyMapper.incomeCondition("소득 없음 증빙 필요")).isEqualTo("소득 없음 증빙 필요");
+        assertThat(KinfaPolicyMapper.incomeCondition("")).isNull();
+        assertThat(KinfaPolicyMapper.incomeCondition("-")).isNull();
+        assertThat(KinfaPolicyMapper.incomeCondition(null)).isNull();
+    }
+
+    @Test
+    void KINFA_나이_조건은_없음만_연령_무관으로_바꾸고_문장은_원문_빈_값은_null이다() {
+        assertThat(KinfaPolicyMapper.ageCondition("없음")).isEqualTo("연령 무관");
+        assertThat(KinfaPolicyMapper.ageCondition("19세 이상 34세 이하")).isEqualTo("19세 이상 34세 이하");
+        assertThat(KinfaPolicyMapper.ageCondition("미성년자 제외")).isEqualTo("미성년자 제외");
+        assertThat(KinfaPolicyMapper.ageCondition("-")).isNull();
+        assertThat(KinfaPolicyMapper.ageCondition(null)).isNull();
     }
 
     @Test

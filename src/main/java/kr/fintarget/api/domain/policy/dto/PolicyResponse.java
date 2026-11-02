@@ -22,6 +22,8 @@ public record PolicyResponse(
     Long incomeLimit,
     @Schema(description = "지급 혜택 금액(원). 금액으로 환산되지 않는 혜택(현물/서비스 등)이거나 원문에서 금액을 읽지 못하면 null입니다. 지원 내용은 supportContent를 참고하세요.", example = "2400000", types = {"integer", "null"})
     Long benefitAmount,
+    @Schema(description = "나이 조건 원문 (현재 KINFA 정책만 값이 있음). 원문이 없으면 null입니다. minAge·maxAge가 null일 때 표시용입니다.", example = "19세 이상 34세 이하", types = {"string", "null"})
+    String ageCondition,
     @Schema(description = "소득 조건 원문. 원문이 없으면 null입니다.", example = "중위소득 150% 이하", types = {"string", "null"})
     String incomeCondition,
     @Schema(description = "지원 내용 원문 (KINFA는 대출 한도·금리 등을 \"라벨: 값\" 줄로 묶은 값). 원문이 없으면 null입니다.", example = "월 최대 20만원, 최장 12개월 지원", types = {"string", "null"})
@@ -47,6 +49,7 @@ public record PolicyResponse(
             policy.getMaxAge(),
             policy.getIncomeLimit(),
             policy.getBenefitAmount(),
+            text == null ? null : text.getAgeCondition(),
             text == null ? null : text.getIncomeCondition(),
             text == null ? null : text.getSupportContent(),
             policy.getPolicyType().name(),

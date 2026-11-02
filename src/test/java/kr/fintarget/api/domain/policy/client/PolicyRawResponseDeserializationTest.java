@@ -101,6 +101,9 @@ class PolicyRawResponseDeserializationTest {
         assertThat(item.bizPrdEndYmd()).isEqualTo("20261120");
         assertThat(item.bizPrdEtcCn()).isNotNull();
         assertThat(item.earnEtcCn()).isEqualTo("신청인 본인 연소득 4천만원 이하, 부부일 경우 8천만원 이하");
+        assertThat(item.earnCndSeCd()).isEqualTo("0043003");
+        assertThat(item.earnMinAmt()).isEqualTo("0");
+        assertThat(item.earnMaxAmt()).isEqualTo("0");
     }
 
     @Test

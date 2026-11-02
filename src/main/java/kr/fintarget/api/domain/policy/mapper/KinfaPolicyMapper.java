@@ -91,8 +91,8 @@ public class KinfaPolicyMapper {
                 .eligibilityDetail(PolicyTextCleaner.labeledLines(
                         "대상", item.trgt(),
                         "신용 조건", item.crdtSc()))
-                .incomeCondition(PolicyTextCleaner.clean(item.incm()))
-                .ageCondition(PolicyTextCleaner.clean(item.age()))
+                .incomeCondition(incomeCondition(item.incm()))
+                .ageCondition(ageCondition(item.age()))
                 .applyMethod(PolicyTextCleaner.clean(item.jnMthd()))
                 .applyPeriod(PolicyTextCleaner.clean(item.mgmDln()))
                 .contactInfo(PolicyTextCleaner.labeledLines(
@@ -100,6 +100,18 @@ public class KinfaPolicyMapper {
                         "관련 사이트", item.rltSite()))
                 .etcNote(PolicyTextCleaner.clean(item.etcRefSbjc()))
                 .build();
+    }
+
+    // 소득 조건: "없음"(2026-10 기준 329건 중 228건)은 온통청년 무관과 같은 문구로 통일한다 (#150). 그 외 문장은 원문, 빈 값은 null
+    static String incomeCondition(String incm) {
+        String cleaned = PolicyTextCleaner.clean(incm);
+        return "없음".equals(cleaned) ? PolicyTextCleaner.INCOME_NO_LIMIT : cleaned;
+    }
+
+    // 나이 조건: "없음"(2026-10 기준 329건 중 265건)은 소득 조건과 같은 방식으로 표시 문구를 통일한다 (#150)
+    static String ageCondition(String age) {
+        String cleaned = PolicyTextCleaner.clean(age);
+        return "없음".equals(cleaned) ? PolicyTextCleaner.AGE_NO_LIMIT : cleaned;
     }
 
     public static String toExternalId(KinfaItem item) {

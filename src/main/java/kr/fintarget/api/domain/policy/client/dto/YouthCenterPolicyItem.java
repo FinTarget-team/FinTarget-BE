@@ -36,6 +36,11 @@ public record YouthCenterPolicyItem(
         String bizPrdBgngYmd,
         String bizPrdEndYmd,
         String bizPrdEtcCn,
-        String earnEtcCn
+        String earnEtcCn,
+        // 이하 소득 조건 필드 (#150, 2026-11-02 실응답과 API 코드정의서로 확인). 기존 생성자 호출 순서를 유지하려고 끝에 추가
+        // earnCndSeCd: 0043001 무관, 0043002 연소득, 0043003 기타. 금액 단위는 코드정의서에 없어 실데이터로 만원 단위로 판단
+        String earnCndSeCd,
+        String earnMinAmt,
+        String earnMaxAmt
 ) {
 }
