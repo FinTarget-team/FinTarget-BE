@@ -265,7 +265,7 @@ Authorization: Bearer {accessToken}
     - `policyType` (optional): 정책 유형 (`HOUSING` | `FINANCE_WELFARE` | `STARTUP` | `ETC`, 대소문자 구분 없음). 그 외 값은 400
 - 매칭 조건
     - 나이: 출생연도가 있으면 만 나이 후보 [올해-출생연도-1, 올해-출생연도] 중 하나라도 정책 `minAge`~`maxAge`에 들면 포함 (null은 제한 없음). 출생연도 입력 전 사용자는 기존 연령대 값으로 비교
-    - 소득: 사용자 소득 구간의 대표값이 정책 `incomeLimit` 이하이면 포함 (null은 제한 없음)
+    - 소득: 사용자 소득 구간의 대표값이 정책 `incomeLimit` 이하이면 포함. `incomeLimit`이 null(정형화된 소득 상한 없음)이면 소득 조건으로 제외하지 않음
     - 지역: `regions`가 빈 배열(전국)이거나 사용자 거주 지역 코드가 `regions`에 포함되면 포함. 거주 지역 미입력 사용자는 전국 정책만
     - 나이 또는 소득을 입력하지 않은 사용자는 빈 배열 (에러 아님)
 - Response (200):
@@ -282,6 +282,8 @@ Authorization: Bearer {accessToken}
       "maxAge": 34,
       "incomeLimit": null,
       "benefitAmount": null,
+      "incomeCondition": "중위소득 150% 이하",
+      "supportContent": "월 최대 20만원, 최장 12개월 지원",
       "policyType": "HOUSING",
       "regions": ["GYEONGNAM", "ULSAN"]
     }
@@ -292,8 +294,10 @@ Authorization: Bearer {accessToken}
 | 필드 | 설명 |
 |---|---|
 | `minAge`, `maxAge` | 지원 대상 나이. `null`이면 해당 방향 제한 없음 |
-| `incomeLimit` | 소득 상한(원). `null`이면 소득 제한 없음 |
-| `benefitAmount` | 지원 금액(원). 현물·서비스처럼 금액으로 환산되지 않는 혜택이면 `null` |
+| `incomeLimit` | 소득 상한(원). `null`이면 정형화된 소득 상한이 없다는 뜻이며, 소득 제한이 없다는 뜻은 아님 (현재 모든 정책이 `null`). 소득 조건은 `incomeCondition` 참고 |
+| `benefitAmount` | 지원 금액(원). 현물·서비스처럼 금액으로 환산되지 않는 혜택이거나 원문에서 금액을 읽지 못하면 `null` (온통청년 정책은 항상 `null`). 지원 내용은 `supportContent` 참고 |
+| `incomeCondition` | 소득 조건 원문. 원문이 없으면 `null`. 숫자 값(`incomeLimit`)이 없을 때 표시용 |
+| `supportContent` | 지원 내용 원문. KINFA 정책은 `대출 한도: ...`, `금리: ...`처럼 "라벨: 값" 줄을 줄바꿈(`\n`)으로 묶은 값. 원문이 없으면 `null`. 숫자 값(`benefitAmount`)이 없을 때 표시용 |
 | `policyType` | `HOUSING`(주거) \| `FINANCE_WELFARE`(금융·복지) \| `STARTUP`(창업) \| `ETC`(기타) |
 | `regions` | 신청 가능 지역 코드 목록 (사용자 `region`과 같은 17개 시/도 코드). 빈 배열이면 전국 정책 |
 
@@ -318,6 +322,8 @@ Authorization: Bearer {accessToken}
         "maxAge": 34,
         "incomeLimit": null,
         "benefitAmount": null,
+        "incomeCondition": "중위소득 150% 이하",
+        "supportContent": "월 최대 20만원, 최장 12개월 지원",
         "policyType": "HOUSING",
         "regions": []
       },
