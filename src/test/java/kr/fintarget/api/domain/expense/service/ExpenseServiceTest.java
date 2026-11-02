@@ -1,10 +1,14 @@
 package kr.fintarget.api.domain.expense.service;
 
+import kr.fintarget.api.domain.expense.dto.BankTransactionRequest;
+import kr.fintarget.api.domain.expense.dto.BankTransactionResult;
 import kr.fintarget.api.domain.expense.dto.ExpenseCategoryStat;
 import kr.fintarget.api.domain.expense.dto.ExpenseStatsResponse;
 import kr.fintarget.api.domain.expense.dto.ExpenseSyncRequest;
 import kr.fintarget.api.domain.expense.entity.Expense;
 import kr.fintarget.api.domain.expense.repository.ExpenseRepository;
+import kr.fintarget.api.domain.user.entity.User;
+import kr.fintarget.api.domain.user.repository.UserRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -13,12 +17,15 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Arrays;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyIterable;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -31,6 +38,9 @@ class ExpenseServiceTest {
 
     @Mock
     private ExpenseRepository expenseRepository;
+
+    @Mock
+    private UserRepository userRepository;
 
     @InjectMocks
     private ExpenseService expenseService;
@@ -159,5 +169,136 @@ class ExpenseServiceTest {
                 .hasMessage("시작일이 종료일보다 늦을 수 없습니다.");
 
         verifyNoInteractions(expenseRepository);
+    }
+
+    // ===== 은행 거래 웹훅 수신 (#158) =====
+
+    private static BankTransactionRequest bankTransaction(UUID userId, long amount, String category, String description, LocalDate spentAt) {
+        return new BankTransactionRequest(UUID.randomUUID(), userId, amount, category, description, spentAt);
+    }
+
+    private void givenUsersExist(UUID... userIds) {
+        when(userRepository.findAllById(anyIterable())).thenReturn(
+                Arrays.stream(userIds).map(id -> User.builder().id(id.toString()).build()).toList());
+    }
+
+    private void givenInsertSucceeds() {
+        when(expenseRepository.insertIfNotExists(any(), any(), any(), any(), any(), any(), any())).thenReturn(1);
+    }
+
+    @Test
+    void 은행_거래_새_지출은_CREATED로_저장된다() {
+        givenUsersExist(USER_ID);
+        givenInsertSucceeds();
+        BankTransactionRequest request = bankTransaction(USER_ID, 12000L, "식비", "김밥천국", SPENT_AT);
+
+        List<BankTransactionResult> results = expenseService.receiveBankTransactions(List.of(request));
+
+        assertThat(results).containsExactly(new BankTransactionResult(request.transactionId(), BankTransactionResult.Result.CREATED));
+        verify(expenseRepository).insertIfNotExists(
+                any(), eq(USER_ID), eq("식비"), eq(12000L), eq("김밥천국"), eq(SPENT_AT), any(LocalDateTime.class));
+    }
+
+    @Test
+    void 은행_거래가_이미_저장된_지출과_같으면_DUPLICATE이고_저장하지_않는다() {
+        givenUsersExist(USER_ID);
+        when(expenseRepository.findByUserIdAndSpentAtBetween(USER_ID, SPENT_AT, SPENT_AT))
+                .thenReturn(List.of(new Expense(USER_ID, 12000L, "식비", "김밥천국", SPENT_AT)));
+        BankTransactionRequest request = bankTransaction(USER_ID, 12000L, "식비", "김밥천국", SPENT_AT);
+
+        List<BankTransactionResult> results = expenseService.receiveBankTransactions(List.of(request));
+
+        assertThat(results).extracting(BankTransactionResult::result).containsExactly(BankTransactionResult.Result.DUPLICATE);
+        verify(expenseRepository, never()).insertIfNotExists(any(), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void 같은_요청_안에_같은_조합이_두_번_있으면_첫_번째만_CREATED이고_결과는_요청_순서를_따른다() {
+        givenUsersExist(USER_ID);
+        givenInsertSucceeds();
+        BankTransactionRequest first = bankTransaction(USER_ID, 4500L, "카페", "스타벅스", SPENT_AT);
+        BankTransactionRequest second = bankTransaction(USER_ID, 4500L, "카페", "스타벅스", SPENT_AT);
+        BankTransactionRequest other = bankTransaction(USER_ID, 1400L, "교통", "서울교통공사", SPENT_AT);
+
+        List<BankTransactionResult> results = expenseService.receiveBankTransactions(List.of(first, second, other));
+
+        assertThat(results).containsExactly(
+                new BankTransactionResult(first.transactionId(), BankTransactionResult.Result.CREATED),
+                new BankTransactionResult(second.transactionId(), BankTransactionResult.Result.DUPLICATE),
+                new BankTransactionResult(other.transactionId(), BankTransactionResult.Result.CREATED));
+        verify(expenseRepository, times(2)).insertIfNotExists(any(), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void 조회_이후_다른_요청이_먼저_저장해_삽입이_0건이면_DUPLICATE로_돌려준다() {
+        givenUsersExist(USER_ID);
+        when(expenseRepository.insertIfNotExists(any(), any(), any(), any(), any(), any(), any())).thenReturn(0);
+
+        List<BankTransactionResult> results = expenseService.receiveBankTransactions(
+                List.of(bankTransaction(USER_ID, 12000L, "식비", "김밥천국", SPENT_AT)));
+
+        assertThat(results).extracting(BankTransactionResult::result).containsExactly(BankTransactionResult.Result.DUPLICATE);
+    }
+
+    @Test
+    void 같은_조합이어도_사용자가_다르면_각각_저장된다() {
+        UUID otherUser = UUID.randomUUID();
+        givenUsersExist(USER_ID, otherUser);
+        givenInsertSucceeds();
+
+        List<BankTransactionResult> results = expenseService.receiveBankTransactions(List.of(
+                bankTransaction(USER_ID, 12000L, "식비", "김밥천국", SPENT_AT),
+                bankTransaction(otherUser, 12000L, "식비", "김밥천국", SPENT_AT)));
+
+        assertThat(results).extracting(BankTransactionResult::result)
+                .containsExactly(BankTransactionResult.Result.CREATED, BankTransactionResult.Result.CREATED);
+        verify(expenseRepository).findByUserIdAndSpentAtBetween(USER_ID, SPENT_AT, SPENT_AT);
+        verify(expenseRepository).findByUserIdAndSpentAtBetween(otherUser, SPENT_AT, SPENT_AT);
+    }
+
+    @Test
+    void 기존_지출은_그_사용자가_보낸_거래의_날짜_범위로만_조회한다() {
+        givenUsersExist(USER_ID);
+        givenInsertSucceeds();
+        LocalDate later = SPENT_AT.plusDays(10);
+
+        expenseService.receiveBankTransactions(List.of(
+                bankTransaction(USER_ID, 1000L, "교통", null, later),
+                bankTransaction(USER_ID, 2000L, "교통", null, SPENT_AT)));
+
+        verify(expenseRepository).findByUserIdAndSpentAtBetween(USER_ID, SPENT_AT, later);
+    }
+
+    @Test
+    void 존재하지_않는_사용자가_하나라도_있으면_아무것도_저장하지_않고_거부한다() {
+        UUID unknownUser = UUID.randomUUID();
+        givenUsersExist(USER_ID);
+
+        assertThatThrownBy(() -> expenseService.receiveBankTransactions(List.of(
+                bankTransaction(USER_ID, 12000L, "식비", "김밥천국", SPENT_AT),
+                bankTransaction(unknownUser, 5000L, "카페", "메가커피", SPENT_AT))))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("존재하지 않는 사용자입니다: " + unknownUser);
+
+        verify(expenseRepository, never()).insertIfNotExists(any(), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void 사용자_존재_여부는_중복_없이_한_번에_조회한다() {
+        givenUsersExist(USER_ID);
+        givenInsertSucceeds();
+
+        expenseService.receiveBankTransactions(List.of(
+                bankTransaction(USER_ID, 1000L, "교통", null, SPENT_AT),
+                bankTransaction(USER_ID, 2000L, "교통", null, SPENT_AT)));
+
+        verify(userRepository).findAllById(Set.of(USER_ID.toString()));
+    }
+
+    @Test
+    void 은행_거래가_빈_목록이면_아무것도_조회하지_않고_빈_결과를_반환한다() {
+        assertThat(expenseService.receiveBankTransactions(List.of())).isEmpty();
+
+        verifyNoInteractions(userRepository, expenseRepository);
     }
 }
