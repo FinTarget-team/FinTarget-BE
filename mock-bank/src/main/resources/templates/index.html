@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="ko" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Mock Bank</title>
+    <style>
+        :root { --border: #d0d7de; --muted: #57606a; --accent: #0969da; --danger: #cf222e; --ok: #1a7f37; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+               margin: 0; padding: 24px 16px; background: #f6f8fa; color: #1f2328; }
+        main { max-width: 960px; margin: 0 auto; }
+        h1 { margin: 0 0 4px; font-size: 22px; }
+        .sub { color: var(--muted); margin: 0 0 20px; }
+        section { background: #fff; border: 1px solid var(--border); border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+        h2 { font-size: 16px; margin: 0 0 12px; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+        label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+        input, select { width: 100%; box-sizing: border-box; padding: 8px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; }
+        .full { grid-column: 1 / -1; }
+        .field-error { color: var(--danger); font-size: 12px; margin-top: 4px; }
+        button { padding: 9px 14px; border-radius: 6px; border: 1px solid var(--border); background: #fff; cursor: pointer; font-size: 14px; }
+        button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+        .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+        .demo-note { color: var(--muted); font-size: 12px; margin: 8px 0 0; }
+        .flash { padding: 10px 12px; border-radius: 6px; margin-bottom: 16px; }
+        .flash.ok { background: #dafbe1; color: var(--ok); }
+        .flash.err { background: #ffebe9; color: var(--danger); }
+        .table-wrap { overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        th, td { text-align: left; padding: 8px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+        td.num { text-align: right; }
+        .badge { padding: 2px 8px; border-radius: 10px; font-size: 12px; font-weight: 600; }
+        .badge.PENDING { background: #fff8c5; color: #9a6700; }
+        .badge.SENT { background: #dafbe1; color: var(--ok); }
+        .badge.DUPLICATE { background: #ddf4ff; color: var(--accent); }
+        .badge.FAILED { background: #ffebe9; color: var(--danger); }
+        .empty { color: var(--muted); text-align: center; padding: 16px; }
+    </style>
+</head>
+<body>
+<main>
+    <h1>Mock Bank</h1>
+    <p class="sub">핀타겟 시연용 가상 금융 서버 · 거래를 발생시켜 핀타겟으로 전달합니다 (웹훅 전송은 다음 단계)</p>
+
+    <div class="flash ok" th:if="${message}" th:text="${message}"></div>
+    <div class="flash err" th:if="${error}" th:text="${error}"></div>
+
+    <section>
+        <h2>결제 발생</h2>
+        <form th:action="@{/transactions}" th:object="${form}" method="post" novalidate>
+            <div class="grid">
+                <div class="full">
+                    <label for="userId">핀타겟 사용자 UUID</label>
+                    <input id="userId" type="text" th:field="*{userId}" placeholder="3fa85f64-5717-4562-b3fc-2c963f66afa6" autocomplete="off">
+                    <div class="field-error" th:if="${#fields.hasErrors('userId')}" th:errors="*{userId}"></div>
+                </div>
+                <div>
+                    <label for="amount">금액 (원)</label>
+                    <input id="amount" type="number" min="1" th:field="*{amount}" placeholder="12000">
+                    <div class="field-error" th:if="${#fields.hasErrors('amount')}" th:errors="*{amount}"></div>
+                </div>
+                <div>
+                    <label for="category">카테고리</label>
+                    <select id="category" th:field="*{category}">
+                        <option value="">선택</option>
+                        <option th:each="c : ${categories}" th:value="${c}" th:text="${c}"></option>
+                    </select>
+                    <div class="field-error" th:if="${#fields.hasErrors('category')}" th:errors="*{category}"></div>
+                </div>
+                <div>
+                    <label for="description">설명 (가맹점)</label>
+                    <input id="description" type="text" th:field="*{description}" placeholder="스타벅스">
+                    <div class="field-error" th:if="${#fields.hasErrors('description')}" th:errors="*{description}"></div>
+                </div>
+                <div>
+                    <label for="spentAt">결제 날짜</label>
+                    <input id="spentAt" type="date" th:field="*{spentAt}" th:max="${today}">
+                    <div class="field-error" th:if="${#fields.hasErrors('spentAt')}" th:errors="*{spentAt}"></div>
+                </div>
+            </div>
+
+            <div class="actions">
+                <button type="submit" class="primary">결제 발생</button>
+            </div>
+
+            <h2 style="margin-top: 20px;">시연용 데이터</h2>
+            <div class="actions">
+                <button type="submit" th:formaction="@{/demo/baseline}" formnovalidate>① 기준선 생성</button>
+                <button type="submit" th:formaction="@{/demo/random}" formnovalidate>② 랜덤 거래 10건</button>
+                <button type="submit" th:formaction="@{/demo/food-surge}" formnovalidate>③ 식비 급증</button>
+            </div>
+            <p class="demo-note">
+                위에 입력한 사용자 UUID로 생성합니다.
+                ① 지난 3개월 매달 모든 카테고리 · ② 이번 달 1일~오늘 · ③ 이번 달 식비를 이전 월평균의 2배 이상으로
+            </p>
+        </form>
+    </section>
+
+    <section>
+        <h2>최근 거래 (20건)</h2>
+        <div class="table-wrap">
+            <table>
+                <thead>
+                <tr>
+                    <th>결제 날짜</th>
+                    <th>사용자</th>
+                    <th>카테고리</th>
+                    <th>설명</th>
+                    <th>금액</th>
+                    <th>웹훅</th>
+                    <th>생성 시각</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr th:each="t : ${transactions}">
+                    <td th:text="${t.spentAt}"></td>
+                    <td th:text="${#strings.substring(t.finTargetUserId.toString(), 0, 8)} + '…'" th:title="${t.finTargetUserId}"></td>
+                    <td th:text="${t.category}"></td>
+                    <td th:text="${t.description} ?: '-'"></td>
+                    <td class="num" th:text="${#numbers.formatInteger(t.amount, 1, 'COMMA')} + '원'"></td>
+                    <td><span class="badge" th:classappend="${t.webhookStatus.name()}" th:text="${t.webhookStatus}"></span></td>
+                    <td th:text="${#temporals.format(t.createdAt, 'MM-dd HH:mm:ss')}"></td>
+                </tr>
+                <tr th:if="${#lists.isEmpty(transactions)}">
+                    <td colspan="7" class="empty">아직 거래가 없습니다.</td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+</main>
+</body>
+</html>

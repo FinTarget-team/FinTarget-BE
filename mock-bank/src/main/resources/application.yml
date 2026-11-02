@@ -1,0 +1,20 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: mock-bank
+  datasource:
+    url: jdbc:h2:file:./data/mock-bank
+    username: sa
+    password:
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+
+# Basic Auth 계정. 기본값이 없으므로 환경변수가 없으면 앱이 시작되지 않는다
+mock-bank:
+  auth:
+    username: ${MOCK_BANK_USERNAME}
+    password: ${MOCK_BANK_PASSWORD}
