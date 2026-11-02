@@ -400,12 +400,16 @@ Authorization: Bearer {accessToken}
 | `expectedCompletionDate` | 예상 달성일 (중앙값, 50번째 백분위) |
 | `optimisticCompletionDate` | 낙관적 시나리오 달성일 (10번째 백분위, 가장 빠른 쪽) |
 | `pessimisticCompletionDate` | 비관적 시나리오 달성일 (90번째 백분위, 가장 늦은 쪽) |
-| `policyCompletionDate` | 정책 혜택을 반영한 예상 달성일(중앙값). 정책의 `benefitAmount`(연간)를 12로 나눠 월 저축액에 더해 계산. 요청에 `userPolicyId`를 보내지 않았으면 `null` |
+| `policyCompletionDate` | 정책 혜택을 반영한 예상 달성일(중앙값). 정책의 `benefitAmount`(연간)를 12로 나눠 월 저축액에 더해 계산. 아래 두 경우에는 `null` |
 | `successProbability` | 목표 마감일까지 목표 금액을 달성할 확률 (0.0~1.0) |
 
 > 목표의 `deadlineDefaulted`가 `true`면 마감일이 사용자가 정한 날짜가 아니므로, `successProbability`는 화면에 노출하지 않는 것을 권장합니다.
 > 낙관·비관 달성일과 성공 확률이 추가되기 전에 저장된 시뮬레이션 기록은 세 값이 `null`일 수 있습니다.
-> 현재 `benefitAmount`가 `null`인 정책(금액으로 환산되지 않는 혜택)을 `userPolicyId`로 보내면 서버 오류(500)가 발생합니다. 수정 전까지는 `benefitAmount`가 있는 정책만 보내 주세요.
+> `policyCompletionDate`가 `null`인 경우
+> - 요청에 `userPolicyId`를 보내지 않은 경우
+> - 보낸 정책의 `benefitAmount`가 `null`인 경우 (온통청년 정책 전체, 현물·서비스처럼 금액으로 환산되지 않는 혜택). 이때도 요청은 성공(200)하고 나머지 결과는 정상으로 계산됩니다.
+>
+> 프론트는 정책 목록의 `benefitAmount`로 정책 반영 달성일이 나올지 미리 알 수 있습니다.
 
 - 요청 필드 검증 규칙:
 
@@ -413,7 +417,7 @@ Authorization: Bearer {accessToken}
 |---|---|---|---|
 | `goalId` | O | 본인 소유 목표의 ID | 누락: `목표를 선택해주세요.` / 없거나 타인 목표: `존재하지 않는 목표입니다.` |
 | `monthlySaving` | O | 0보다 큰 정수(원) | 누락: `월 저축액을 입력해주세요.` / 0·음수: `월 저축액은 0보다 커야 합니다.` |
-| `userPolicyId` | X | 본인이 스크랩한 정책 ID. 생략하면 `policyCompletionDate`는 `null` | `존재하지 않는 유저 정책입니다.` |
+| `userPolicyId` | X | 본인이 스크랩한 정책 ID. 생략하거나 정책의 `benefitAmount`가 `null`이면 `policyCompletionDate`는 `null` | `존재하지 않는 유저 정책입니다.` |
 | `annualInterestRate` | X | 0.0 이상 1.0 이하(예: 3% = `0.03`). 생략하면 `0.03` 적용 | 음수: `연이율은 0 이상이어야 합니다.` / 1.0 초과: `연이율은 100%(1.0) 이하여야 합니다.` |
 
 - 검증 실패는 모두 **HTTP 400**으로 응답합니다. 여러 필드가 동시에 틀려도 메시지는 하나만 반환되며, 어떤 필드인지 알려주는 `field` 키는 없습니다.
