@@ -2,6 +2,7 @@ package kr.fintarget.api.domain.policy.service;
 
 import kr.fintarget.api.domain.policy.dto.PolicyResponse;
 import kr.fintarget.api.domain.policy.entity.Policy;
+import kr.fintarget.api.domain.policy.entity.PolicyText;
 import kr.fintarget.api.domain.policy.entity.PolicyType;
 import kr.fintarget.api.domain.policy.repository.PolicyRepository;
 import kr.fintarget.api.domain.policy.repository.UserPolicyRepository;
@@ -139,6 +140,37 @@ class PolicyServiceTest {
         List<PolicyResponse> result = policyService.getMatchingPolicies("user-1", null);
 
         assertThat(result).extracting(PolicyResponse::name).containsExactly("전국 정책");
+    }
+
+    @Test
+    void 정책_원문의_소득_조건과_지원_내용을_함께_반환한다() {
+        when(userRepository.findById("user-1")).thenReturn(Optional.of(userWith(25, 3000000L)));
+        PolicyText text = PolicyText.builder()
+                .incomeCondition("중위소득 150% 이하")
+                .supportContent("대출 한도: 1억원\n금리: 연 2.0%")
+                .build();
+        Policy policy = Policy.create("원문 있는 정책", "설명", null, null, null, null,
+                PolicyType.FINANCE_WELFARE, null, "ext-1", "KINFA", text);
+        when(policyRepository.findMatchingPolicies(25, 25, 3000000L, null)).thenReturn(List.of(policy));
+
+        List<PolicyResponse> result = policyService.getMatchingPolicies("user-1", null);
+
+        assertThat(result.get(0).incomeLimit()).isNull();
+        assertThat(result.get(0).benefitAmount()).isNull();
+        assertThat(result.get(0).incomeCondition()).isEqualTo("중위소득 150% 이하");
+        assertThat(result.get(0).supportContent()).isEqualTo("대출 한도: 1억원\n금리: 연 2.0%");
+    }
+
+    @Test
+    void 정책_원문이_없으면_소득_조건과_지원_내용은_null이다() {
+        when(userRepository.findById("user-1")).thenReturn(Optional.of(userWith(25, 3000000L)));
+        when(policyRepository.findMatchingPolicies(25, 25, 3000000L, null))
+                .thenReturn(List.of(policy("원문 없는 정책", null)));
+
+        List<PolicyResponse> result = policyService.getMatchingPolicies("user-1", null);
+
+        assertThat(result.get(0).incomeCondition()).isNull();
+        assertThat(result.get(0).supportContent()).isNull();
     }
 
     @Test
