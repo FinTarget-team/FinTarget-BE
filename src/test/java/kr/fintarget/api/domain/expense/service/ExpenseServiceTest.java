@@ -148,4 +148,16 @@ class ExpenseServiceTest {
 
         verifyNoInteractions(expenseRepository);
     }
+
+    @Test
+    void 기간_조회도_시작일이_종료일보다_늦으면_예외가_발생한다() {
+        LocalDate start = LocalDate.of(2026, 7, 31);
+        LocalDate end = LocalDate.of(2026, 7, 1);
+
+        assertThatThrownBy(() -> expenseService.getExpensesByPeriod(USER_ID, start, end))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("시작일이 종료일보다 늦을 수 없습니다.");
+
+        verifyNoInteractions(expenseRepository);
+    }
 }

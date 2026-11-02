@@ -1,9 +1,11 @@
 package kr.fintarget.api.domain.policy.service;
 
 import kr.fintarget.api.domain.policy.dto.PolicyResponse;
+import kr.fintarget.api.domain.policy.dto.UserPolicyCreateRequest;
 import kr.fintarget.api.domain.policy.entity.Policy;
 import kr.fintarget.api.domain.policy.entity.PolicyText;
 import kr.fintarget.api.domain.policy.entity.PolicyType;
+import kr.fintarget.api.domain.policy.entity.UserPolicy;
 import kr.fintarget.api.domain.policy.repository.PolicyRepository;
 import kr.fintarget.api.domain.policy.repository.UserPolicyRepository;
 import kr.fintarget.api.domain.user.entity.User;
@@ -18,11 +20,14 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.time.Year;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -187,5 +192,43 @@ class PolicyServiceTest {
         List<PolicyResponse> result = policyService.getMatchingPolicies("user-1", "housing");
 
         assertThat(result).extracting(PolicyResponse::name).containsExactly("부산 주거");
+    }
+
+    @Test
+    void 내_정책_상태값이_허용값이_아니면_안내_메시지와_함께_예외가_발생한다() {
+        UserPolicyCreateRequest request = new UserPolicyCreateRequest(UUID.randomUUID(), "apply");
+
+        assertThatThrownBy(() -> policyService.createUserPolicy(UUID.randomUUID(), request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("유효하지 않은 정책 상태입니다. (APPLIED, INTEREST, ABANDONED 중 하나)");
+
+        verify(userPolicyRepository, never()).save(any());
+    }
+
+    @Test
+    void 내_정책_상태값은_대소문자와_앞뒤_공백을_구분하지_않는다() {
+        UUID userId = UUID.randomUUID();
+        UUID policyId = UUID.randomUUID();
+        when(policyRepository.findById(policyId)).thenReturn(Optional.of(policy("청년 정책", null)));
+        when(userPolicyRepository.findByUserIdAndPolicyPolicyId(userId, policyId)).thenReturn(Optional.empty());
+        when(userPolicyRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        policyService.createUserPolicy(userId, new UserPolicyCreateRequest(policyId, " interest "));
+
+        verify(userPolicyRepository).save(argThat(
+                saved -> saved.getStatus() == UserPolicy.UserPolicyStatus.INTEREST));
+    }
+
+    @Test
+    void 다른_사용자의_내_정책은_없는_정책과_같은_예외로_삭제를_거부한다() {
+        UUID userId = UUID.randomUUID();
+        UUID othersUserPolicyId = UUID.randomUUID();
+        when(userPolicyRepository.findByUserPolicyIdAndUserId(othersUserPolicyId, userId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> policyService.deleteUserPolicy(userId, othersUserPolicyId))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("존재하지 않는 정책입니다.");
+
+        verify(userPolicyRepository, never()).delete(any());
     }
 }

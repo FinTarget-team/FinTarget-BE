@@ -57,6 +57,7 @@ public class PolicyService {
 
     @Transactional
     public UserPolicyResponse createUserPolicy(UUID userId, UserPolicyCreateRequest request) {
+        UserPolicy.UserPolicyStatus status = parseUserPolicyStatus(request.status());
         Policy policy = policyRepository.findById(request.policyId())
                 .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 정책입니다."));
 
@@ -66,7 +67,7 @@ public class PolicyService {
         UserPolicy userPolicy = new UserPolicy(
                 userId,
                 policy,
-                UserPolicy.UserPolicyStatus.valueOf(request.status())
+                status
         );
 
         return UserPolicyResponse.from(userPolicyRepository.save(userPolicy));
@@ -82,14 +83,19 @@ public class PolicyService {
 
     @Transactional
     public void deleteUserPolicy(UUID userId, UUID userPolicyId) {
-        UserPolicy userPolicy = userPolicyRepository.findById(userPolicyId)
+        // 본인 소유 조건으로 조회해, 다른 사용자의 정책이면 없는 정책과 같은 응답을 준다 (존재 여부를 드러내지 않음)
+        UserPolicy userPolicy = userPolicyRepository.findByUserPolicyIdAndUserId(userPolicyId, userId)
                 .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 정책입니다."));
 
-        if (!userPolicy.getUserId().equals(userId)) {
-            throw new IllegalStateException("본인의 정책만 삭제할 수 있습니다.");
-        }
-
         userPolicyRepository.delete(userPolicy);
+    }
+
+    private UserPolicy.UserPolicyStatus parseUserPolicyStatus(String status) {
+        try {
+            return UserPolicy.UserPolicyStatus.valueOf(status.trim().toUpperCase());
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("유효하지 않은 정책 상태입니다. (APPLIED, INTEREST, ABANDONED 중 하나)");
+        }
     }
 }
 

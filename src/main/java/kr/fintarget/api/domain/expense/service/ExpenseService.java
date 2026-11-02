@@ -73,6 +73,7 @@ public class ExpenseService {
 
     @Transactional(readOnly = true)
     public List<ExpenseResponse> getExpensesByPeriod(UUID userId, LocalDate start, LocalDate end) {
+        validatePeriod(start, end);
         return expenseRepository.findByUserIdAndSpentAtBetween(userId, start, end)
             .stream()
             .map(ExpenseResponse::from)
@@ -81,12 +82,16 @@ public class ExpenseService {
 
     @Transactional(readOnly = true)
     public ExpenseStatsResponse getExpenseStats(UUID userId, LocalDate start, LocalDate end) {
-        if (start.isAfter(end)) {
-            throw new IllegalArgumentException("시작일이 종료일보다 늦을 수 없습니다.");
-        }
+        validatePeriod(start, end);
 
         List<ExpenseCategoryStat> byCategory = expenseRepository.sumByCategory(userId, start, end);
         long totalAmount = byCategory.stream().mapToLong(ExpenseCategoryStat::amount).sum();
         return new ExpenseStatsResponse(totalAmount, byCategory);
+    }
+
+    private static void validatePeriod(LocalDate start, LocalDate end) {
+        if (start.isAfter(end)) {
+            throw new IllegalArgumentException("시작일이 종료일보다 늦을 수 없습니다.");
+        }
     }
 }
