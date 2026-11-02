@@ -44,7 +44,7 @@ class TransactionServiceTest {
 
     @Test
     void 설명이_비어_있으면_null로_저장된다() {
-        Transaction saved = transactionService.create(UUID.randomUUID(), 5_000, "카페", "   ", LocalDate.of(2026, 11, 2));
+        Transaction saved = transactionService.create(UUID.randomUUID(), 5_000, "식비", "   ", LocalDate.of(2026, 11, 2));
 
         assertThat(transactionRepository.findById(saved.getId()).orElseThrow().getDescription()).isNull();
     }
@@ -54,8 +54,8 @@ class TransactionServiceTest {
         UUID userId = UUID.randomUUID();
         LocalDate date = LocalDate.of(2026, 11, 2);
 
-        transactionService.create(userId, 4_500, "카페", "스타벅스", date);
-        transactionService.create(userId, 4_500, "카페", "스타벅스", date);
+        transactionService.create(userId, 4_500, "식비", "스타벅스", date);
+        transactionService.create(userId, 4_500, "식비", "스타벅스", date);
 
         assertThat(transactionRepository.count()).isEqualTo(2);
     }

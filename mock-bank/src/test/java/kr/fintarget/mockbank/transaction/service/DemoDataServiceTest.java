@@ -46,7 +46,8 @@ class DemoDataServiceTest {
 
         List<Transaction> all = transactionRepository.findAll();
         assertThat(all).hasSize(created);
-        assertThat(created).isBetween(3 * 8 * 2, 3 * 8 * 3);
+        int categoryCount = ExpenseCategory.values().length;
+        assertThat(created).isBetween(3 * categoryCount * 2, 3 * categoryCount * 3);
 
         Set<YearMonth> expectedMonths = Set.of(YearMonth.of(2026, 8), YearMonth.of(2026, 9), YearMonth.of(2026, 10));
         Map<YearMonth, Set<String>> categoriesByMonth = all.stream().collect(Collectors.groupingBy(
