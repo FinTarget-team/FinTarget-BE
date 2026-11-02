@@ -146,6 +146,7 @@ class PolicyServiceTest {
     void 정책_원문의_소득_조건과_지원_내용을_함께_반환한다() {
         when(userRepository.findById("user-1")).thenReturn(Optional.of(userWith(25, 3000000L)));
         PolicyText text = PolicyText.builder()
+                .ageCondition("19세 이상 34세 이하")
                 .incomeCondition("중위소득 150% 이하")
                 .supportContent("대출 한도: 1억원\n금리: 연 2.0%")
                 .build();
@@ -157,6 +158,7 @@ class PolicyServiceTest {
 
         assertThat(result.get(0).incomeLimit()).isNull();
         assertThat(result.get(0).benefitAmount()).isNull();
+        assertThat(result.get(0).ageCondition()).isEqualTo("19세 이상 34세 이하");
         assertThat(result.get(0).incomeCondition()).isEqualTo("중위소득 150% 이하");
         assertThat(result.get(0).supportContent()).isEqualTo("대출 한도: 1억원\n금리: 연 2.0%");
     }
@@ -169,6 +171,7 @@ class PolicyServiceTest {
 
         List<PolicyResponse> result = policyService.getMatchingPolicies("user-1", null);
 
+        assertThat(result.get(0).ageCondition()).isNull();
         assertThat(result.get(0).incomeCondition()).isNull();
         assertThat(result.get(0).supportContent()).isNull();
     }

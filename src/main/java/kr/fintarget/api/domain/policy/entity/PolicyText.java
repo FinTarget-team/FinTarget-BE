@@ -11,7 +11,7 @@ import lombok.NoArgsConstructor;
 /**
  * 정책 원문 텍스트 (#113). 정책 상세 AI 질문의 근거로 쓰려고 소스 응답의 원문을 의미별 컬럼에 나눠 저장한다.
  * 여러 컬럼을 하나의 문서로 합치는 조립은 AI 질문 단계에서 한다. 정책 목록 응답(PolicyResponse)에는
- * 정형화된 숫자 값을 보완하는 income_condition, support_content만 노출한다 (#148).
+ * 정형화된 숫자 값을 보완하는 age_condition, income_condition, support_content만 노출한다 (#148, #150).
  * 모든 컬럼은 nullable이며, 소스에 해당 내용이 없거나 빈 값/"-"이면 null이다 (PolicyTextCleaner 참고).
  *
  * 소스별 매핑 (상세는 각 매퍼 참고)

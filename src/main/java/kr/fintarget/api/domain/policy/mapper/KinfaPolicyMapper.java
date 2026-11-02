@@ -92,7 +92,7 @@ public class KinfaPolicyMapper {
                         "대상", item.trgt(),
                         "신용 조건", item.crdtSc()))
                 .incomeCondition(incomeCondition(item.incm()))
-                .ageCondition(PolicyTextCleaner.clean(item.age()))
+                .ageCondition(ageCondition(item.age()))
                 .applyMethod(PolicyTextCleaner.clean(item.jnMthd()))
                 .applyPeriod(PolicyTextCleaner.clean(item.mgmDln()))
                 .contactInfo(PolicyTextCleaner.labeledLines(
@@ -106,6 +106,12 @@ public class KinfaPolicyMapper {
     static String incomeCondition(String incm) {
         String cleaned = PolicyTextCleaner.clean(incm);
         return "없음".equals(cleaned) ? PolicyTextCleaner.INCOME_NO_LIMIT : cleaned;
+    }
+
+    // 나이 조건: "없음"(2026-10 기준 329건 중 265건)은 소득 조건과 같은 방식으로 표시 문구를 통일한다 (#150)
+    static String ageCondition(String age) {
+        String cleaned = PolicyTextCleaner.clean(age);
+        return "없음".equals(cleaned) ? PolicyTextCleaner.AGE_NO_LIMIT : cleaned;
     }
 
     public static String toExternalId(KinfaItem item) {

@@ -203,9 +203,9 @@ class PolicyTextMappingTest {
         assertThat(text.getSupportContent()).isEqualTo("대출 한도: 3500만원\n상환 방법: 원(리)금균등분할상환");
         assertThat(text.getEligibilityDetail()).isNull();
         assertThat(text.getContactInfo()).isNull();
-        // 소득 조건 "없음"만 소득 무관으로 통일하고 (#150), 나이 조건 "없음"은 원문 그대로 둔다
+        // 소득·나이 조건의 "없음"은 표시 문구로 통일한다 (#150)
         assertThat(text.getIncomeCondition()).isEqualTo("소득 무관");
-        assertThat(text.getAgeCondition()).isEqualTo("없음");
+        assertThat(text.getAgeCondition()).isEqualTo("연령 무관");
         assertThat(text.getEtcNote()).isNull();
     }
 
@@ -217,6 +217,15 @@ class PolicyTextMappingTest {
         assertThat(KinfaPolicyMapper.incomeCondition("")).isNull();
         assertThat(KinfaPolicyMapper.incomeCondition("-")).isNull();
         assertThat(KinfaPolicyMapper.incomeCondition(null)).isNull();
+    }
+
+    @Test
+    void KINFA_나이_조건은_없음만_연령_무관으로_바꾸고_문장은_원문_빈_값은_null이다() {
+        assertThat(KinfaPolicyMapper.ageCondition("없음")).isEqualTo("연령 무관");
+        assertThat(KinfaPolicyMapper.ageCondition("19세 이상 34세 이하")).isEqualTo("19세 이상 34세 이하");
+        assertThat(KinfaPolicyMapper.ageCondition("미성년자 제외")).isEqualTo("미성년자 제외");
+        assertThat(KinfaPolicyMapper.ageCondition("-")).isNull();
+        assertThat(KinfaPolicyMapper.ageCondition(null)).isNull();
     }
 
     @Test
