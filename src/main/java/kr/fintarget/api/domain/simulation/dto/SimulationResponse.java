@@ -16,8 +16,8 @@ public record SimulationResponse(
     @Schema(description = "몬테카를로 시뮬레이션 중앙값(50th percentile) 기준 예상 달성일", example = "2028-03-15")
     LocalDate expectedCompletionDate,
     @Schema(
-            description = "정책 혜택을 반영한 예상 달성일. 요청에 userPolicyId를 보내지 않았거나, 정책의 benefitAmount가 null(금액으로 환산되지 않는 혜택)이면 null입니다. "
-                    + "KINFA(서민금융) 정책은 전부 대출 상품이라 benefitAmount가 없으므로 항상 null입니다.",
+            description = "정책 혜택을 반영한 예상 달성일(중앙값). 지원 기간과 1회 지급을 반영해 한 달씩 계산합니다. "
+                    + "요청에 userPolicyId를 보내지 않았거나, 정책에 금액으로 환산된 혜택이 없으면(대출·현물·서비스 정책, 혜택 금액이 아직 정리되지 않은 정책) null입니다.",
             example = "2027-11-20",
             types = {"string", "null"}
     )
@@ -26,8 +26,15 @@ public record SimulationResponse(
     LocalDate optimisticCompletionDate,
     @Schema(description = "비관적 시나리오(90th percentile) 기준 예상 달성일", example = "2028-08-01")
     LocalDate pessimisticCompletionDate,
-    @Schema(description = "목표 마감일까지 목표 금액을 달성할 확률(0.0~1.0). 1만 회 몬테카를로 시뮬레이션 기준", example = "0.73")
+    @Schema(description = "목표 마감일까지 목표 금액을 달성할 확률(0.0~1.0). 1만 회 몬테카를로 시뮬레이션 기준. 정책 혜택은 반영하지 않은 값입니다.", example = "0.73")
     Double successProbability,
+    @Schema(
+            description = "정책 혜택을 반영한 달성 확률(0.0~1.0). policyCompletionDate와 같은 조건에서 계산되므로, "
+                    + "policyCompletionDate가 null이면 이 값도 null입니다.",
+            example = "0.91",
+            types = {"number", "null"}
+    )
+    Double policySuccessProbability,
     @Schema(description = "시뮬레이션 실행(저장) 시각", example = "2026-08-19T10:00:00")
     LocalDateTime createdAt
 ) {
@@ -41,6 +48,7 @@ public record SimulationResponse(
             simulation.getOptimisticCompletionDate(),
             simulation.getPessimisticCompletionDate(),
             simulation.getSuccessProbability(),
+            simulation.getPolicySuccessProbability(),
             simulation.getCreatedAt()
         );
     }

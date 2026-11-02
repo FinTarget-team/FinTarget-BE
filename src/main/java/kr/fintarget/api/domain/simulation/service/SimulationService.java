@@ -2,6 +2,8 @@ package kr.fintarget.api.domain.simulation.service;
 
 import kr.fintarget.api.domain.goal.entity.Goal;
 import kr.fintarget.api.domain.goal.repository.GoalRepository;
+import kr.fintarget.api.domain.policy.entity.Policy;
+import kr.fintarget.api.domain.policy.entity.PolicyBenefit;
 import kr.fintarget.api.domain.policy.entity.UserPolicy;
 import kr.fintarget.api.domain.policy.repository.UserPolicyRepository;
 import kr.fintarget.api.domain.simulation.dto.SimulationRequest;
@@ -17,6 +19,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Random;
 import java.util.UUID;
+import java.util.function.LongUnaryOperator;
 import java.util.stream.Collectors;
 
 @Service
@@ -28,6 +31,9 @@ public class SimulationService {
     private static final double MAX_ANNUAL_INTEREST_RATE = 1.0;
     private static final double MONTHLY_SAVING_VOLATILITY = 0.20;
     private static final int MONTE_CARLO_ITERATIONS = 10_000;
+    // 달성까지 걸리는 개월 수 상한(100년). 저축액이 목표에 비해 너무 작아도 계산이 끝나고,
+    // LocalDate.plusMonths가 표현할 수 없는 날짜가 나오지 않도록 막는다 (#163)
+    private static final int MAX_MONTHS = 1_200;
 
     private final SimulationRepository simulationRepository;
     private final GoalRepository goalRepository;
@@ -49,25 +55,33 @@ public class SimulationService {
         double monthlyRate = annualRate / 12.0;
         long monthsToDeadline = ChronoUnit.MONTHS.between(LocalDate.now(), goal.getDeadline());
 
-        MonteCarloResult baseResult = runMonteCarlo(remaining, request.monthlySaving(), monthlyRate, monthsToDeadline);
+        // 월 저축액 표본을 먼저 한 번만 뽑아 기본 계산과 정책 계산에 같이 쓴다.
+        // 흔들림(±20%)은 내 저축액에만 적용한다 — 정해진 지원금까지 흔들면 낙관·비관 범위가 실제보다 넓어진다 (#163)
+        long[] savingSamples = sampleMonthlySavings(request.monthlySaving());
+
+        MonteCarloResult baseResult = runMonteCarlo(savingSamples, monthsToDeadline,
+                saving -> monthsNeeded(remaining, saving, monthlyRate));
         LocalDate expectedCompletionDate = LocalDate.now().plusMonths(baseResult.p50Months());
         LocalDate optimisticCompletionDate = LocalDate.now().plusMonths(baseResult.p10Months());
         LocalDate pessimisticCompletionDate = LocalDate.now().plusMonths(baseResult.p90Months());
 
         LocalDate policyDate = null;
+        Double policySuccessProbability = null;
         UserPolicy userPolicy = null;
 
         if (request.userPolicyId() != null) {
             userPolicy = userPolicyRepository.findByUserPolicyIdAndUserId(request.userPolicyId(), userId)
                     .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 유저 정책입니다."));
 
-            // 혜택 금액이 없는 정책(온통청년 전체, 금액 환산이 안 되는 혜택)은 정책 반영 계산만 건너뛰고 policyCompletionDate를 null로 둔다
-            Long benefitAmount = userPolicy.getPolicy().getBenefitAmount();
-            if (benefitAmount != null) {
-                long monthlyBenefit = benefitAmount / 12;
-                long totalMonthlySaving = request.monthlySaving() + monthlyBenefit;
-                MonteCarloResult policyResult = runMonteCarlo(remaining, totalMonthlySaving, monthlyRate, monthsToDeadline);
+            // 금액으로 환산된 혜택이 없는 정책(대출·현물·서비스, 아직 추출되지 않은 정책)은
+            // 정책 반영 계산만 건너뛰고 policyCompletionDate·policySuccessProbability를 null로 둔다
+            Policy policy = userPolicy.getPolicy();
+            if (policy.hasBenefitForSimulation()) {
+                PolicyBenefit benefit = policy.getBenefit();
+                MonteCarloResult policyResult = runMonteCarlo(savingSamples, monthsToDeadline,
+                        saving -> monthsNeededWithBenefit(remaining, saving, monthlyRate, benefit));
                 policyDate = LocalDate.now().plusMonths(policyResult.p50Months());
+                policySuccessProbability = policyResult.successProbability();
             }
         }
 
@@ -80,20 +94,30 @@ public class SimulationService {
             policyDate,
             optimisticCompletionDate,
             pessimisticCompletionDate,
-            baseResult.successProbability()
+            baseResult.successProbability(),
+            policySuccessProbability
         );
 
         return SimulationResponse.from(simulationRepository.save(simulation));
     }
 
-    private MonteCarloResult runMonteCarlo(long remaining, long meanMonthlySaving, double monthlyRate, long monthsToDeadline) {
-        long[] monthsNeeded = new long[MONTE_CARLO_ITERATIONS];
-        int successCount = 0;
-
+    // 월 저축액 표본. 기본 계산과 정책 계산이 같은 표본을 써야 "정책을 넣으면 빨라진다"가 흔들림 때문에 뒤집히지 않는다
+    private long[] sampleMonthlySavings(long meanMonthlySaving) {
+        long[] samples = new long[MONTE_CARLO_ITERATIONS];
         for (int i = 0; i < MONTE_CARLO_ITERATIONS; i++) {
             double sampled = meanMonthlySaving + random.nextGaussian() * meanMonthlySaving * MONTHLY_SAVING_VOLATILITY;
-            long sampledSaving = Math.max(1L, Math.round(sampled));
-            long months = monthsNeeded(remaining, sampledSaving, monthlyRate);
+            samples[i] = Math.max(1L, Math.round(sampled));
+        }
+        return samples;
+    }
+
+    private static MonteCarloResult runMonteCarlo(long[] savingSamples, long monthsToDeadline,
+                                                  LongUnaryOperator monthsOf) {
+        long[] monthsNeeded = new long[savingSamples.length];
+        int successCount = 0;
+
+        for (int i = 0; i < savingSamples.length; i++) {
+            long months = monthsOf.applyAsLong(savingSamples[i]);
             monthsNeeded[i] = months;
             if (months <= monthsToDeadline) {
                 successCount++;
@@ -101,7 +125,7 @@ public class SimulationService {
         }
 
         Arrays.sort(monthsNeeded);
-        double successProbability = (double) successCount / MONTE_CARLO_ITERATIONS;
+        double successProbability = (double) successCount / savingSamples.length;
 
         return new MonteCarloResult(
             percentile(monthsNeeded, 0.10),
@@ -115,11 +139,34 @@ public class SimulationService {
         if (remaining <= 0) {
             return 0;
         }
+        long months;
         if (monthlyRate == 0.0) {
-            return (long) Math.ceil((double) remaining / monthlySaving);
+            months = (long) Math.ceil((double) remaining / monthlySaving);
+        } else {
+            double growthFactor = 1 + (remaining * monthlyRate) / monthlySaving;
+            months = (long) Math.ceil(Math.log(growthFactor) / Math.log(1 + monthlyRate));
         }
-        double growthFactor = 1 + (remaining * monthlyRate) / monthlySaving;
-        return (long) Math.ceil(Math.log(growthFactor) / Math.log(1 + monthlyRate));
+        return Math.min(months, MAX_MONTHS);
+    }
+
+    /**
+     * 지원 혜택이 있을 때 목표까지 걸리는 개월 수. 공식으로는 지원 기간이 끝나는 시점과 1회 지급을 표현할 수 없어
+     * 한 달씩 진행한다 (#163). 한 달 안에서의 순서는 이자 → 내 저축액 → 지원금(지원 기간 안이면) → 1회 지급(첫 달)이다.
+     */
+    static long monthsNeededWithBenefit(long remaining, long monthlySaving, double monthlyRate, PolicyBenefit benefit) {
+        if (remaining <= 0) {
+            return 0;
+        }
+        double balance = 0;
+        for (int month = 1; month <= MAX_MONTHS; month++) {
+            balance += balance * monthlyRate;
+            balance += monthlySaving;
+            balance += benefit.amountForMonth(month);
+            if (balance >= remaining) {
+                return month;
+            }
+        }
+        return MAX_MONTHS;
     }
 
     static long percentile(long[] sortedAscending, double p) {

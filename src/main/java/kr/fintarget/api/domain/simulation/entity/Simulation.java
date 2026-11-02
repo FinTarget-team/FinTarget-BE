@@ -51,6 +51,10 @@ public class Simulation {
     @Column(name = "success_probability")
     private Double successProbability;
 
+    // 정책 혜택을 반영한 달성 확률 (#163). 정책을 안 골랐거나 혜택 금액이 없으면 null
+    @Column(name = "policy_success_probability")
+    private Double policySuccessProbability;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
@@ -58,7 +62,8 @@ public class Simulation {
     public Simulation(UUID userId, Goal goal, UserPolicy userPolicy,
                       Long monthlySaving, LocalDate expectedCompletionDate,
                       LocalDate policyCompletionDate, LocalDate optimisticCompletionDate,
-                      LocalDate pessimisticCompletionDate, Double successProbability) {
+                      LocalDate pessimisticCompletionDate, Double successProbability,
+                      Double policySuccessProbability) {
         this.userId = userId;
         this.goal = goal;
         this.userPolicy = userPolicy;
@@ -68,5 +73,6 @@ public class Simulation {
         this.optimisticCompletionDate = optimisticCompletionDate;
         this.pessimisticCompletionDate = pessimisticCompletionDate;
         this.successProbability = successProbability;
+        this.policySuccessProbability = policySuccessProbability;
     }
 }

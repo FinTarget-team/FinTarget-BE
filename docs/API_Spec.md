@@ -452,6 +452,7 @@ Authorization: Bearer {accessToken}
     "optimisticCompletionDate": "2027-09-10",
     "pessimisticCompletionDate": "2028-08-01",
     "successProbability": 0.73,
+    "policySuccessProbability": 0.91,
     "createdAt": "2026-10-30T10:00:00"
   }
 }
@@ -462,18 +463,36 @@ Authorization: Bearer {accessToken}
 | `expectedCompletionDate` | 예상 달성일 (중앙값, 50번째 백분위) |
 | `optimisticCompletionDate` | 낙관적 시나리오 달성일 (10번째 백분위, 가장 빠른 쪽) |
 | `pessimisticCompletionDate` | 비관적 시나리오 달성일 (90번째 백분위, 가장 늦은 쪽) |
-| `policyCompletionDate` | 정책 혜택을 반영한 예상 달성일(중앙값). 정책의 `benefitAmount`(연간)를 12로 나눠 월 저축액에 더해 계산. 아래 두 경우에는 `null` |
-| `successProbability` | 목표 마감일까지 목표 금액을 달성할 확률 (0.0~1.0) |
+| `policyCompletionDate` | 정책 혜택을 반영한 예상 달성일(중앙값). 지원 기간과 1회 지급을 반영해 한 달씩 계산. 혜택이 없으면 `null` |
+| `successProbability` | 목표 마감일까지 목표 금액을 달성할 확률 (0.0~1.0). **정책 혜택은 반영하지 않은 값** |
+| `policySuccessProbability` | 정책 혜택을 반영한 달성 확률 (0.0~1.0). `policyCompletionDate`와 같은 조건이라 그 값이 `null`이면 이 값도 `null` |
 
 > 목표의 `deadlineDefaulted`가 `true`면 마감일이 사용자가 정한 날짜가 아니므로, `successProbability`는 화면에 노출하지 않는 것을 권장합니다.
 > 낙관·비관 달성일과 성공 확률이 추가되기 전에 저장된 시뮬레이션 기록은 세 값이 `null`일 수 있습니다.
-> `policyCompletionDate`가 `null`인 경우
+> `policySuccessProbability`가 추가되기 전(#163)에 저장된 기록도 이 값이 `null`입니다.
+
+#### 계산 방식 (#163)
+
+- **정책을 반영하지 않는 결과**(예상·낙관·비관 달성일, `successProbability`)는 "매달 같은 금액을 넣을 때 필요한 개월 수" 공식으로 계산합니다.
+  몬테카를로 1만 회로 월 저축액을 `입력값 ± 20%`(정규분포)로 뽑고, 그 결과의 10%·50%·90% 지점을 낙관·예상·비관 달성일로 씁니다.
+- **정책을 반영하는 결과**(`policyCompletionDate`, `policySuccessProbability`)는 공식으로 지원 기간이 끝나는 시점과 1회 지급을 표현할 수 없어
+  한 달씩 진행해 계산합니다. 한 달 안에서의 순서는 **이자 → 내 저축액 → 지원금(지원 기간 안이면) → 1회 지급(첫 달)** 입니다.
+- 흔들림(±20%)은 **내 저축액에만** 적용합니다. 정해진 지원금까지 흔들면 낙관·비관 범위가 실제보다 넓어집니다.
+  정책 반영 계산은 정책 미반영 계산과 **같은 저축액 표본**을 쓰므로, 정책을 넣었다고 기본 결과가 달라지지 않습니다.
+- 달성까지 걸리는 개월 수는 **1,200개월(100년)** 을 넘지 않습니다.
+
+예) 남은 금액 2,000만원, 월 30만원 저축, 이율 0, 월 20만원 × 24개월 지원
+→ 24개월간 월 50만원으로 1,200만원, 남은 800만원을 월 30만원으로 27개월 = **51개월**
+(지원 기간을 반영하지 않고 계속 더하면 40개월로 잘못 계산됩니다)
+
+> `policyCompletionDate`·`policySuccessProbability`가 `null`인 경우
 > - 요청에 `userPolicyId`를 보내지 않은 경우
-> - 보낸 정책의 `benefitAmount`가 `null`인 경우 (온통청년 정책 전체, KINFA 정책 전체, 현물·서비스처럼 금액으로 환산되지 않는 혜택). 이때도 요청은 성공(200)하고 나머지 결과는 정상으로 계산됩니다.
+> - 보낸 정책에 금액으로 환산된 혜택이 없는 경우 (대출·현물·서비스 정책, 혜택 금액이 아직 정리되지 않은 정책).
+>   이때도 요청은 성공(200)하고 나머지 결과는 정상으로 계산됩니다.
 >
-> **현재 저장된 정책은 사실상 전부 `benefitAmount`가 `null`이므로 `policyCompletionDate`는 대부분 `null`로 내려갑니다.**
-> 프론트는 정책 목록의 `benefitAmount`로 정책 반영 달성일이 나올지 미리 알 수 있으니, `null`일 때 정책 반영 달성일 영역을 숨기거나
-> "이 정책은 저축 달성일에 반영되지 않습니다" 같은 안내로 대체해야 합니다.
+> **현재는 혜택 금액이 채워진 정책이 없어 두 값이 항상 `null`로 내려갑니다.** 원문에서 혜택 금액을 채우는 작업은 #162에서 진행합니다.
+> 프론트는 `null`일 때 정책 반영 영역을 숨기거나 "이 정책은 저축 달성일에 반영되지 않습니다" 같은 안내로 대체해야 합니다.
+> 혜택 금액이 채워지면 "최대 지원 금액 기준 예상"임을 함께 표시해야 합니다.
 
 - 요청 필드 검증 규칙:
 
@@ -481,7 +500,7 @@ Authorization: Bearer {accessToken}
 |---|---|---|---|
 | `goalId` | O | 본인 소유 목표의 ID | 누락: `목표를 선택해주세요.` / 없거나 타인 목표: `존재하지 않는 목표입니다.` |
 | `monthlySaving` | O | 0보다 큰 정수(원) | 누락: `월 저축액을 입력해주세요.` / 0·음수: `월 저축액은 0보다 커야 합니다.` |
-| `userPolicyId` | X | 본인이 스크랩한 정책 ID. 생략하거나 정책의 `benefitAmount`가 `null`이면 `policyCompletionDate`는 `null` | `존재하지 않는 유저 정책입니다.` |
+| `userPolicyId` | X | 본인이 스크랩한 정책 ID. 생략하거나 정책에 혜택 금액이 없으면 `policyCompletionDate`·`policySuccessProbability`가 `null` | `존재하지 않는 유저 정책입니다.` |
 | `annualInterestRate` | X | 0.0 이상 1.0 이하(예: 3% = `0.03`). 생략하면 `0.03` 적용 | 음수: `연이율은 0 이상이어야 합니다.` / 1.0 초과: `연이율은 100%(1.0) 이하여야 합니다.` |
 
 - 검증 실패는 모두 **HTTP 400**으로 응답합니다. 여러 필드가 동시에 틀려도 메시지는 하나만 반환되며, 어떤 필드인지 알려주는 `field` 키는 없습니다.
