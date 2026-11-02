@@ -10,3 +10,7 @@ mock-bank:
   auth:
     username: test-operator
     password: test-password
+
+fintarget:
+  base-url: http://localhost:18080
+  webhook-key: test-webhook-key

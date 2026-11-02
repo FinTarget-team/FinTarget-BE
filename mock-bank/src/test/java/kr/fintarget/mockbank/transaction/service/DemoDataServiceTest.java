@@ -42,7 +42,7 @@ class DemoDataServiceTest {
 
     @Test
     void 기준선은_이번_달을_뺀_직전_3개월_매달_모든_카테고리에_거래를_만든다() {
-        int created = serviceAt(TODAY, 1).generateBaseline(userId);
+        int created = serviceAt(TODAY, 1).generateBaseline(userId).size();
 
         List<Transaction> all = transactionRepository.findAll();
         assertThat(all).hasSize(created);
@@ -65,7 +65,7 @@ class DemoDataServiceTest {
 
     @Test
     void 랜덤_거래는_이번_달_1일부터_오늘_사이_날짜로_10건을_만든다() {
-        int created = serviceAt(TODAY, 2).generateRandom(userId);
+        int created = serviceAt(TODAY, 2).generateRandom(userId).size();
 
         assertThat(created).isEqualTo(DemoDataService.RANDOM_COUNT);
         assertThat(transactionRepository.findAll()).allSatisfy(t -> {
