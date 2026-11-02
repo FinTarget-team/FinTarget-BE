@@ -1,0 +1,76 @@
+# dev 푸시에 대한 CI가 성공하면 운영 서버에 SSH로 접속해 scripts/deploy.sh를 실행한다.
+# 아래 저장소 Secrets가 모두 등록되기 전까지는 배포 단계를 건너뛴다(실패로 표시하지 않음).
+#   DEPLOY_HOST         서버 주소
+#   DEPLOY_USER         SSH 계정 (예: ubuntu)
+#   DEPLOY_SSH_KEY      배포 전용 SSH 개인 키 (개인 키 재사용 금지)
+#   DEPLOY_KNOWN_HOSTS  서버 호스트 키 (ssh-keyscan 결과). 중간자 공격을 막기 위해 고정한다
+name: CD
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [dev]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: 운영 서버 배포
+    # 수동 실행이거나, dev 푸시로 실행된 CI가 성공했을 때만 배포한다 (PR CI는 제외)
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Secrets 확인
+        id: secrets
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          if [ -z "$DEPLOY_HOST" ] || [ -z "$DEPLOY_USER" ] || [ -z "$DEPLOY_SSH_KEY" ] || [ -z "$DEPLOY_KNOWN_HOSTS" ]; then
+            echo "배포 Secrets가 등록되지 않아 배포를 건너뜁니다." >> "$GITHUB_STEP_SUMMARY"
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: SSH 설정
+        if: steps.secrets.outputs.ready == 'true'
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+
+      - name: 배포 스크립트 실행
+        if: steps.secrets.outputs.ready == 'true'
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+        run: |
+          ssh -i ~/.ssh/deploy_key -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            "$DEPLOY_USER@$DEPLOY_HOST" 'bash ~/FinTarget-BE/scripts/deploy.sh' 2>&1 | tee deploy.log
+          {
+            echo '### 배포 결과'
+            echo '```'
+            tail -n 20 deploy.log
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: SSH 키 삭제
+        if: always()
+        run: rm -f ~/.ssh/deploy_key
