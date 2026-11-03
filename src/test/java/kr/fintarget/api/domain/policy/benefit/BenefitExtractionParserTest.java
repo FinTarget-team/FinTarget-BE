@@ -46,7 +46,7 @@ class BenefitExtractionParserTest {
         assertThat(result.monthlyAmount()).isNull();
         assertThat(result.months()).isNull();
         assertThat(result.oneTimeAmount()).isNull();
-        assertThat(result.toPolicyBenefit()).isNull();
+        assertThat(result.toPolicyBenefit("v", "h", null).hasAny()).isFalse();
     }
 
     @Test
@@ -57,7 +57,7 @@ class BenefitExtractionParserTest {
 
         assertThat(result.type()).isEqualTo(BenefitType.UNKNOWN);
         assertThat(result.validationNote()).contains("근거");
-        assertThat(result.toPolicyBenefit()).isNull();
+        assertThat(result.toPolicyBenefit("v", "h", null).hasAny()).isFalse();
     }
 
     @Test

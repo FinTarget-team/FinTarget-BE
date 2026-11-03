@@ -24,6 +24,7 @@ public record PolicyResponse(
             + "KINFA(서민금융) 정책은 전부 대출 상품이라 항상 null이며, 대출 한도는 supportContent의 \"대출 한도\" 줄에 있습니다. "
             + "지원 내용은 supportContent를 참고하세요.", example = "2400000", types = {"integer", "null"})
     Long benefitAmount,
+    SimulationBenefitResponse simulationBenefit,
     @Schema(description = "나이 조건 원문 (현재 KINFA 정책만 값이 있음). 원문이 없으면 null입니다. minAge·maxAge가 null일 때 표시용입니다.", example = "19세 이상 34세 이하", types = {"string", "null"})
     String ageCondition,
     @Schema(description = "소득 조건 원문. 원문이 없으면 null입니다.", example = "중위소득 150% 이하", types = {"string", "null"})
@@ -51,6 +52,7 @@ public record PolicyResponse(
             policy.getMaxAge(),
             policy.getIncomeLimit(),
             policy.getBenefitAmount(),
+            SimulationBenefitResponse.from(policy),
             text == null ? null : text.getAgeCondition(),
             text == null ? null : text.getIncomeCondition(),
             text == null ? null : text.getSupportContent(),

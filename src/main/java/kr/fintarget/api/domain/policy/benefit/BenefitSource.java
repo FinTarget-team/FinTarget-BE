@@ -3,6 +3,10 @@ package kr.fintarget.api.domain.policy.benefit;
 import kr.fintarget.api.domain.policy.entity.Policy;
 import kr.fintarget.api.domain.policy.entity.PolicyText;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -37,6 +41,17 @@ public record BenefitSource(String source, String name, String supportContent, S
                 .filter(e -> e.getValue() != null && !e.getValue().isBlank())
                 .map(e -> "[" + e.getKey() + "]\n" + e.getValue().strip())
                 .collect(Collectors.joining("\n\n"));
+    }
+
+    /** AI 입력 원문의 SHA-256 (hex). 저장된 값과 다르면 원문이 바뀐 것이라 다시 추출한다 */
+    public String contentHash() {
+        try {
+            byte[] digest = MessageDigest.getInstance("SHA-256")
+                    .digest(toPromptText().getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(digest);
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256을 사용할 수 없습니다.", e);
+        }
     }
 
     /** 지원 내용과 설명이 모두 비어 있으면 추출할 근거가 없다 */

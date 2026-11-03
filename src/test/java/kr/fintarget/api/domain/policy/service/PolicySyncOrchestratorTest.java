@@ -1,7 +1,10 @@
 package kr.fintarget.api.domain.policy.service;
 
+import kr.fintarget.api.domain.policy.benefit.BenefitExtractionInProgressException;
+import kr.fintarget.api.domain.policy.benefit.PolicyBenefitExtractionService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -12,6 +15,7 @@ import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -23,6 +27,9 @@ class PolicySyncOrchestratorTest {
 
     @Mock
     private KinfaPolicySyncService kinfaPolicySyncService;
+
+    @Mock
+    private PolicyBenefitExtractionService policyBenefitExtractionService;
 
     @InjectMocks
     private PolicySyncOrchestrator policySyncOrchestrator;
@@ -97,5 +104,42 @@ class PolicySyncOrchestratorTest {
         PolicySyncResult second = policySyncOrchestrator.syncAll();
 
         assertThat(second.kinfaSavedCount()).isEqualTo(2);
+    }
+
+    @Test
+    void 동기화가_끝나면_혜택_추출을_실행한다() {
+        when(youthCenterPolicySyncService.sync()).thenReturn(1);
+        when(kinfaPolicySyncService.sync()).thenReturn(2);
+
+        policySyncOrchestrator.syncAll();
+
+        InOrder inOrder = inOrder(youthCenterPolicySyncService, kinfaPolicySyncService, policyBenefitExtractionService);
+        inOrder.verify(youthCenterPolicySyncService).sync();
+        inOrder.verify(kinfaPolicySyncService).sync();
+        inOrder.verify(policyBenefitExtractionService).extractPending();
+    }
+
+    @Test
+    void 혜택_추출이_실패해도_동기화_결과는_그대로_반환한다() {
+        when(youthCenterPolicySyncService.sync()).thenReturn(3);
+        when(kinfaPolicySyncService.sync()).thenReturn(5);
+        when(policyBenefitExtractionService.extractPending()).thenThrow(new RuntimeException("추출 오류"));
+
+        PolicySyncResult result = policySyncOrchestrator.syncAll();
+
+        assertThat(result.youthCenterSavedCount()).isEqualTo(3);
+        assertThat(result.kinfaSavedCount()).isEqualTo(5);
+    }
+
+    @Test
+    void 관리자_백필이_실행_중이면_동기화_후_추출만_건너뛴다() {
+        when(youthCenterPolicySyncService.sync()).thenReturn(1);
+        when(kinfaPolicySyncService.sync()).thenReturn(1);
+        when(policyBenefitExtractionService.extractPending()).thenThrow(new BenefitExtractionInProgressException());
+
+        PolicySyncResult result = policySyncOrchestrator.syncAll();
+
+        assertThat(result.youthCenterFailed()).isFalse();
+        assertThat(result.kinfaFailed()).isFalse();
     }
 }

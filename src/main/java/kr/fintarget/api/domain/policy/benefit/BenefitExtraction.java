@@ -2,6 +2,8 @@ package kr.fintarget.api.domain.policy.benefit;
 
 import kr.fintarget.api.domain.policy.entity.PolicyBenefit;
 
+import java.time.LocalDateTime;
+
 /**
  * 정책 원문에서 추출한 혜택 (#162). AI 응답을 {@link BenefitExtractionParser}가 검증한 결과다.
  *
@@ -20,15 +22,22 @@ public record BenefitExtraction(BenefitType type, Long monthlyAmount, Integer mo
         return new BenefitExtraction(type, null, null, null, false, evidence, validationNote);
     }
 
-    /** 시뮬레이션에 반영할 혜택. CASH가 아니면 null */
-    public PolicyBenefit toPolicyBenefit() {
-        if (!type.reflectsInSimulation()) {
-            return null;
-        }
+    /**
+     * 저장할 혜택. 반영하지 않는 유형도 저장해 같은 원문을 다시 추출하지 않게 하며, 이때 금액은 모두 null이라
+     * 시뮬레이션에는 반영되지 않는다 (PolicyBenefit.hasAny)
+     */
+    public PolicyBenefit toPolicyBenefit(String promptVersion, String sourceHash, LocalDateTime extractedAt) {
+        boolean reflects = type.reflectsInSimulation();
         return PolicyBenefit.builder()
-                .monthlyAmount(monthlyAmount)
-                .benefitMonths(monthlyAmount == null ? null : months)
-                .oneTimeAmount(oneTimeAmount)
+                .monthlyAmount(reflects ? monthlyAmount : null)
+                .benefitMonths(reflects && monthlyAmount != null ? months : null)
+                .oneTimeAmount(reflects ? oneTimeAmount : null)
+                .type(type)
+                .maximum(reflects && isMaximum)
+                .evidence(evidence)
+                .promptVersion(promptVersion)
+                .sourceHash(sourceHash)
+                .extractedAt(extractedAt)
                 .build();
     }
 }

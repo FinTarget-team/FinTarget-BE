@@ -1,5 +1,7 @@
 package kr.fintarget.api.domain.policy.service;
 
+import kr.fintarget.api.domain.policy.benefit.BenefitExtractionInProgressException;
+import kr.fintarget.api.domain.policy.benefit.PolicyBenefitExtractionService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -19,6 +21,7 @@ public class PolicySyncOrchestrator {
 
     private final YouthCenterPolicySyncService youthCenterPolicySyncService;
     private final KinfaPolicySyncService kinfaPolicySyncService;
+    private final PolicyBenefitExtractionService policyBenefitExtractionService;
     private final AtomicBoolean running = new AtomicBoolean(false);
 
     public PolicySyncResult syncAll() {
@@ -26,9 +29,23 @@ public class PolicySyncOrchestrator {
             throw new PolicySyncInProgressException();
         }
         try {
-            return doSyncAll();
+            PolicySyncResult result = doSyncAll();
+            extractBenefits();
+            return result;
         } finally {
             running.set(false);
+        }
+    }
+
+    // 동기화로 새로 들어오거나 원문이 바뀐 정책의 혜택을 추출한다 (#162).
+    // 추출은 부가 작업이라 실패해도 동기화 결과에 영향을 주지 않는다 (실패한 정책은 다음 동기화 때 다시 시도)
+    private void extractBenefits() {
+        try {
+            policyBenefitExtractionService.extractPending();
+        } catch (BenefitExtractionInProgressException e) {
+            log.warn("정책 혜택 추출(관리자 백필)이 이미 실행 중이어서 동기화 후 추출을 건너뜁니다");
+        } catch (Exception e) {
+            log.error("동기화 후 정책 혜택 추출 실패", e);
         }
     }
 

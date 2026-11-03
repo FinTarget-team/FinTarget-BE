@@ -284,6 +284,13 @@ Authorization: Bearer {accessToken}
       "maxAge": 34,
       "incomeLimit": null,
       "benefitAmount": null,
+      "simulationBenefit": {
+        "monthlyAmount": 200000,
+        "months": 12,
+        "monthsSpecified": true,
+        "oneTimeAmount": null,
+        "maximum": true
+      },
       "ageCondition": null,
       "incomeCondition": "중위소득 150% 이하",
       "supportContent": "월 최대 20만원, 최장 12개월 지원",
@@ -300,6 +307,7 @@ Authorization: Bearer {accessToken}
 | `ageCondition` | 나이 조건 원문 (현재 KINFA 정책만 값이 있음). 원본이 조건 없음을 명시하면 `연령 무관`. 원문이 없으면 `null`. 표시 순서: `minAge`·`maxAge` → `ageCondition` → 둘 다 없으면 "제한 없음" |
 | `incomeLimit` | 소득 상한(원). `null`이면 정형화된 소득 상한이 없다는 뜻이며, 소득 제한이 없다는 뜻은 아님 (현재 모든 정책이 `null`). 소득 조건은 `incomeCondition` 참고 |
 | `benefitAmount` | 지원 금액(원). 현물·서비스처럼 금액으로 환산되지 않는 혜택이거나 원문에서 금액을 읽지 못하면 `null` (온통청년 정책은 항상 `null`). **KINFA 정책도 전부 대출 상품이라 항상 `null`** — 대출 한도는 받는 혜택이 아니라 빌리는 한도이므로 저축액으로 환산하지 않는다. 한도는 `supportContent`의 `대출 한도: ...` 줄 참고 |
+| `simulationBenefit` | 시뮬레이션 정책 반영 달성일에 쓰이는 현금 혜택 (#162). 정책 원문에서 AI로 추출한 값이며, 반영할 혜택이 없으면 `null` (대출·이자 지원·보증료, 현물·바우처·실비 지원, 금액을 알 수 없는 정책, 아직 추출 전인 정책). `monthlyAmount`(월 금액, 원)·`months`(계산에 쓰는 개월 수)·`monthsSpecified`(원문에 기간이 있는지. `false`면 `months`는 기본 12개월)·`oneTimeAmount`(1회 금액, 원, 첫 달 지급으로 계산)·`maximum`(`true`면 "최대 지원 금액 기준 예상" 안내 필요). 이 값이 있는 정책만 시뮬레이션의 `policyCompletionDate`가 계산됨 |
 | `incomeCondition` | 소득 조건 원문. 원본이 조건 없음을 명시하면 `소득 무관`, 온통청년 연소득 조건은 `연소득 N만원 이하` 형식. 원문이 없으면 `null`(정보 없음). 숫자 값(`incomeLimit`)이 없을 때 표시용 |
 | `supportContent` | 지원 내용 원문. KINFA 정책은 `대출 한도: ...`, `금리: ...`처럼 "라벨: 값" 줄을 줄바꿈(`\n`)으로 묶은 값. 원문이 없으면 `null`. 숫자 값(`benefitAmount`)이 없을 때 표시용 |
 | `policyType` | `HOUSING`(주거) \| `FINANCE_WELFARE`(금융·복지) \| `STARTUP`(창업) \| `ETC`(기타) |
@@ -326,6 +334,7 @@ Authorization: Bearer {accessToken}
         "maxAge": 34,
         "incomeLimit": null,
         "benefitAmount": null,
+        "simulationBenefit": null,
         "ageCondition": null,
         "incomeCondition": "중위소득 150% 이하",
         "supportContent": "월 최대 20만원, 최장 12개월 지원",
@@ -491,9 +500,10 @@ Authorization: Bearer {accessToken}
 > - 보낸 정책에 금액으로 환산된 혜택이 없는 경우 (대출·현물·서비스 정책, 혜택 금액이 아직 정리되지 않은 정책).
 >   이때도 요청은 성공(200)하고 나머지 결과는 정상으로 계산됩니다.
 >
-> **현재는 혜택 금액이 채워진 정책이 없어 두 값이 항상 `null`로 내려갑니다.** 원문에서 혜택 금액을 채우는 작업은 #162에서 진행합니다.
+> 혜택 금액은 정책 동기화 후 AI가 원문에서 추출해 채웁니다 (#162). 정책 목록의 `simulationBenefit`이 `null`이 아닌 정책만 두 값이 계산되므로,
+> 프론트는 시뮬레이션 전에 정책 반영 결과가 나올지 미리 알 수 있습니다.
 > 프론트는 `null`일 때 정책 반영 영역을 숨기거나 "이 정책은 저축 달성일에 반영되지 않습니다" 같은 안내로 대체해야 합니다.
-> 혜택 금액이 채워지면 "최대 지원 금액 기준 예상"임을 함께 표시해야 합니다.
+> `simulationBenefit.maximum`이 `true`면 "최대 지원 금액 기준 예상"임을 함께 표시해야 합니다.
 
 - 요청 필드 검증 규칙:
 
@@ -731,6 +741,38 @@ Authorization: Bearer {accessToken}
 | 400 | 잘못된 요청 (파라미터 누락 등) |
 | 401 | 인증 실패 (토큰 없음/만료) |
 | 500 | 서버 오류 |
+
+### 정책 혜택 AI 추출 (관리자, 앱에서는 호출하지 않음)
+
+```
+POST /api/admin/policy/benefit/extract?all=false
+X-Admin-Key: {ADMIN_API_KEY}
+```
+
+- 저장된 정책 원문에서 시뮬레이션에 반영할 현금 혜택을 AI로 추출해 저장합니다 (#162). 정책 동기화(`POST /api/admin/policy/sync`, 매일 03:00) 직후에도 자동 실행됩니다.
+- `all=false`(기본): 아직 추출하지 않았거나 원문·프롬프트 버전이 바뀐 정책만 처리. `all=true`: 전체 다시 추출
+- KINFA 정책은 AI를 호출하지 않고 대출(`LOAN`)로 분류합니다.
+- 정책 수에 따라 수 분이 걸릴 수 있습니다. 이미 실행 중이면 409
+
+```json
+{
+  "status": 200,
+  "message": "OK",
+  "data": {
+    "targetCount": 220,
+    "savedByType": { "CASH": 80, "LOAN": 40, "SERVICE": 90, "UNKNOWN": 10 },
+    "failedCount": 0,
+    "skippedCount": 0,
+    "elapsedMs": 95000
+  }
+}
+```
+
+| 필드 | 설명 |
+|---|---|
+| `savedByType` | 유형별 저장 건수. `CASH`만 시뮬레이션에 반영 (`SAVINGS_MATCH`, `LOAN`, `CORPORATE`, `SERVICE`, `UNKNOWN`은 반영 안 함) |
+| `failedCount` | AI 호출·응답 해석에 실패해 기존 값을 유지한 정책 수. 다음 동기화 때 다시 시도 |
+| `skippedCount` | AI를 쓸 수 없는 상태(키 없음, 호출 한도 초과, 인증 실패)여서 중간에 멈춰 시도하지 않은 정책 수 |
 
 ---
 

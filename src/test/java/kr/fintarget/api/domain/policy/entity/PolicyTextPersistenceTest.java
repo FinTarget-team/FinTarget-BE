@@ -82,8 +82,10 @@ class PolicyTextPersistenceTest {
     @Test
     void PolicyResponse에는_원문_중_나이_소득_조건과_지원_내용만_노출된다() {
         // #148, #150: 숫자 값(minAge·maxAge, incomeLimit, benefitAmount)을 보완하는 세 원문만 노출하고 나머지 원문은 AI 질문 전용으로 둔다
+        // #162: 시뮬레이션에 반영되는 추출 혜택(simulationBenefit)은 금액만 노출하고 근거 문장·추출 정보는 노출하지 않는다
         assertThat(Arrays.stream(PolicyResponse.class.getRecordComponents()).map(RecordComponent::getName))
                 .containsExactly("policyId", "name", "description", "minAge", "maxAge", "incomeLimit",
-                        "benefitAmount", "ageCondition", "incomeCondition", "supportContent", "policyType", "regions");
+                        "benefitAmount", "simulationBenefit", "ageCondition", "incomeCondition", "supportContent",
+                        "policyType", "regions");
     }
 }
