@@ -201,12 +201,14 @@ class SimulationServiceTest {
     }
 
     @Test
-    void monthsNeededWithBenefit_지원_기간이_없으면_목표_달성까지_계속_더해진다() {
-        // 같은 조건에서 기간 제한만 없애면 월 50만원이 계속 들어가 40개월
+    void monthsNeededWithBenefit_지원_기간이_없으면_기본_12개월만_더해진다() {
+        // 같은 조건에서 기간이 원문에 없으면 12개월만 반영 (#162)
+        //  → 12개월간 월 50만원으로 600만원, 남은 1,400만원을 월 30만원으로 47개월 = 59개월
+        //    (계속 더하면 40개월로 지나치게 빨라진다)
         long months = SimulationService.monthsNeededWithBenefit(
                 20_000_000L, 300_000L, 0.0, benefit(200_000L, null, null));
 
-        assertThat(months).isEqualTo(40L);
+        assertThat(months).isEqualTo(59L);
     }
 
     @Test

@@ -150,6 +150,11 @@ public class Policy {
         this.benefit = benefit;
     }
 
+    /** 이 원문·프롬프트 버전으로 아직 혜택을 추출하지 않았는지 (#162). 처음이거나 원문·버전이 바뀌면 true */
+    public boolean needsBenefitExtraction(String sourceHash, String promptVersion) {
+        return benefit == null || !benefit.isExtractedFrom(sourceHash, promptVersion);
+    }
+
     /**
      * 외부 API에서 다시 받아온 값으로 내용을 갱신한다 (externalId/source는 식별자라 유지).
      * benefit은 소스 응답이 아니라 원문 추출로 채우는 값이라 동기화가 덮지 않는다 — 덮으면 매일 03:00

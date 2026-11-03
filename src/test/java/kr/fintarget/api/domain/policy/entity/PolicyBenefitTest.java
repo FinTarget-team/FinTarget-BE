@@ -41,11 +41,15 @@ class PolicyBenefitTest {
     }
 
     @Test
-    void 지원_기간이_null이면_계속_더해진다() {
+    void 지원_기간이_null이면_기본_12개월만_더해진다() {
+        // 원문에 기간이 없는 월 지급은 목표 달성까지 계속 더하지 않고 1년만 반영한다 (#162)
         PolicyBenefit benefit = benefit(200_000L, null, null);
 
+        assertThat(benefit.effectiveMonths()).isEqualTo(PolicyBenefit.DEFAULT_MONTHS_WHEN_UNSPECIFIED).isEqualTo(12);
         assertThat(benefit.amountForMonth(1)).isEqualTo(200_000L);
-        assertThat(benefit.amountForMonth(1_200)).isEqualTo(200_000L);
+        assertThat(benefit.amountForMonth(12)).isEqualTo(200_000L);
+        assertThat(benefit.amountForMonth(13)).isZero();
+        assertThat(benefit.getBenefitMonths()).isNull();
     }
 
     @Test
