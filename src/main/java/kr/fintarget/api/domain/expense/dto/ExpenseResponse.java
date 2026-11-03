@@ -13,7 +13,8 @@ public record ExpenseResponse(
     Long amount,
     @Schema(description = "지출 카테고리", example = "식비")
     String category,
-    @Schema(description = "지출에 대한 메모/설명. 클라이언트가 값을 보내지 않았으면 null", example = "점심 식사", types = {"string", "null"})
+    // iOS ExpenseDTO.description이 non-optional String이라 null이면 목록 전체 디코딩이 실패한다. 저장값이 null이어도 빈 문자열로 내려준다
+    @Schema(description = "지출에 대한 메모/설명. 값이 없으면 빈 문자열(\"\")이며 null은 내려가지 않습니다", example = "점심 식사")
     String description,
     @Schema(description = "지출이 발생한 날짜 (yyyy-MM-dd)", example = "2026-08-15")
     LocalDate spentAt,
@@ -25,7 +26,7 @@ public record ExpenseResponse(
             expense.getExpenseId(),
             expense.getAmount(),
             expense.getCategory(),
-            expense.getDescription(),
+            expense.getDescription() == null ? "" : expense.getDescription(),
             expense.getSpentAt(),
             expense.getCreatedAt()
         );
