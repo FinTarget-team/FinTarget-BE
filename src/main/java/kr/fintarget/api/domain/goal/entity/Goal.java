@@ -8,7 +8,6 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.Objects;
 import java.util.UUID;
 
 @Entity
@@ -90,11 +89,10 @@ public class Goal {
         }
     }
 
+    // 목표 수정 화면에서 저장했다면 마감일을 바꾸지 않았더라도 사용자가 확인한 마감일로 본다 (#186)
     public void update(String title, Long targetAmount,
                        Long currentAmount, LocalDate deadline) {
-        if (!Objects.equals(this.deadline, deadline)) {
-            this.deadlineDefaulted = false;
-        }
+        this.deadlineDefaulted = false;
         this.title = title;
         this.targetAmount = targetAmount;
         this.currentAmount = currentAmount;
