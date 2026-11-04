@@ -2,6 +2,8 @@ package kr.fintarget.api.domain.policy.service;
 
 import kr.fintarget.api.domain.policy.benefit.BenefitExtractionInProgressException;
 import kr.fintarget.api.domain.policy.benefit.PolicyBenefitExtractionService;
+import kr.fintarget.api.domain.policy.chunk.PolicyChunkRefreshResult;
+import kr.fintarget.api.domain.policy.chunk.PolicyChunkService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -13,6 +15,8 @@ import java.util.function.IntSupplier;
  * 온통청년/KINFA 정책 동기화를 순차 실행한다. 스케줄러와 수동 트리거 API가 공유한다.
  * 한쪽 API 장애가 다른 쪽 동기화를 막지 않도록 각각 격리해서 실행한다.
  * 같은 정책을 중복 저장하지 않도록 동시에 하나의 동기화만 실행하며, 실행 중 요청은 PolicySyncInProgressException으로 거절한다.
+ * 동기화 후 검색용 청크 갱신(#180)과 혜택 추출(#162)을 차례로 실행한다. 청크 백필(관리자 API)도 같은 잠금을 써서
+ * 동기화가 지우는 정책의 청크를 다시 만드는 경합을 막는다.
  */
 @Slf4j
 @Service
@@ -22,6 +26,7 @@ public class PolicySyncOrchestrator {
     private final YouthCenterPolicySyncService youthCenterPolicySyncService;
     private final KinfaPolicySyncService kinfaPolicySyncService;
     private final PolicyBenefitExtractionService policyBenefitExtractionService;
+    private final PolicyChunkService policyChunkService;
     private final AtomicBoolean running = new AtomicBoolean(false);
 
     public PolicySyncResult syncAll() {
@@ -30,10 +35,37 @@ public class PolicySyncOrchestrator {
         }
         try {
             PolicySyncResult result = doSyncAll();
+            refreshChunks();
             extractBenefits();
             return result;
         } finally {
             running.set(false);
+        }
+    }
+
+    /**
+     * 검색용 청크를 즉시 갱신한다 (관리자 백필, #180). 동기화와 잠금을 공유하므로 동기화 중이면 PolicySyncInProgressException(409)
+     *
+     * @param all true면 원문이 같은 정책까지 전부 다시 만든다
+     */
+    public PolicyChunkRefreshResult refreshChunksNow(boolean all) {
+        if (!running.compareAndSet(false, true)) {
+            throw new PolicySyncInProgressException();
+        }
+        try {
+            return all ? policyChunkService.refreshAll() : policyChunkService.refreshPending();
+        } finally {
+            running.set(false);
+        }
+    }
+
+    // 동기화로 새로 들어오거나 원문이 바뀐 정책의 청크를 다시 만든다 (#180).
+    // 부가 작업이라 실패해도 동기화 결과에 영향을 주지 않는다 (다음 동기화 때 해시를 다시 비교해 만든다)
+    private void refreshChunks() {
+        try {
+            policyChunkService.refreshPending();
+        } catch (Exception e) {
+            log.error("동기화 후 정책 청크 갱신 실패", e);
         }
     }
 

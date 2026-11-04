@@ -2,6 +2,8 @@ package kr.fintarget.api.domain.policy.service;
 
 import kr.fintarget.api.domain.policy.benefit.BenefitExtractionInProgressException;
 import kr.fintarget.api.domain.policy.benefit.PolicyBenefitExtractionService;
+import kr.fintarget.api.domain.policy.chunk.PolicyChunkRefreshResult;
+import kr.fintarget.api.domain.policy.chunk.PolicyChunkService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InOrder;
@@ -16,6 +18,7 @@ import java.util.concurrent.TimeUnit;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -30,6 +33,9 @@ class PolicySyncOrchestratorTest {
 
     @Mock
     private PolicyBenefitExtractionService policyBenefitExtractionService;
+
+    @Mock
+    private PolicyChunkService policyChunkService;
 
     @InjectMocks
     private PolicySyncOrchestrator policySyncOrchestrator;
@@ -117,6 +123,86 @@ class PolicySyncOrchestratorTest {
         inOrder.verify(youthCenterPolicySyncService).sync();
         inOrder.verify(kinfaPolicySyncService).sync();
         inOrder.verify(policyBenefitExtractionService).extractPending();
+    }
+
+    @Test
+    void 동기화가_끝나면_청크를_갱신한_뒤_혜택을_추출한다() {
+        when(youthCenterPolicySyncService.sync()).thenReturn(1);
+        when(kinfaPolicySyncService.sync()).thenReturn(2);
+
+        policySyncOrchestrator.syncAll();
+
+        InOrder inOrder = inOrder(kinfaPolicySyncService, policyChunkService, policyBenefitExtractionService);
+        inOrder.verify(kinfaPolicySyncService).sync();
+        inOrder.verify(policyChunkService).refreshPending();
+        inOrder.verify(policyBenefitExtractionService).extractPending();
+    }
+
+    @Test
+    void 청크_갱신이_실패해도_혜택_추출과_동기화_결과는_그대로_진행된다() {
+        when(youthCenterPolicySyncService.sync()).thenReturn(3);
+        when(kinfaPolicySyncService.sync()).thenReturn(5);
+        when(policyChunkService.refreshPending()).thenThrow(new RuntimeException("청크 오류"));
+
+        PolicySyncResult result = policySyncOrchestrator.syncAll();
+
+        assertThat(result.youthCenterSavedCount()).isEqualTo(3);
+        assertThat(result.kinfaSavedCount()).isEqualTo(5);
+        verify(policyBenefitExtractionService).extractPending();
+    }
+
+    @Test
+    void 청크_백필은_all_값에_따라_변경분_또는_전체를_다시_만든다() {
+        PolicyChunkRefreshResult pending = new PolicyChunkRefreshResult(10, 2, 8, 3, 0, 5L);
+        PolicyChunkRefreshResult all = new PolicyChunkRefreshResult(10, 10, 0, 12, 0, 9L);
+        when(policyChunkService.refreshPending()).thenReturn(pending);
+        when(policyChunkService.refreshAll()).thenReturn(all);
+
+        assertThat(policySyncOrchestrator.refreshChunksNow(false)).isEqualTo(pending);
+        assertThat(policySyncOrchestrator.refreshChunksNow(true)).isEqualTo(all);
+    }
+
+    @Test
+    void 동기화가_실행_중이면_청크_백필을_거절한다() throws Exception {
+        CountDownLatch started = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        when(youthCenterPolicySyncService.sync()).thenAnswer(invocation -> {
+            started.countDown();
+            release.await(5, TimeUnit.SECONDS);
+            return 1;
+        });
+        when(kinfaPolicySyncService.sync()).thenReturn(2);
+
+        CompletableFuture<PolicySyncResult> sync = CompletableFuture.supplyAsync(policySyncOrchestrator::syncAll);
+        assertThat(started.await(5, TimeUnit.SECONDS)).isTrue();
+
+        assertThatThrownBy(() -> policySyncOrchestrator.refreshChunksNow(false))
+                .isInstanceOf(PolicySyncInProgressException.class);
+        verify(policyChunkService, never()).refreshAll();
+
+        release.countDown();
+        sync.get(5, TimeUnit.SECONDS);
+    }
+
+    @Test
+    void 청크_백필이_실행_중이면_동기화를_거절한다() throws Exception {
+        CountDownLatch started = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        when(policyChunkService.refreshAll()).thenAnswer(invocation -> {
+            started.countDown();
+            release.await(5, TimeUnit.SECONDS);
+            return new PolicyChunkRefreshResult(0, 0, 0, 0, 0, 0L);
+        });
+
+        CompletableFuture<PolicyChunkRefreshResult> refresh =
+                CompletableFuture.supplyAsync(() -> policySyncOrchestrator.refreshChunksNow(true));
+        assertThat(started.await(5, TimeUnit.SECONDS)).isTrue();
+
+        assertThatThrownBy(() -> policySyncOrchestrator.syncAll())
+                .isInstanceOf(PolicySyncInProgressException.class);
+
+        release.countDown();
+        refresh.get(5, TimeUnit.SECONDS);
     }
 
     @Test
