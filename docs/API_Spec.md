@@ -42,15 +42,17 @@ Authorization: Bearer {accessToken}
 ```
 
 ### 네이버 로그인
-- **POST** `/auth/naver/login`
+- **POST** `/auth/naver/login/token`
 - 인증 불필요
+- iOS/Android 네이버 SDK가 발급한 액세스 토큰을 보내면 서버가 네이버 사용자 정보 API로 검증한 뒤 로그인/회원가입을 처리합니다.
+- 인가 코드 방식(`/auth/naver/login`)은 지원하지 않습니다.
 - Request Body:
 ```json
 {
-  "authorizationCode": "string",
-  "state": "string"
+  "accessToken": "string"
 }
 ```
+- Response: 카카오 로그인과 동일 (`provider`: `"NAVER"`). 유효하지 않거나 만료된 토큰이면 401
 
 ### 토큰 갱신
 - **POST** `/auth/token/refresh`
