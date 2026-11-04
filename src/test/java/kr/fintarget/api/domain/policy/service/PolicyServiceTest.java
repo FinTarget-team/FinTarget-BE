@@ -148,6 +148,29 @@ class PolicyServiceTest {
         assertThat(result).extracting(PolicyResponse::name).containsExactly("전국 정책");
     }
 
+    // 검색(#182)이 쓰는 findCandidatePolicies가 맞춤 정책 목록과 같은 조건을 적용하는지 (분리 전후 동작 동일)
+    @Test
+    void 조건_필터는_맞춤_정책_목록과_같은_정책을_돌려준다() {
+        when(userRepository.findById("user-1")).thenReturn(Optional.of(userWith(25, 3000000L, "ULSAN")));
+        when(policyRepository.findMatchingPolicies(25, 25, 3000000L, null)).thenReturn(List.of(
+                policy("전국 정책", null),
+                policy("울산 정책", "ULSAN"),
+                policy("서울 정책", "SEOUL")
+        ));
+
+        List<Policy> candidates = policyService.findCandidatePolicies("user-1", null);
+
+        assertThat(candidates).extracting(Policy::getName).containsExactly("전국 정책", "울산 정책");
+    }
+
+    @Test
+    void 조건_필터도_나이나_소득이_없으면_빈_목록이다() {
+        when(userRepository.findById("user-1")).thenReturn(Optional.of(userWith(null, 3000000L)));
+
+        assertThat(policyService.findCandidatePolicies("user-1", null)).isEmpty();
+        verify(policyRepository, never()).findMatchingPolicies(anyInt(), anyInt(), anyLong(), any());
+    }
+
     @Test
     void 정책_원문의_소득_조건과_지원_내용을_함께_반환한다() {
         when(userRepository.findById("user-1")).thenReturn(Optional.of(userWith(25, 3000000L)));

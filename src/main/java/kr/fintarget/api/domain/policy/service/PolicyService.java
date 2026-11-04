@@ -27,6 +27,18 @@ public class PolicyService {
 
     @Transactional(readOnly = true)
     public List<PolicyResponse> getMatchingPolicies(String userId, String policyType) {
+        return findCandidatePolicies(userId, policyType)
+                .stream()
+                .map(PolicyResponse::from)
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * 사용자 조건(나이·소득·유형·지역)에 맞는 정책 목록. 맞춤 정책 목록과 정책 검색(#182)이 같은 조건을 쓰도록 분리했다.
+     * 나이나 소득을 모르는 사용자는 맞춤 여부를 판단할 수 없어 빈 목록이다.
+     */
+    @Transactional(readOnly = true)
+    public List<Policy> findCandidatePolicies(String userId, String policyType) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
 
@@ -40,8 +52,7 @@ public class PolicyService {
         return policyRepository.findMatchingPolicies(ageRange.lower(), ageRange.upper(), user.getIncome(), parsePolicyType(policyType))
                 .stream()
                 .filter(policy -> policy.appliesToRegion(user.getRegion()))
-                .map(PolicyResponse::from)
-                .collect(Collectors.toList());
+                .toList();
     }
 
     private PolicyType parsePolicyType(String policyType) {
