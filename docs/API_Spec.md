@@ -859,6 +859,42 @@ X-Admin-Key: {ADMIN_API_KEY}
 | `chunkCount` | 새로 저장한 청크 수 |
 | `orphanDeletedCount` | 정책 테이블에 없는 정책의 청크를 지운 건수 |
 
+### 정책 청크 임베딩 갱신 (관리자, 앱에서는 호출하지 않음)
+
+```
+POST /api/admin/policy/embedding/refresh?all=false
+X-Admin-Key: {ADMIN_API_KEY}
+```
+
+- 정책 청크를 OpenAI 임베딩(`text-embedding-3-small`, 1536차원)으로 변환해 `policy_chunk_embedding`에 저장합니다 (#181). 정책 동기화 직후(청크 갱신·혜택 추출 다음)에도 자동 실행되며, 배포 직후 기존 청크를 바로 임베딩할 때 씁니다.
+- 사전 조건: `docs/sql/181_policy_chunk_embedding.sql` 실행 (pgvector 확장, 테이블 생성)
+- `all=false`(기본): 임베딩이 없거나 다른 모델로 만든 청크만. `all=true`: 전체 다시 임베딩
+- 청크 100개씩 한 요청으로 보냅니다 (`policy.embedding.batch-size`). `OPENAI_API_KEY`가 없거나 호출 한도를 넘으면 그 시점부터 건너뜁니다(`skippedCount`)
+- 정책 동기화와 잠금을 공유하므로 동기화·청크 갱신·다른 임베딩 갱신이 실행 중이면 409
+
+```json
+{
+  "status": 200,
+  "message": "OK",
+  "data": {
+    "model": "text-embedding-3-small",
+    "targetCount": 15,
+    "embeddedCount": 15,
+    "failedCount": 0,
+    "skippedCount": 0,
+    "elapsedMs": 2300
+  }
+}
+```
+
+| 필드 | 설명 |
+|---|---|
+| `model` | 임베딩 모델 |
+| `targetCount` | 임베딩 대상 청크 수 |
+| `embeddedCount` | 임베딩을 저장한 청크 수 |
+| `failedCount` | 호출·저장에 실패한 청크 수 (다음 실행 때 다시 시도) |
+| `skippedCount` | AI를 쓸 수 없어 건너뛴 청크 수 |
+
 ---
 
 ## 참고 사항
