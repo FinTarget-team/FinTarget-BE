@@ -210,7 +210,7 @@ Authorization: Bearer {accessToken}
 | `status` | `ACTIVE` \| `COMPLETED` \| `ABANDONED` |
 | `progressRate` | 달성률(%) = `currentAmount / targetAmount * 100`. 초과 달성 시 100보다 클 수 있음 |
 | `dday` | 마감일까지 남은 일수. 양수=남음, 0=오늘, 음수=기한 초과 |
-| `deadlineDefaulted` | 온보딩 자동 생성 시 채운 기본 마감일(생성일 + 1년)이면 `true`. 목표 수정에서 **마감일을 바꾸면** `false` (제목·금액만 수정하면 `true` 유지). `true`일 때는 시뮬레이션 성공 확률을 노출하지 않는 것을 권장 |
+| `deadlineDefaulted` | 온보딩 자동 생성 시 채운 기본 마감일(생성일 + 1년)이면 `true`. 목표 수정(`PUT /api/goals`)으로 저장하면 **마감일을 바꾸지 않았더라도** 사용자가 확인한 것으로 보고 `false` (#186). 온보딩 7단계 재제출(금액만 갱신)로는 바뀌지 않음. `true`일 때는 시뮬레이션 성공 확률을 노출하지 않는 것을 권장 |
 
 ### 목표 생성
 - **POST** `/api/goals`
@@ -460,6 +460,10 @@ Authorization: Bearer {accessToken}
   "data": {
     "simulationId": "uuid",
     "goalId": "uuid",
+    "goalTitle": "내 집 마련",
+    "goalTargetAmount": 50000000,
+    "goalCurrentAmount": 8000000,
+    "goalDeadline": "2028-12-31",
     "monthlySaving": 500000,
     "expectedCompletionDate": "2028-03-15",
     "policyCompletionDate": "2027-11-20",
@@ -474,6 +478,7 @@ Authorization: Bearer {accessToken}
 
 | 필드 | 설명 |
 |---|---|
+| `goalTitle`, `goalTargetAmount`, `goalCurrentAmount`, `goalDeadline` | 실행 당시 목표의 제목·목표 금액·모은 금액·마감일 (#186). 나중에 목표를 수정해도 바뀌지 않으므로, 기록이 어떤 조건에서 나온 결과인지 표시할 때 사용. 이 필드가 추가되기 전에 실행한 기록은 `null` |
 | `expectedCompletionDate` | 예상 달성일 (중앙값, 50번째 백분위) |
 | `optimisticCompletionDate` | 낙관적 시나리오 달성일 (10번째 백분위, 가장 빠른 쪽) |
 | `pessimisticCompletionDate` | 비관적 시나리오 달성일 (90번째 백분위, 가장 늦은 쪽) |
@@ -484,6 +489,7 @@ Authorization: Bearer {accessToken}
 > 목표의 `deadlineDefaulted`가 `true`면 마감일이 사용자가 정한 날짜가 아니므로, `successProbability`는 화면에 노출하지 않는 것을 권장합니다.
 > 낙관·비관 달성일과 성공 확률이 추가되기 전에 저장된 시뮬레이션 기록은 세 값이 `null`일 수 있습니다.
 > `policySuccessProbability`가 추가되기 전(#163)에 저장된 기록도 이 값이 `null`입니다.
+> 목표를 수정해도 `goalId`와 시뮬레이션 기록은 그대로 유지됩니다. 기록이 지워지는 것은 목표를 삭제할 때뿐입니다. 목표를 수정한 뒤에는 시뮬레이션을 다시 실행하도록 안내하는 것을 권장합니다.
 
 #### 계산 방식 (#163)
 

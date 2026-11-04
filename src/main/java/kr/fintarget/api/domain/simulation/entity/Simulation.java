@@ -55,6 +55,20 @@ public class Simulation {
     @Column(name = "policy_success_probability")
     private Double policySuccessProbability;
 
+    // 실행 당시 목표 값 (#186). 목표를 나중에 수정해도 이 기록이 어떤 조건에서 나온 결과인지 알 수 있게 복사해 둔다.
+    // 이 컬럼이 생기기 전에 저장된 기록은 null이다
+    @Column(name = "goal_title")
+    private String goalTitle;
+
+    @Column(name = "goal_target_amount")
+    private Long goalTargetAmount;
+
+    @Column(name = "goal_current_amount")
+    private Long goalCurrentAmount;
+
+    @Column(name = "goal_deadline")
+    private LocalDate goalDeadline;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
@@ -66,6 +80,10 @@ public class Simulation {
                       Double policySuccessProbability) {
         this.userId = userId;
         this.goal = goal;
+        this.goalTitle = goal.getTitle();
+        this.goalTargetAmount = goal.getTargetAmount();
+        this.goalCurrentAmount = goal.getCurrentAmount();
+        this.goalDeadline = goal.getDeadline();
         this.userPolicy = userPolicy;
         this.monthlySaving = monthlySaving;
         this.expectedCompletionDate = expectedCompletionDate;

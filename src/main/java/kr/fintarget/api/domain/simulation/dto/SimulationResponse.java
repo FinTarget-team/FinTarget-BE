@@ -11,6 +11,18 @@ public record SimulationResponse(
     UUID simulationId,
     @Schema(description = "시뮬레이션 대상 목표 ID (UUID)", example = "3fa85f64-5717-4562-b3fc-2c963f66afa6")
     UUID goalId,
+    @Schema(description = "실행 당시 목표 제목. 목표를 나중에 수정해도 바뀌지 않습니다. 이 필드가 추가되기 전(#186)에 실행한 기록은 null입니다.",
+            example = "내 집 마련", types = {"string", "null"})
+    String goalTitle,
+    @Schema(description = "실행 당시 목표 금액(원). 이 필드가 추가되기 전(#186)에 실행한 기록은 null입니다.",
+            example = "50000000", types = {"integer", "null"})
+    Long goalTargetAmount,
+    @Schema(description = "실행 당시 현재까지 모은 금액(원). 이 필드가 추가되기 전(#186)에 실행한 기록은 null입니다.",
+            example = "8000000", types = {"integer", "null"})
+    Long goalCurrentAmount,
+    @Schema(description = "실행 당시 목표 마감일 (yyyy-MM-dd). 이 필드가 추가되기 전(#186)에 실행한 기록은 null입니다.",
+            example = "2028-12-31", types = {"string", "null"})
+    LocalDate goalDeadline,
     @Schema(description = "요청에 사용된 월 저축액(원)", example = "500000")
     Long monthlySaving,
     @Schema(description = "몬테카를로 시뮬레이션 중앙값(50th percentile) 기준 예상 달성일", example = "2028-03-15")
@@ -42,6 +54,10 @@ public record SimulationResponse(
         return new SimulationResponse(
             simulation.getSimulationId(),
             simulation.getGoal().getGoalId(),
+            simulation.getGoalTitle(),
+            simulation.getGoalTargetAmount(),
+            simulation.getGoalCurrentAmount(),
+            simulation.getGoalDeadline(),
             simulation.getMonthlySaving(),
             simulation.getExpectedCompletionDate(),
             simulation.getPolicyCompletionDate(),

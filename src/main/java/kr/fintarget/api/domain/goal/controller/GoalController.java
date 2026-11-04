@@ -125,7 +125,9 @@ public class GoalController {
 
     @Operation(
             summary = "목표 수정",
-            description = "사용자의 저축 목표를 수정합니다. 요청 본문의 모든 필드로 기존 값을 덮어씁니다(부분 수정 아님)."
+            description = "사용자의 저축 목표를 수정합니다. 요청 본문의 모든 필드로 기존 값을 덮어씁니다(부분 수정 아님). "
+                    + "저장하면 마감일을 바꾸지 않았더라도 사용자가 확인한 마감일로 보고 deadlineDefaulted가 false가 됩니다. "
+                    + "goalId와 기존 시뮬레이션 기록은 유지되며, 각 기록에는 실행 당시 목표 값이 남아 있습니다."
     )
     @io.swagger.v3.oas.annotations.responses.ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(

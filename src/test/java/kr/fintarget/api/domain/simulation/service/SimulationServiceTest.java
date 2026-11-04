@@ -1,5 +1,6 @@
 package kr.fintarget.api.domain.simulation.service;
 
+import static org.mockito.Mockito.times;
 import kr.fintarget.api.domain.goal.entity.Goal;
 import kr.fintarget.api.domain.goal.repository.GoalRepository;
 import kr.fintarget.api.domain.policy.client.dto.KinfaItem;
@@ -335,5 +336,45 @@ class SimulationServiceTest {
         SimulationResponse response = simulationService.runSimulation(USER_ID, request);
 
         assertThat(response.expectedCompletionDate()).isNotNull();
+    }
+
+    @Test
+    void 실행_당시_목표_값을_기록에_함께_저장한다() {
+        LocalDate deadline = LocalDate.now().plusMonths(24);
+        Goal goal = new Goal(USER_ID, "내 집 마련", 50_000_000L, 8_000_000L, deadline);
+        when(goalRepository.findByGoalIdAndUserId(any(), eq(USER_ID))).thenReturn(Optional.of(goal));
+
+        SimulationResponse response = simulationService.runSimulation(
+                USER_ID, new SimulationRequest(UUID.randomUUID(), 1_000_000L, null, null));
+
+        assertThat(response.goalTitle()).isEqualTo("내 집 마련");
+        assertThat(response.goalTargetAmount()).isEqualTo(50_000_000L);
+        assertThat(response.goalCurrentAmount()).isEqualTo(8_000_000L);
+        assertThat(response.goalDeadline()).isEqualTo(deadline);
+    }
+
+    @Test
+    void 목표를_수정해도_이전_기록의_목표_값은_바뀌지_않고_새_실행에는_수정된_값이_저장된다() {
+        LocalDate oldDeadline = LocalDate.now().plusMonths(24);
+        LocalDate newDeadline = LocalDate.now().plusMonths(36);
+        Goal goal = new Goal(USER_ID, "전세 자금", 30_000_000L, 0L, oldDeadline);
+        when(goalRepository.findByGoalIdAndUserId(any(), eq(USER_ID))).thenReturn(Optional.of(goal));
+        ArgumentCaptor<Simulation> captor = ArgumentCaptor.forClass(Simulation.class);
+
+        simulationService.runSimulation(USER_ID, new SimulationRequest(UUID.randomUUID(), 1_000_000L, null, null));
+        goal.update("내 집 마련", 80_000_000L, 5_000_000L, newDeadline);
+        simulationService.runSimulation(USER_ID, new SimulationRequest(UUID.randomUUID(), 1_000_000L, null, null));
+
+        verify(simulationRepository, times(2)).save(captor.capture());
+        Simulation before = captor.getAllValues().get(0);
+        Simulation after = captor.getAllValues().get(1);
+        assertThat(before.getGoalTitle()).isEqualTo("전세 자금");
+        assertThat(before.getGoalTargetAmount()).isEqualTo(30_000_000L);
+        assertThat(before.getGoalCurrentAmount()).isZero();
+        assertThat(before.getGoalDeadline()).isEqualTo(oldDeadline);
+        assertThat(after.getGoalTitle()).isEqualTo("내 집 마련");
+        assertThat(after.getGoalTargetAmount()).isEqualTo(80_000_000L);
+        assertThat(after.getGoalCurrentAmount()).isEqualTo(5_000_000L);
+        assertThat(after.getGoalDeadline()).isEqualTo(newDeadline);
     }
 }

@@ -123,14 +123,28 @@ class GoalServiceTest {
     }
 
     @Test
-    void 마감일을_그대로_두고_수정하면_기본_마감일_플래그가_유지된다() {
+    void 마감일을_그대로_두고_수정해도_사용자가_확인한_마감일로_보고_플래그가_해제된다() {
+        UUID userId = UUID.randomUUID();
+        Goal goal = Goal.createFromOnboarding(userId, 30_000_000L);
+        LocalDate defaultDeadline = goal.getDeadline();
+        when(goalRepository.findByUserId(userId)).thenReturn(Optional.of(goal));
+
+        GoalResponse response = goalService.updateGoal(userId, new GoalUpdateRequest(
+                "내 집 마련", 40_000_000L, 1_000_000L, defaultDeadline));
+
+        assertThat(response.deadlineDefaulted()).isFalse();
+        assertThat(response.deadline()).isEqualTo(defaultDeadline);
+    }
+
+    @Test
+    void 온보딩_재제출로_금액만_갱신하면_기본_마감일_플래그가_유지된다() {
         UUID userId = UUID.randomUUID();
         Goal goal = Goal.createFromOnboarding(userId, 30_000_000L);
         when(goalRepository.findByUserId(userId)).thenReturn(Optional.of(goal));
 
-        GoalResponse response = goalService.updateGoal(userId, new GoalUpdateRequest(
-                "내 집 마련", 40_000_000L, 1_000_000L, goal.getDeadline()));
+        goalService.upsertFromOnboarding(userId, 50_000_000L);
 
-        assertThat(response.deadlineDefaulted()).isTrue();
+        assertThat(goal.isDeadlineDefaulted()).isTrue();
+        assertThat(goal.getTargetAmount()).isEqualTo(50_000_000L);
     }
 }
