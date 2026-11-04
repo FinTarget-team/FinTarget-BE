@@ -22,13 +22,18 @@ public record ExpenseResponse(
     LocalDateTime createdAt
 ) {
     public static ExpenseResponse from(Expense expense) {
-        return new ExpenseResponse(
+        return of(
             expense.getExpenseId(),
             expense.getAmount(),
             expense.getCategory(),
-            expense.getDescription() == null ? "" : expense.getDescription(),
+            expense.getDescription(),
             expense.getSpentAt(),
             expense.getCreatedAt()
         );
+    }
+
+    public static ExpenseResponse of(UUID expenseId, Long amount, String category, String description,
+                                     LocalDate spentAt, LocalDateTime createdAt) {
+        return new ExpenseResponse(expenseId, amount, category, description == null ? "" : description, spentAt, createdAt);
     }
 }

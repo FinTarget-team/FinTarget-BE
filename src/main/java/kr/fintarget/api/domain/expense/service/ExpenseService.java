@@ -7,10 +7,12 @@ import kr.fintarget.api.domain.expense.dto.ExpenseResponse;
 import kr.fintarget.api.domain.expense.dto.ExpenseStatsResponse;
 import kr.fintarget.api.domain.expense.dto.ExpenseSyncRequest;
 import kr.fintarget.api.domain.expense.entity.Expense;
+import kr.fintarget.api.domain.expense.event.ExpenseCreatedEvent;
 import kr.fintarget.api.domain.expense.repository.ExpenseRepository;
 import kr.fintarget.api.domain.user.entity.User;
 import kr.fintarget.api.domain.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
@@ -19,6 +21,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -31,6 +34,7 @@ public class ExpenseService {
 
     private final ExpenseRepository expenseRepository;
     private final UserRepository userRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Transactional
     public void syncExpenses(UUID userId, List<ExpenseSyncRequest> requests) {
@@ -65,6 +69,7 @@ public class ExpenseService {
      * 가상 금융 서버(mock-bank)가 보낸 거래를 지출로 저장하고, 거래별로 새로 저장됐는지(CREATED) 중복이라 건너뛰었는지(DUPLICATE) 돌려준다.
      * 중복 판정은 syncExpenses와 같은 사용자별 (카테고리, 금액, 날짜, 설명) 조합이다.
      * 존재하지 않는 사용자가 하나라도 있으면 아무것도 저장하지 않고 거부한다 (expense.user_id에 FK가 없어 그대로 저장되기 때문).
+     * 새로 저장된 지출은 사용자별로 묶어 ExpenseCreatedEvent로 발행하고, 커밋 뒤 앱에 실시간으로 전달된다.
      */
     @Transactional
     public List<BankTransactionResult> receiveBankTransactions(List<BankTransactionRequest> requests) {
@@ -74,22 +79,32 @@ public class ExpenseService {
         validateUsersExist(requests);
 
         Map<UUID, Set<ExpenseKey>> seenByUser = new HashMap<>();
+        // 요청에 처음 나온 사용자 순서대로 이벤트를 발행하도록 LinkedHashMap을 쓴다
+        Map<UUID, List<ExpenseResponse>> createdByUser = new LinkedHashMap<>();
         List<BankTransactionResult> results = new ArrayList<>();
         for (BankTransactionRequest request : requests) {
             Set<ExpenseKey> seen = seenByUser.computeIfAbsent(request.userId(), userId -> loadExistingKeys(userId, requests));
+            UUID expenseId = UUID.randomUUID();
+            LocalDateTime createdAt = LocalDateTime.now();
             // 조회 이후 다른 요청이 먼저 넣은 경우도 insertIfNotExists가 0을 반환하므로 DUPLICATE로 처리된다
             boolean created = seen.add(ExpenseKey.from(request))
                     && expenseRepository.insertIfNotExists(
-                            UUID.randomUUID(),
+                            expenseId,
                             request.userId(),
                             request.category(),
                             request.amount(),
                             request.description(),
                             request.spentAt(),
-                            LocalDateTime.now()) > 0;
+                            createdAt) > 0;
+            if (created) {
+                createdByUser.computeIfAbsent(request.userId(), userId -> new ArrayList<>())
+                        .add(ExpenseResponse.of(expenseId, request.amount(), request.category(), request.description(),
+                                request.spentAt(), createdAt));
+            }
             results.add(new BankTransactionResult(request.transactionId(),
                     created ? BankTransactionResult.Result.CREATED : BankTransactionResult.Result.DUPLICATE));
         }
+        createdByUser.forEach((userId, expenses) -> eventPublisher.publishEvent(new ExpenseCreatedEvent(userId, expenses)));
         return results;
     }
 
