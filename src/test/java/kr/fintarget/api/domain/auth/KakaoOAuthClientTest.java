@@ -1,5 +1,6 @@
 package kr.fintarget.api.domain.auth;
 
+import kr.fintarget.api.domain.auth.dto.SocialUserInfo;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
@@ -33,9 +34,10 @@ class KakaoOAuthClientTest {
         mockServer.expect(requestTo(USER_URI))
                 .andRespond(withSuccess("{\"id\":123456789}", MediaType.APPLICATION_JSON));
 
-        String result = kakaoOAuthClient.getKakaoUserIdByAccessToken("fake-access-token");
+        SocialUserInfo result = kakaoOAuthClient.getKakaoUserByAccessToken("fake-access-token");
 
-        assertThat(result).isEqualTo("123456789");
+        assertThat(result.providerId()).isEqualTo("123456789");
+        assertThat(result.email()).isNull();
     }
 
     @Test
@@ -43,7 +45,7 @@ class KakaoOAuthClientTest {
         mockServer.expect(requestTo(USER_URI))
                 .andRespond(withSuccess("{\"id\":null}", MediaType.APPLICATION_JSON));
 
-        assertThatThrownBy(() -> kakaoOAuthClient.getKakaoUserIdByAccessToken("fake-access-token"))
+        assertThatThrownBy(() -> kakaoOAuthClient.getKakaoUserByAccessToken("fake-access-token"))
                 .isInstanceOf(KakaoOAuthException.class)
                 .hasMessage("카카오 사용자 정보 응답에 id가 없습니다.");
     }
@@ -53,7 +55,7 @@ class KakaoOAuthClientTest {
         mockServer.expect(requestTo(USER_URI))
                 .andRespond(withSuccess("{\"id\":\"\"}", MediaType.APPLICATION_JSON));
 
-        assertThatThrownBy(() -> kakaoOAuthClient.getKakaoUserIdByAccessToken("fake-access-token"))
+        assertThatThrownBy(() -> kakaoOAuthClient.getKakaoUserByAccessToken("fake-access-token"))
                 .isInstanceOf(KakaoOAuthException.class)
                 .hasMessage("카카오 사용자 정보 응답에 id가 없습니다.");
 
@@ -61,7 +63,7 @@ class KakaoOAuthClientTest {
         mockServer.expect(requestTo(USER_URI))
                 .andRespond(withSuccess("{\"id\":\"   \"}", MediaType.APPLICATION_JSON));
 
-        assertThatThrownBy(() -> kakaoOAuthClient.getKakaoUserIdByAccessToken("fake-access-token"))
+        assertThatThrownBy(() -> kakaoOAuthClient.getKakaoUserByAccessToken("fake-access-token"))
                 .isInstanceOf(KakaoOAuthException.class)
                 .hasMessage("카카오 사용자 정보 응답에 id가 없습니다.");
     }
@@ -71,7 +73,7 @@ class KakaoOAuthClientTest {
         mockServer.expect(requestTo(USER_URI))
                 .andRespond(withStatus(HttpStatus.UNAUTHORIZED));
 
-        assertThatThrownBy(() -> kakaoOAuthClient.getKakaoUserIdByAccessToken("fake-access-token"))
+        assertThatThrownBy(() -> kakaoOAuthClient.getKakaoUserByAccessToken("fake-access-token"))
                 .isInstanceOf(KakaoOAuthException.class)
                 .hasMessage("유효하지 않거나 만료된 카카오 인증 정보입니다.");
     }
@@ -81,7 +83,7 @@ class KakaoOAuthClientTest {
         mockServer.expect(requestTo(USER_URI))
                 .andRespond(withStatus(HttpStatus.INTERNAL_SERVER_ERROR));
 
-        assertThatThrownBy(() -> kakaoOAuthClient.getKakaoUserIdByAccessToken("fake-access-token"))
+        assertThatThrownBy(() -> kakaoOAuthClient.getKakaoUserByAccessToken("fake-access-token"))
                 .isNotInstanceOf(KakaoOAuthException.class);
     }
 
@@ -92,9 +94,9 @@ class KakaoOAuthClientTest {
         mockServer.expect(requestTo(USER_URI))
                 .andRespond(withSuccess("{\"id\":987654321}", MediaType.APPLICATION_JSON));
 
-        String result = kakaoOAuthClient.getKakaoUserId("fake-authorization-code");
+        SocialUserInfo result = kakaoOAuthClient.getKakaoUser("fake-authorization-code");
 
-        assertThat(result).isEqualTo("987654321");
+        assertThat(result.providerId()).isEqualTo("987654321");
     }
 
     @Test
@@ -104,7 +106,7 @@ class KakaoOAuthClientTest {
         mockServer.expect(requestTo(USER_URI))
                 .andRespond(withStatus(HttpStatus.UNAUTHORIZED));
 
-        assertThatThrownBy(() -> kakaoOAuthClient.getKakaoUserId("fake-authorization-code"))
+        assertThatThrownBy(() -> kakaoOAuthClient.getKakaoUser("fake-authorization-code"))
                 .isInstanceOf(KakaoOAuthException.class)
                 .hasMessage("유효하지 않거나 만료된 카카오 인증 정보입니다.");
     }
@@ -116,7 +118,7 @@ class KakaoOAuthClientTest {
         mockServer.expect(requestTo(USER_URI))
                 .andRespond(withSuccess("{\"id\":null}", MediaType.APPLICATION_JSON));
 
-        assertThatThrownBy(() -> kakaoOAuthClient.getKakaoUserId("fake-authorization-code"))
+        assertThatThrownBy(() -> kakaoOAuthClient.getKakaoUser("fake-authorization-code"))
                 .isInstanceOf(KakaoOAuthException.class)
                 .hasMessage("카카오 사용자 정보 응답에 id가 없습니다.");
     }
@@ -126,7 +128,45 @@ class KakaoOAuthClientTest {
         mockServer.expect(requestTo(TOKEN_URI))
                 .andRespond(withStatus(HttpStatus.BAD_REQUEST));
 
-        assertThatThrownBy(() -> kakaoOAuthClient.getKakaoUserId("invalid-authorization-code"))
+        assertThatThrownBy(() -> kakaoOAuthClient.getKakaoUser("invalid-authorization-code"))
                 .isNotInstanceOf(KakaoOAuthException.class);
+    }
+
+    @Test
+    void 이메일_제공에_동의했고_유효하고_인증된_이메일이면_이메일을_반환한다() {
+        mockServer.expect(requestTo(USER_URI))
+                .andRespond(withSuccess("""
+                        {"id":1,"kakao_account":{"has_email":true,"is_email_valid":true,"is_email_verified":true,"email":"user@kakao.com"}}
+                        """, MediaType.APPLICATION_JSON));
+
+        assertThat(kakaoOAuthClient.getKakaoUserByAccessToken("fake-access-token").email()).isEqualTo("user@kakao.com");
+    }
+
+    @Test
+    void 이메일_제공에_동의하지_않아_이메일이_없으면_null을_반환한다() {
+        mockServer.expect(requestTo(USER_URI))
+                .andRespond(withSuccess("""
+                        {"id":1,"kakao_account":{"has_email":true,"email_needs_agreement":true}}
+                        """, MediaType.APPLICATION_JSON));
+
+        assertThat(kakaoOAuthClient.getKakaoUserByAccessToken("fake-access-token").email()).isNull();
+    }
+
+    @Test
+    void 인증되지_않았거나_유효하지_않은_이메일이면_null을_반환한다() {
+        mockServer.expect(requestTo(USER_URI))
+                .andRespond(withSuccess("""
+                        {"id":1,"kakao_account":{"is_email_valid":true,"is_email_verified":false,"email":"user@kakao.com"}}
+                        """, MediaType.APPLICATION_JSON));
+
+        assertThat(kakaoOAuthClient.getKakaoUserByAccessToken("fake-access-token").email()).isNull();
+
+        mockServer.reset();
+        mockServer.expect(requestTo(USER_URI))
+                .andRespond(withSuccess("""
+                        {"id":1,"kakao_account":{"is_email_valid":false,"is_email_verified":true,"email":"user@kakao.com"}}
+                        """, MediaType.APPLICATION_JSON));
+
+        assertThat(kakaoOAuthClient.getKakaoUserByAccessToken("fake-access-token").email()).isNull();
     }
 }

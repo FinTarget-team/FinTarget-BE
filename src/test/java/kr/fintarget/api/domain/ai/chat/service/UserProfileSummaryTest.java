@@ -2,6 +2,7 @@ package kr.fintarget.api.domain.ai.chat.service;
 
 import kr.fintarget.api.domain.user.code.IncomeBracket;
 import kr.fintarget.api.domain.user.entity.User;
+import kr.fintarget.api.domain.user.code.SocialProvider;
 import org.junit.jupiter.api.Test;
 
 import java.time.Year;
@@ -13,7 +14,7 @@ class UserProfileSummaryTest {
     private static final Year YEAR = Year.of(2026);
 
     private static User.UserBuilder base() {
-        return User.builder().id("u").provider("kakao").providerId("p");
+        return User.builder().id("u").provider(SocialProvider.KAKAO).providerId("p");
     }
 
     @Test

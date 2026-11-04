@@ -1,6 +1,7 @@
 package kr.fintarget.api.domain.user.dto;
 
 import kr.fintarget.api.domain.user.entity.User;
+import kr.fintarget.api.domain.user.code.SocialProvider;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -11,7 +12,7 @@ class UserProfileResponseTest {
     void 온보딩을_완료한_사용자는_출생연도_소득구간_코드와_기존_필드를_그대로_반환한다() {
         User user = User.builder()
                 .id("user-1")
-                .provider("KAKAO")
+                .provider(SocialProvider.KAKAO)
                 .providerId("kakao-1")
                 .name("홍길동")
                 .email("user@example.com")
@@ -39,7 +40,7 @@ class UserProfileResponseTest {
     void 온보딩을_완료하지_않은_사용자는_출생연도_소득구간_등이_null이다() {
         User user = User.builder()
                 .id("user-2")
-                .provider("KAKAO")
+                .provider(SocialProvider.KAKAO)
                 .providerId("kakao-2")
                 .onboardingCompleted(false)
                 .build();
@@ -60,7 +61,7 @@ class UserProfileResponseTest {
     void income이_매핑에_없는_값이면_예외없이_incomeBracket이_null이다() {
         User user = User.builder()
                 .id("user-3")
-                .provider("KAKAO")
+                .provider(SocialProvider.KAKAO)
                 .providerId("kakao-3")
                 .income(999L)
                 .build();
@@ -74,7 +75,7 @@ class UserProfileResponseTest {
     void 출생연도_입력_전에_연령대만_저장된_사용자는_birthYear가_null이다() {
         User user = User.builder()
                 .id("user-4")
-                .provider("KAKAO")
+                .provider(SocialProvider.KAKAO)
                 .providerId("kakao-4")
                 .age(25)
                 .build();
@@ -86,14 +87,14 @@ class UserProfileResponseTest {
 
     @Test
     void housingStatus가_저장되어_있으면_코드를_그대로_반환한다() {
-        User user = User.builder().id("user-5").provider("KAKAO").providerId("kakao-5").housingStatus("HOMEOWNER").build();
+        User user = User.builder().id("user-5").provider(SocialProvider.KAKAO).providerId("kakao-5").housingStatus("HOMEOWNER").build();
 
         assertThat(UserProfileResponse.from(user).getHousingStatus()).isEqualTo("HOMEOWNER");
     }
 
     @Test
     void housingStatus가_null이면_선택_안_함과_미응답_모두_NOT_SPECIFIED로_반환한다() {
-        User user = User.builder().id("user-6").provider("KAKAO").providerId("kakao-6").onboardingCompleted(true).build();
+        User user = User.builder().id("user-6").provider(SocialProvider.KAKAO).providerId("kakao-6").onboardingCompleted(true).build();
 
         assertThat(UserProfileResponse.from(user).getHousingStatus()).isEqualTo("NOT_SPECIFIED");
     }

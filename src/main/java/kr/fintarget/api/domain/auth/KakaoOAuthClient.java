@@ -1,5 +1,6 @@
 package kr.fintarget.api.domain.auth;
 
+import kr.fintarget.api.domain.auth.dto.SocialUserInfo;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
@@ -27,7 +28,7 @@ public class KakaoOAuthClient {
         this.restClient = restClientBuilder.build();
     }
 
-    public String getKakaoUserId(String authorizationCode) {
+    public SocialUserInfo getKakaoUser(String authorizationCode) {
         MultiValueMap<String, String> params = new LinkedMultiValueMap<>();
         params.add("grant_type", "authorization_code");
         params.add("client_id", clientId);
@@ -44,10 +45,10 @@ public class KakaoOAuthClient {
 
         String kakaoAccessToken = (String) tokenResponse.get("access_token");
 
-        return getKakaoUserIdByAccessToken(kakaoAccessToken);
+        return getKakaoUserByAccessToken(kakaoAccessToken);
     }
 
-    public String getKakaoUserIdByAccessToken(String accessToken) {
+    public SocialUserInfo getKakaoUserByAccessToken(String accessToken) {
         Map<String, Object> userResponse = restClient.get()
                 .uri("https://kapi.kakao.com/v2/user/me")
                 .header("Authorization", "Bearer " + accessToken)
@@ -61,6 +62,17 @@ public class KakaoOAuthClient {
         if (id == null || String.valueOf(id).isBlank()) {
             throw new KakaoOAuthException("카카오 사용자 정보 응답에 id가 없습니다.");
         }
-        return String.valueOf(id);
+        return new SocialUserInfo(String.valueOf(id), verifiedEmail(userResponse.get("kakao_account")));
+    }
+
+    // 이메일 제공에 동의했고, 카카오가 유효하고 인증된 이메일이라고 알려줄 때만 쓴다 (#173). 그 외에는 null
+    private static String verifiedEmail(Object kakaoAccount) {
+        if (!(kakaoAccount instanceof Map<?, ?> account)) {
+            return null;
+        }
+        if (!Boolean.TRUE.equals(account.get("is_email_valid")) || !Boolean.TRUE.equals(account.get("is_email_verified"))) {
+            return null;
+        }
+        return account.get("email") instanceof String email && !email.isBlank() ? email.strip() : null;
     }
 }

@@ -8,6 +8,7 @@ import kr.fintarget.api.domain.user.dto.UpdateProfileRequest;
 import kr.fintarget.api.domain.user.dto.UserProfileResponse;
 import kr.fintarget.api.domain.user.entity.User;
 import kr.fintarget.api.domain.user.repository.UserRepository;
+import kr.fintarget.api.domain.user.code.SocialProvider;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -42,7 +43,7 @@ class UserServiceTest {
     void 프로필_조회시_온보딩으로_저장된_birthYear와_income_코드가_내려간다() {
         User user = User.builder()
                 .id("user-1")
-                .provider("KAKAO")
+                .provider(SocialProvider.KAKAO)
                 .providerId("kakao-1")
                 .region("SEOUL")
                 .birthYear(1986)
@@ -62,11 +63,10 @@ class UserServiceTest {
         assertThat(response.isOnboardingCompleted()).isTrue();
     }
 
-    private UpdateProfileRequest updateRequest(String name, String email, String region,
+    private UpdateProfileRequest updateRequest(String name, String region,
                                                 String birthYear, String employmentType, String incomeBracket) {
         UpdateProfileRequest request = new UpdateProfileRequest();
         ReflectionTestUtils.setField(request, "name", name);
-        ReflectionTestUtils.setField(request, "email", email);
         ReflectionTestUtils.setField(request, "region", region);
         ReflectionTestUtils.setField(request, "birthYear", birthYear);
         ReflectionTestUtils.setField(request, "employmentType", employmentType);
@@ -76,10 +76,10 @@ class UserServiceTest {
 
     @Test
     void 프로필_수정시_birthYear_employmentType_incomeBracket이_저장값으로_변환되어_반영된다() {
-        User user = User.builder().id("user-1").provider("KAKAO").providerId("kakao-1").build();
+        User user = User.builder().id("user-1").provider(SocialProvider.KAKAO).providerId("kakao-1").build();
         when(userRepository.findById("user-1")).thenReturn(Optional.of(user));
 
-        UpdateProfileRequest request = updateRequest(null, null, null, " 1990 ", "STUDENT", "OVER_410");
+        UpdateProfileRequest request = updateRequest(null, null, " 1990 ", "STUDENT", "OVER_410");
 
         UserProfileResponse response = userService.updateProfile("user-1", request);
 
@@ -93,10 +93,10 @@ class UserServiceTest {
 
     @Test
     void birthYear가_4자리_숫자가_아니면_400_예외가_발생하고_값이_바뀌지_않는다() {
-        User user = User.builder().id("user-1").provider("KAKAO").providerId("kakao-1").birthYear(1990).build();
+        User user = User.builder().id("user-1").provider(SocialProvider.KAKAO).providerId("kakao-1").birthYear(1990).build();
         when(userRepository.findById("user-1")).thenReturn(Optional.of(user));
 
-        UpdateProfileRequest request = updateRequest(null, null, null, "1995-03-01", null, null);
+        UpdateProfileRequest request = updateRequest(null, null, "1995-03-01", null, null);
 
         assertThatThrownBy(() -> userService.updateProfile("user-1", request))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -106,10 +106,10 @@ class UserServiceTest {
 
     @Test
     void birthYear가_구버전_연령대_코드면_400_예외가_발생한다() {
-        User user = User.builder().id("user-1").provider("KAKAO").providerId("kakao-1").age(25).build();
+        User user = User.builder().id("user-1").provider(SocialProvider.KAKAO).providerId("kakao-1").age(25).build();
         when(userRepository.findById("user-1")).thenReturn(Optional.of(user));
 
-        UpdateProfileRequest request = updateRequest(null, null, null, "YOUTH", null, null);
+        UpdateProfileRequest request = updateRequest(null, null, "YOUTH", null, null);
 
         assertThatThrownBy(() -> userService.updateProfile("user-1", request))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -120,10 +120,10 @@ class UserServiceTest {
 
     @Test
     void birthYear가_범위_밖이면_400_예외가_발생한다() {
-        User user = User.builder().id("user-1").provider("KAKAO").providerId("kakao-1").build();
+        User user = User.builder().id("user-1").provider(SocialProvider.KAKAO).providerId("kakao-1").build();
         when(userRepository.findById("user-1")).thenReturn(Optional.of(user));
 
-        UpdateProfileRequest request = updateRequest(null, null, null, "1939", null, null);
+        UpdateProfileRequest request = updateRequest(null, null, "1939", null, null);
 
         assertThatThrownBy(() -> userService.updateProfile("user-1", request))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -133,10 +133,10 @@ class UserServiceTest {
 
     @Test
     void 기존_연령대만_있는_사용자가_birthYear를_입력하면_나이가_출생연도_기준으로_바뀐다() {
-        User user = User.builder().id("user-1").provider("KAKAO").providerId("kakao-1").age(40).build();
+        User user = User.builder().id("user-1").provider(SocialProvider.KAKAO).providerId("kakao-1").age(40).build();
         when(userRepository.findById("user-1")).thenReturn(Optional.of(user));
 
-        userService.updateProfile("user-1", updateRequest(null, null, null, "2000", null, null));
+        userService.updateProfile("user-1", updateRequest(null, null, "2000", null, null));
 
         assertThat(user.getBirthYear()).isEqualTo(2000);
         int thisYear = java.time.Year.now(java.time.ZoneId.of("Asia/Seoul")).getValue();
@@ -145,10 +145,10 @@ class UserServiceTest {
 
     @Test
     void employmentType이_유효하지_않은_코드면_400_예외가_발생하고_값이_바뀌지_않는다() {
-        User user = User.builder().id("user-1").provider("KAKAO").providerId("kakao-1").build();
+        User user = User.builder().id("user-1").provider(SocialProvider.KAKAO).providerId("kakao-1").build();
         when(userRepository.findById("user-1")).thenReturn(Optional.of(user));
 
-        UpdateProfileRequest request = updateRequest(null, null, null, null, "FREELANCER", null);
+        UpdateProfileRequest request = updateRequest(null, null, null, "FREELANCER", null);
 
         assertThatThrownBy(() -> userService.updateProfile("user-1", request))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -158,10 +158,10 @@ class UserServiceTest {
 
     @Test
     void incomeBracket이_유효하지_않은_코드면_400_예외가_발생하고_값이_바뀌지_않는다() {
-        User user = User.builder().id("user-1").provider("KAKAO").providerId("kakao-1").build();
+        User user = User.builder().id("user-1").provider(SocialProvider.KAKAO).providerId("kakao-1").build();
         when(userRepository.findById("user-1")).thenReturn(Optional.of(user));
 
-        UpdateProfileRequest request = updateRequest(null, null, null, null, null, "OVER_10M");
+        UpdateProfileRequest request = updateRequest(null, null, null, null, "OVER_10M");
 
         assertThatThrownBy(() -> userService.updateProfile("user-1", request))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -171,10 +171,10 @@ class UserServiceTest {
 
     @Test
     void incomeBracket이_구간_개편_전_코드면_400_예외가_발생하고_기존_값이_유지된다() {
-        User user = User.builder().id("user-1").provider("KAKAO").providerId("kakao-1").income(1_500_000L).build();
+        User user = User.builder().id("user-1").provider(SocialProvider.KAKAO).providerId("kakao-1").income(1_500_000L).build();
         when(userRepository.findById("user-1")).thenReturn(Optional.of(user));
 
-        UpdateProfileRequest request = updateRequest(null, null, null, null, null, "UNDER_2M");
+        UpdateProfileRequest request = updateRequest(null, null, null, null, "UNDER_2M");
 
         assertThatThrownBy(() -> userService.updateProfile("user-1", request))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -184,7 +184,7 @@ class UserServiceTest {
 
     @Test
     void 구간_개편_전_소득이_저장된_사용자는_프로필_조회시_incomeBracket이_null이다() {
-        User user = User.builder().id("user-1").provider("KAKAO").providerId("kakao-1").income(1_500_000L).build();
+        User user = User.builder().id("user-1").provider(SocialProvider.KAKAO).providerId("kakao-1").income(1_500_000L).build();
         when(userRepository.findById("user-1")).thenReturn(Optional.of(user));
 
         UserProfileResponse response = userService.getProfile("user-1");
@@ -194,10 +194,10 @@ class UserServiceTest {
 
     @Test
     void birthYear가_빈_문자열이면_400_예외가_발생한다() {
-        User user = User.builder().id("user-1").provider("KAKAO").providerId("kakao-1").birthYear(1990).build();
+        User user = User.builder().id("user-1").provider(SocialProvider.KAKAO).providerId("kakao-1").birthYear(1990).build();
         when(userRepository.findById("user-1")).thenReturn(Optional.of(user));
 
-        UpdateProfileRequest request = updateRequest(null, null, null, "", null, null);
+        UpdateProfileRequest request = updateRequest(null, null, "", null, null);
 
         assertThatThrownBy(() -> userService.updateProfile("user-1", request))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -207,10 +207,10 @@ class UserServiceTest {
 
     @Test
     void birthYear가_공백만이면_400_예외가_발생한다() {
-        User user = User.builder().id("user-1").provider("KAKAO").providerId("kakao-1").build();
+        User user = User.builder().id("user-1").provider(SocialProvider.KAKAO).providerId("kakao-1").build();
         when(userRepository.findById("user-1")).thenReturn(Optional.of(user));
 
-        UpdateProfileRequest request = updateRequest(null, null, null, "   ", null, null);
+        UpdateProfileRequest request = updateRequest(null, null, "   ", null, null);
 
         assertThatThrownBy(() -> userService.updateProfile("user-1", request))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -219,10 +219,10 @@ class UserServiceTest {
 
     @Test
     void employmentType이_빈_문자열이면_400_예외가_발생한다() {
-        User user = User.builder().id("user-1").provider("KAKAO").providerId("kakao-1").build();
+        User user = User.builder().id("user-1").provider(SocialProvider.KAKAO).providerId("kakao-1").build();
         when(userRepository.findById("user-1")).thenReturn(Optional.of(user));
 
-        UpdateProfileRequest request = updateRequest(null, null, null, null, "", null);
+        UpdateProfileRequest request = updateRequest(null, null, null, "", null);
 
         assertThatThrownBy(() -> userService.updateProfile("user-1", request))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -231,10 +231,10 @@ class UserServiceTest {
 
     @Test
     void incomeBracket이_빈_문자열이면_400_예외가_발생한다() {
-        User user = User.builder().id("user-1").provider("KAKAO").providerId("kakao-1").build();
+        User user = User.builder().id("user-1").provider(SocialProvider.KAKAO).providerId("kakao-1").build();
         when(userRepository.findById("user-1")).thenReturn(Optional.of(user));
 
-        UpdateProfileRequest request = updateRequest(null, null, null, null, null, "");
+        UpdateProfileRequest request = updateRequest(null, null, null, null, "");
 
         assertThatThrownBy(() -> userService.updateProfile("user-1", request))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -244,12 +244,12 @@ class UserServiceTest {
     @Test
     void 온보딩_항목이_모두_null이면_기존_값을_유지한다() {
         User user = User.builder()
-                .id("user-1").provider("KAKAO").providerId("kakao-1")
+                .id("user-1").provider(SocialProvider.KAKAO).providerId("kakao-1")
                 .age(25).birthYear(1995).income(1_500_000L).employmentType("EMPLOYED")
                 .build();
         when(userRepository.findById("user-1")).thenReturn(Optional.of(user));
 
-        UpdateProfileRequest request = updateRequest(null, null, null, null, null, null);
+        UpdateProfileRequest request = updateRequest(null, null, null, null, null);
 
         userService.updateProfile("user-1", request);
 
@@ -261,13 +261,13 @@ class UserServiceTest {
     @Test
     void 일부_필드만_요청하면_나머지_온보딩_필드와_기존_name은_유지된다() {
         User user = User.builder()
-                .id("user-1").provider("KAKAO").providerId("kakao-1")
+                .id("user-1").provider(SocialProvider.KAKAO).providerId("kakao-1")
                 .name("기존이름")
                 .age(25).income(1_500_000L).employmentType("EMPLOYED")
                 .build();
         when(userRepository.findById("user-1")).thenReturn(Optional.of(user));
 
-        UpdateProfileRequest request = updateRequest(null, null, null, null, null, "OVER_410");
+        UpdateProfileRequest request = updateRequest(null, null, null, null, "OVER_410");
 
         UserProfileResponse response = userService.updateProfile("user-1", request);
 
@@ -279,10 +279,10 @@ class UserServiceTest {
 
     @Test
     void region이_정상_코드면_변경된다() {
-        User user = User.builder().id("user-1").provider("KAKAO").providerId("kakao-1").region("BUSAN").build();
+        User user = User.builder().id("user-1").provider(SocialProvider.KAKAO).providerId("kakao-1").region("BUSAN").build();
         when(userRepository.findById("user-1")).thenReturn(Optional.of(user));
 
-        UpdateProfileRequest request = updateRequest(null, null, "SEOUL", null, null, null);
+        UpdateProfileRequest request = updateRequest(null, "SEOUL", null, null, null);
 
         UserProfileResponse response = userService.updateProfile("user-1", request);
 
@@ -292,10 +292,10 @@ class UserServiceTest {
 
     @Test
     void region이_유효하지_않은_코드면_400_예외가_발생하고_값이_바뀌지_않는다() {
-        User user = User.builder().id("user-1").provider("KAKAO").providerId("kakao-1").region("BUSAN").build();
+        User user = User.builder().id("user-1").provider(SocialProvider.KAKAO).providerId("kakao-1").region("BUSAN").build();
         when(userRepository.findById("user-1")).thenReturn(Optional.of(user));
 
-        UpdateProfileRequest request = updateRequest(null, null, "ATLANTIS", null, null, null);
+        UpdateProfileRequest request = updateRequest(null, "ATLANTIS", null, null, null);
 
         assertThatThrownBy(() -> userService.updateProfile("user-1", request))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -305,10 +305,10 @@ class UserServiceTest {
 
     @Test
     void region이_빈_문자열이면_400_예외가_발생한다() {
-        User user = User.builder().id("user-1").provider("KAKAO").providerId("kakao-1").region("BUSAN").build();
+        User user = User.builder().id("user-1").provider(SocialProvider.KAKAO).providerId("kakao-1").region("BUSAN").build();
         when(userRepository.findById("user-1")).thenReturn(Optional.of(user));
 
-        UpdateProfileRequest request = updateRequest(null, null, "", null, null, null);
+        UpdateProfileRequest request = updateRequest(null, "", null, null, null);
 
         assertThatThrownBy(() -> userService.updateProfile("user-1", request))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -318,10 +318,10 @@ class UserServiceTest {
 
     @Test
     void region이_null이면_기존_값을_유지한다() {
-        User user = User.builder().id("user-1").provider("KAKAO").providerId("kakao-1").region("BUSAN").build();
+        User user = User.builder().id("user-1").provider(SocialProvider.KAKAO).providerId("kakao-1").region("BUSAN").build();
         when(userRepository.findById("user-1")).thenReturn(Optional.of(user));
 
-        UpdateProfileRequest request = updateRequest(null, null, null, null, null, null);
+        UpdateProfileRequest request = updateRequest(null, null, null, null, null);
 
         UserProfileResponse response = userService.updateProfile("user-1", request);
 
@@ -331,10 +331,10 @@ class UserServiceTest {
 
     @Test
     void name이_null이면_기존_값을_유지한다() {
-        User user = User.builder().id("user-1").provider("KAKAO").providerId("kakao-1").name("기존이름").build();
+        User user = User.builder().id("user-1").provider(SocialProvider.KAKAO).providerId("kakao-1").name("기존이름").build();
         when(userRepository.findById("user-1")).thenReturn(Optional.of(user));
 
-        UpdateProfileRequest request = updateRequest(null, null, null, null, null, null);
+        UpdateProfileRequest request = updateRequest(null, null, null, null, null);
 
         UserProfileResponse response = userService.updateProfile("user-1", request);
 
@@ -344,10 +344,10 @@ class UserServiceTest {
 
     @Test
     void name이_빈_문자열이면_400_예외가_발생하고_값이_바뀌지_않는다() {
-        User user = User.builder().id("user-1").provider("KAKAO").providerId("kakao-1").name("기존이름").build();
+        User user = User.builder().id("user-1").provider(SocialProvider.KAKAO).providerId("kakao-1").name("기존이름").build();
         when(userRepository.findById("user-1")).thenReturn(Optional.of(user));
 
-        UpdateProfileRequest request = updateRequest("", null, null, null, null, null);
+        UpdateProfileRequest request = updateRequest("", null, null, null, null);
 
         assertThatThrownBy(() -> userService.updateProfile("user-1", request))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -357,10 +357,10 @@ class UserServiceTest {
 
     @Test
     void name이_공백만_있으면_400_예외가_발생하고_값이_바뀌지_않는다() {
-        User user = User.builder().id("user-1").provider("KAKAO").providerId("kakao-1").name("기존이름").build();
+        User user = User.builder().id("user-1").provider(SocialProvider.KAKAO).providerId("kakao-1").name("기존이름").build();
         when(userRepository.findById("user-1")).thenReturn(Optional.of(user));
 
-        UpdateProfileRequest request = updateRequest("   ", null, null, null, null, null);
+        UpdateProfileRequest request = updateRequest("   ", null, null, null, null);
 
         assertThatThrownBy(() -> userService.updateProfile("user-1", request))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -370,10 +370,10 @@ class UserServiceTest {
 
     @Test
     void name의_앞뒤_공백은_제거되어_저장된다() {
-        User user = User.builder().id("user-1").provider("KAKAO").providerId("kakao-1").build();
+        User user = User.builder().id("user-1").provider(SocialProvider.KAKAO).providerId("kakao-1").build();
         when(userRepository.findById("user-1")).thenReturn(Optional.of(user));
 
-        UpdateProfileRequest request = updateRequest("  홍길동  ", null, null, null, null, null);
+        UpdateProfileRequest request = updateRequest("  홍길동  ", null, null, null, null);
 
         UserProfileResponse response = userService.updateProfile("user-1", request);
 
@@ -383,10 +383,10 @@ class UserServiceTest {
 
     @Test
     void name이_전각_공백만_있으면_400_예외가_발생하고_값이_바뀌지_않는다() {
-        User user = User.builder().id("user-1").provider("KAKAO").providerId("kakao-1").name("기존이름").build();
+        User user = User.builder().id("user-1").provider(SocialProvider.KAKAO).providerId("kakao-1").name("기존이름").build();
         when(userRepository.findById("user-1")).thenReturn(Optional.of(user));
 
-        UpdateProfileRequest request = updateRequest("　　", null, null, null, null, null);
+        UpdateProfileRequest request = updateRequest("　　", null, null, null, null);
 
         assertThatThrownBy(() -> userService.updateProfile("user-1", request))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -396,10 +396,10 @@ class UserServiceTest {
 
     @Test
     void name의_앞뒤_전각_공백은_제거되어_저장된다() {
-        User user = User.builder().id("user-1").provider("KAKAO").providerId("kakao-1").build();
+        User user = User.builder().id("user-1").provider(SocialProvider.KAKAO).providerId("kakao-1").build();
         when(userRepository.findById("user-1")).thenReturn(Optional.of(user));
 
-        UpdateProfileRequest request = updateRequest("　홍길동　", null, null, null, null, null);
+        UpdateProfileRequest request = updateRequest("　홍길동　", null, null, null, null);
 
         UserProfileResponse response = userService.updateProfile("user-1", request);
 
@@ -409,11 +409,11 @@ class UserServiceTest {
 
     @Test
     void name이_20자면_정상_저장된다() {
-        User user = User.builder().id("user-1").provider("KAKAO").providerId("kakao-1").build();
+        User user = User.builder().id("user-1").provider(SocialProvider.KAKAO).providerId("kakao-1").build();
         when(userRepository.findById("user-1")).thenReturn(Optional.of(user));
 
         String name20 = "가".repeat(20);
-        UpdateProfileRequest request = updateRequest(name20, null, null, null, null, null);
+        UpdateProfileRequest request = updateRequest(name20, null, null, null, null);
 
         UserProfileResponse response = userService.updateProfile("user-1", request);
 
@@ -423,11 +423,11 @@ class UserServiceTest {
 
     @Test
     void name이_21자면_400_예외가_발생하고_값이_바뀌지_않는다() {
-        User user = User.builder().id("user-1").provider("KAKAO").providerId("kakao-1").name("기존이름").build();
+        User user = User.builder().id("user-1").provider(SocialProvider.KAKAO).providerId("kakao-1").name("기존이름").build();
         when(userRepository.findById("user-1")).thenReturn(Optional.of(user));
 
         String name21 = "가".repeat(21);
-        UpdateProfileRequest request = updateRequest(name21, null, null, null, null, null);
+        UpdateProfileRequest request = updateRequest(name21, null, null, null, null);
 
         assertThatThrownBy(() -> userService.updateProfile("user-1", request))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -436,31 +436,31 @@ class UserServiceTest {
     }
 
     @Test
-    void name_email_region_수정은_기존과_동일하게_동작한다() {
+    void name_region_수정은_기존과_동일하게_동작하고_이메일은_유지된다() {
         User user = User.builder()
-                .id("user-1").provider("KAKAO").providerId("kakao-1")
+                .id("user-1").provider(SocialProvider.KAKAO).providerId("kakao-1")
                 .name("기존이름").email("old@example.com").region("BUSAN")
                 .build();
         when(userRepository.findById("user-1")).thenReturn(Optional.of(user));
 
-        UpdateProfileRequest request = updateRequest("새이름", "new@example.com", "SEOUL", null, null, null);
+        UpdateProfileRequest request = updateRequest("새이름", "SEOUL", null, null, null);
 
         UserProfileResponse response = userService.updateProfile("user-1", request);
 
         assertThat(response.getName()).isEqualTo("새이름");
-        assertThat(response.getEmail()).isEqualTo("new@example.com");
+        assertThat(response.getEmail()).isEqualTo("old@example.com");
         assertThat(response.getRegion()).isEqualTo("SEOUL");
     }
 
     private UpdateProfileRequest housingRequest(String housingStatus) {
-        UpdateProfileRequest request = updateRequest(null, null, null, null, null, null);
+        UpdateProfileRequest request = updateRequest(null, null, null, null, null);
         ReflectionTestUtils.setField(request, "housingStatus", housingStatus);
         return request;
     }
 
     @Test
     void housingStatus가_null이면_기존_값을_유지한다() {
-        User user = User.builder().id("user-1").provider("KAKAO").providerId("kakao-1").housingStatus("HOMEOWNER").build();
+        User user = User.builder().id("user-1").provider(SocialProvider.KAKAO).providerId("kakao-1").housingStatus("HOMEOWNER").build();
         when(userRepository.findById("user-1")).thenReturn(Optional.of(user));
 
         UserProfileResponse response = userService.updateProfile("user-1", housingRequest(null));
@@ -471,7 +471,7 @@ class UserServiceTest {
 
     @Test
     void housingStatus가_HOMELESS면_저장된다() {
-        User user = User.builder().id("user-1").provider("KAKAO").providerId("kakao-1").build();
+        User user = User.builder().id("user-1").provider(SocialProvider.KAKAO).providerId("kakao-1").build();
         when(userRepository.findById("user-1")).thenReturn(Optional.of(user));
 
         UserProfileResponse response = userService.updateProfile("user-1", housingRequest("HOMELESS"));
@@ -482,7 +482,7 @@ class UserServiceTest {
 
     @Test
     void housingStatus가_NOT_SPECIFIED면_기존_값이_null로_바뀌고_NOT_SPECIFIED로_응답한다() {
-        User user = User.builder().id("user-1").provider("KAKAO").providerId("kakao-1").housingStatus("HOMEOWNER").build();
+        User user = User.builder().id("user-1").provider(SocialProvider.KAKAO).providerId("kakao-1").housingStatus("HOMEOWNER").build();
         when(userRepository.findById("user-1")).thenReturn(Optional.of(user));
 
         UserProfileResponse response = userService.updateProfile("user-1", housingRequest("NOT_SPECIFIED"));
@@ -493,7 +493,7 @@ class UserServiceTest {
 
     @Test
     void housingStatus가_빈_문자열이면_400_예외가_발생하고_값이_바뀌지_않는다() {
-        User user = User.builder().id("user-1").provider("KAKAO").providerId("kakao-1").housingStatus("HOMELESS").build();
+        User user = User.builder().id("user-1").provider(SocialProvider.KAKAO).providerId("kakao-1").housingStatus("HOMELESS").build();
         when(userRepository.findById("user-1")).thenReturn(Optional.of(user));
 
         assertThatThrownBy(() -> userService.updateProfile("user-1", housingRequest("")))
@@ -504,7 +504,7 @@ class UserServiceTest {
 
     @Test
     void housingStatus가_공백만이면_400_예외가_발생한다() {
-        User user = User.builder().id("user-1").provider("KAKAO").providerId("kakao-1").build();
+        User user = User.builder().id("user-1").provider(SocialProvider.KAKAO).providerId("kakao-1").build();
         when(userRepository.findById("user-1")).thenReturn(Optional.of(user));
 
         assertThatThrownBy(() -> userService.updateProfile("user-1", housingRequest("   ")))
@@ -514,7 +514,7 @@ class UserServiceTest {
 
     @Test
     void housingStatus가_유효하지_않은_코드면_400_예외가_발생하고_값이_바뀌지_않는다() {
-        User user = User.builder().id("user-1").provider("KAKAO").providerId("kakao-1").housingStatus("HOMELESS").build();
+        User user = User.builder().id("user-1").provider(SocialProvider.KAKAO).providerId("kakao-1").housingStatus("HOMELESS").build();
         when(userRepository.findById("user-1")).thenReturn(Optional.of(user));
 
         assertThatThrownBy(() -> userService.updateProfile("user-1", housingRequest("RENT")))

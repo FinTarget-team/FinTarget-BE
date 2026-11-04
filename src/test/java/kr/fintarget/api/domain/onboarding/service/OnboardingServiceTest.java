@@ -8,6 +8,7 @@ import kr.fintarget.api.domain.onboarding.repository.OnboardingAnswerRepository;
 import kr.fintarget.api.domain.user.code.IncomeBracket;
 import kr.fintarget.api.domain.user.entity.User;
 import kr.fintarget.api.domain.user.repository.UserRepository;
+import kr.fintarget.api.domain.user.code.SocialProvider;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -71,7 +72,7 @@ class OnboardingServiceTest {
     @Test
     void step1_답변_제출시_정상_이름이면_유저_name이_갱신되고_2단계_질문을_반환한다() {
         String userId = UUID.randomUUID().toString();
-        User user = User.builder().id(userId).provider("kakao").providerId("provider-1").build();
+        User user = User.builder().id(userId).provider(SocialProvider.KAKAO).providerId("provider-1").build();
 
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
 
@@ -120,7 +121,7 @@ class OnboardingServiceTest {
     @Test
     void step1_답변_제출시_이름이_20자면_정상_저장된다() {
         String userId = UUID.randomUUID().toString();
-        User user = User.builder().id(userId).provider("kakao").providerId("provider-1").build();
+        User user = User.builder().id(userId).provider(SocialProvider.KAKAO).providerId("provider-1").build();
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
 
         String name20 = "가".repeat(20);
@@ -132,7 +133,7 @@ class OnboardingServiceTest {
     @Test
     void step1_답변_제출시_이름이_21자면_400_예외가_발생한다() {
         String userId = UUID.randomUUID().toString();
-        User user = User.builder().id(userId).provider("kakao").providerId("provider-1").build();
+        User user = User.builder().id(userId).provider(SocialProvider.KAKAO).providerId("provider-1").build();
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
 
         String name21 = "가".repeat(21);
@@ -147,7 +148,7 @@ class OnboardingServiceTest {
     @Test
     void step1_답변_제출시_앞뒤_공백은_제거되어_유저_name에_저장되고_답변에는_원문이_저장된다() {
         String userId = UUID.randomUUID().toString();
-        User user = User.builder().id(userId).provider("kakao").providerId("provider-1").build();
+        User user = User.builder().id(userId).provider(SocialProvider.KAKAO).providerId("provider-1").build();
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
 
         onboardingService.submitAnswer(userId, answerRequest(STEP_NAME, "  홍길동  "));
@@ -186,7 +187,7 @@ class OnboardingServiceTest {
     @Test
     void step2_답변_제출시_유효한_출생연도면_유저_birthYear가_갱신되고_3단계_질문을_반환한다() {
         String userId = UUID.randomUUID().toString();
-        User user = User.builder().id(userId).provider("kakao").providerId("provider-1").build();
+        User user = User.builder().id(userId).provider(SocialProvider.KAKAO).providerId("provider-1").build();
 
         when(onboardingAnswerRepository.existsByUserIdAndStep(UUID.fromString(userId), STEP_NAME)).thenReturn(true);
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
@@ -201,7 +202,7 @@ class OnboardingServiceTest {
     @Test
     void step2_답변_제출시_구버전_연령대_코드면_400_예외가_발생한다() {
         String userId = UUID.randomUUID().toString();
-        User user = User.builder().id(userId).provider("kakao").providerId("provider-1").build();
+        User user = User.builder().id(userId).provider(SocialProvider.KAKAO).providerId("provider-1").build();
 
         when(onboardingAnswerRepository.existsByUserIdAndStep(UUID.fromString(userId), STEP_NAME)).thenReturn(true);
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
@@ -217,7 +218,7 @@ class OnboardingServiceTest {
     @Test
     void step2_답변_제출시_출생연도가_범위_밖이면_400_예외가_발생한다() {
         String userId = UUID.randomUUID().toString();
-        User user = User.builder().id(userId).provider("kakao").providerId("provider-1").build();
+        User user = User.builder().id(userId).provider(SocialProvider.KAKAO).providerId("provider-1").build();
 
         when(onboardingAnswerRepository.existsByUserIdAndStep(UUID.fromString(userId), STEP_NAME)).thenReturn(true);
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
@@ -252,7 +253,7 @@ class OnboardingServiceTest {
     @Test
     void step5_답변_제출시_유효한_지역코드면_유저_region이_갱신되고_주택_단계_질문을_반환한다() {
         String userId = UUID.randomUUID().toString();
-        User user = User.builder().id(userId).provider("kakao").providerId("provider-1").build();
+        User user = User.builder().id(userId).provider(SocialProvider.KAKAO).providerId("provider-1").build();
 
         when(onboardingAnswerRepository.existsByUserIdAndStep(UUID.fromString(userId), STEP_INCOME)).thenReturn(true);
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
@@ -272,7 +273,7 @@ class OnboardingServiceTest {
 
         when(onboardingAnswerRepository.existsByUserIdAndStep(UUID.fromString(userId), STEP_INCOME)).thenReturn(true);
         when(userRepository.findById(userId)).thenReturn(Optional.of(
-                User.builder().id(userId).provider("kakao").providerId("provider-1").build()
+                User.builder().id(userId).provider(SocialProvider.KAKAO).providerId("provider-1").build()
         ));
 
         assertThatThrownBy(() -> onboardingService.submitAnswer(userId, answerRequest(STEP_REGION, "ATLANTIS")))
@@ -285,7 +286,7 @@ class OnboardingServiceTest {
     @Test
     void step3_답변_제출시_유효한_고용형태_코드면_유저_employmentType이_갱신되고_4단계_질문을_반환한다() {
         String userId = UUID.randomUUID().toString();
-        User user = User.builder().id(userId).provider("kakao").providerId("provider-1").build();
+        User user = User.builder().id(userId).provider(SocialProvider.KAKAO).providerId("provider-1").build();
 
         when(onboardingAnswerRepository.existsByUserIdAndStep(UUID.fromString(userId), STEP_AGE)).thenReturn(true);
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
@@ -303,7 +304,7 @@ class OnboardingServiceTest {
 
         when(onboardingAnswerRepository.existsByUserIdAndStep(UUID.fromString(userId), STEP_AGE)).thenReturn(true);
         when(userRepository.findById(userId)).thenReturn(Optional.of(
-                User.builder().id(userId).provider("kakao").providerId("provider-1").build()
+                User.builder().id(userId).provider(SocialProvider.KAKAO).providerId("provider-1").build()
         ));
 
         assertThatThrownBy(() -> onboardingService.submitAnswer(userId, answerRequest(STEP_EMPLOYMENT, "FREELANCER")))
@@ -331,7 +332,7 @@ class OnboardingServiceTest {
     @Test
     void step4_답변_제출시_유효한_소득코드면_유저_income이_대표값으로_갱신되고_5단계_질문을_반환한다() {
         String userId = UUID.randomUUID().toString();
-        User user = User.builder().id(userId).provider("kakao").providerId("provider-1").build();
+        User user = User.builder().id(userId).provider(SocialProvider.KAKAO).providerId("provider-1").build();
 
         when(onboardingAnswerRepository.existsByUserIdAndStep(UUID.fromString(userId), STEP_EMPLOYMENT)).thenReturn(true);
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
@@ -349,7 +350,7 @@ class OnboardingServiceTest {
 
         when(onboardingAnswerRepository.existsByUserIdAndStep(UUID.fromString(userId), STEP_EMPLOYMENT)).thenReturn(true);
         when(userRepository.findById(userId)).thenReturn(Optional.of(
-                User.builder().id(userId).provider("kakao").providerId("provider-1").build()
+                User.builder().id(userId).provider(SocialProvider.KAKAO).providerId("provider-1").build()
         ));
 
         assertThatThrownBy(() -> onboardingService.submitAnswer(userId, answerRequest(STEP_INCOME, "UNDER_2M")))
@@ -407,7 +408,7 @@ class OnboardingServiceTest {
     @Test
     void step6_답변_제출시_무주택이면_유저_housingStatus가_갱신되고_목표_금액_질문을_반환한다() {
         String userId = UUID.randomUUID().toString();
-        User user = User.builder().id(userId).provider("kakao").providerId("provider-1").build();
+        User user = User.builder().id(userId).provider(SocialProvider.KAKAO).providerId("provider-1").build();
 
         when(onboardingAnswerRepository.existsByUserIdAndStep(UUID.fromString(userId), STEP_REGION)).thenReturn(true);
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
@@ -425,7 +426,7 @@ class OnboardingServiceTest {
     @Test
     void step6_답변_제출시_유주택이면_HOMEOWNER로_저장된다() {
         String userId = UUID.randomUUID().toString();
-        User user = User.builder().id(userId).provider("kakao").providerId("provider-1").build();
+        User user = User.builder().id(userId).provider(SocialProvider.KAKAO).providerId("provider-1").build();
 
         when(onboardingAnswerRepository.existsByUserIdAndStep(UUID.fromString(userId), STEP_REGION)).thenReturn(true);
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
@@ -438,7 +439,7 @@ class OnboardingServiceTest {
     @Test
     void step6_답변_제출시_선택_안_함이면_유저에는_null로_저장되고_답변에는_원문이_저장된다() {
         String userId = UUID.randomUUID().toString();
-        User user = User.builder().id(userId).provider("kakao").providerId("provider-1").housingStatus("HOMEOWNER").build();
+        User user = User.builder().id(userId).provider(SocialProvider.KAKAO).providerId("provider-1").housingStatus("HOMEOWNER").build();
 
         when(onboardingAnswerRepository.existsByUserIdAndStep(UUID.fromString(userId), STEP_REGION)).thenReturn(true);
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
@@ -455,7 +456,7 @@ class OnboardingServiceTest {
     @Test
     void step6_답변_제출시_유효하지_않은_코드면_400_예외가_발생한다() {
         String userId = UUID.randomUUID().toString();
-        User user = User.builder().id(userId).provider("kakao").providerId("provider-1").build();
+        User user = User.builder().id(userId).provider(SocialProvider.KAKAO).providerId("provider-1").build();
 
         when(onboardingAnswerRepository.existsByUserIdAndStep(UUID.fromString(userId), STEP_REGION)).thenReturn(true);
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
@@ -474,7 +475,7 @@ class OnboardingServiceTest {
 
         when(onboardingAnswerRepository.existsByUserIdAndStep(UUID.fromString(userId), STEP_REGION)).thenReturn(true);
         when(userRepository.findById(userId)).thenReturn(Optional.of(
-                User.builder().id(userId).provider("kakao").providerId("provider-1").build()
+                User.builder().id(userId).provider(SocialProvider.KAKAO).providerId("provider-1").build()
         ));
 
         assertThatThrownBy(() -> onboardingService.submitAnswer(userId, answerRequest(STEP_HOUSING, "30000000")))
@@ -500,7 +501,7 @@ class OnboardingServiceTest {
     @Test
     void step7_답변_제출시_목표가_생성되고_온보딩이_완료된다() {
         String userId = UUID.randomUUID().toString();
-        User user = User.builder().id(userId).provider("kakao").providerId("provider-1").build();
+        User user = User.builder().id(userId).provider(SocialProvider.KAKAO).providerId("provider-1").build();
 
         when(onboardingAnswerRepository.existsByUserIdAndStep(UUID.fromString(userId), STEP_HOUSING)).thenReturn(true);
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
