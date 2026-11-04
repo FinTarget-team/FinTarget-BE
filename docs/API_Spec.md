@@ -825,6 +825,40 @@ X-Admin-Key: {ADMIN_API_KEY}
 | `failedCount` | AI 호출·응답 해석에 실패해 기존 값을 유지한 정책 수. 다음 동기화 때 다시 시도 |
 | `skippedCount` | AI를 쓸 수 없는 상태(키 없음, 호출 한도 초과, 인증 실패)여서 중간에 멈춰 시도하지 않은 정책 수 |
 
+### 정책 원문 청크 갱신 (관리자, 앱에서는 호출하지 않음)
+
+```
+POST /api/admin/policy/chunk/refresh?all=false
+X-Admin-Key: {ADMIN_API_KEY}
+```
+
+- 전체 정책 검색(통합 RAG)에 쓸 정책 원문 청크를 만듭니다 (#180). 정책 동기화(`POST /api/admin/policy/sync`, 매일 03:00) 직후에도 자동 실행되며, 배포 직후 기존 정책 청크를 바로 만들 때 씁니다.
+- `all=false`(기본): 청크가 없거나 원문·분할 규칙이 바뀐 정책만 다시 만듦. `all=true`: 전체 다시 만듦
+- AI를 호출하지 않습니다. 정책 동기화와 잠금을 공유하므로 동기화나 다른 청크 갱신이 실행 중이면 409
+
+```json
+{
+  "status": 200,
+  "message": "OK",
+  "data": {
+    "policyCount": 864,
+    "regeneratedCount": 12,
+    "skippedCount": 852,
+    "chunkCount": 15,
+    "orphanDeletedCount": 0,
+    "elapsedMs": 850
+  }
+}
+```
+
+| 필드 | 설명 |
+|---|---|
+| `policyCount` | 검사한 정책 수 (전체 정책) |
+| `regeneratedCount` | 청크를 새로 만든 정책 수 |
+| `skippedCount` | 원문이 같아 그대로 둔 정책 수 |
+| `chunkCount` | 새로 저장한 청크 수 |
+| `orphanDeletedCount` | 정책 테이블에 없는 정책의 청크를 지운 건수 |
+
 ---
 
 ## 참고 사항

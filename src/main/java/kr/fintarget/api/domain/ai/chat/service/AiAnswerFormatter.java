@@ -46,7 +46,7 @@ public final class AiAnswerFormatter {
      * URL만 지운다. 프롬프트에 넣는 정책 원문용이며(모델이 원문 URL을 답변에 옮기지 않도록), 원문의 목록 기호 등은 그대로 둔다.
      * URL을 지워 "관련 사이트:"처럼 라벨만 남은 줄과 빈 괄호는 지운다. 결과가 비면 null.
      */
-    static String removeUrls(String text) {
+    public static String removeUrls(String text) {
         if (text == null) {
             return null;
         }

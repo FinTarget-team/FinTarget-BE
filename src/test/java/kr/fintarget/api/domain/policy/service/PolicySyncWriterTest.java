@@ -1,5 +1,6 @@
 package kr.fintarget.api.domain.policy.service;
 
+import kr.fintarget.api.domain.policy.chunk.PolicyChunkRepository;
 import kr.fintarget.api.domain.policy.entity.Policy;
 import kr.fintarget.api.domain.policy.entity.PolicyType;
 import kr.fintarget.api.domain.policy.repository.PolicyRepository;
@@ -31,6 +32,9 @@ class PolicySyncWriterTest {
 
     @Mock
     private UserPolicyRepository userPolicyRepository;
+
+    @Mock
+    private PolicyChunkRepository policyChunkRepository;
 
     @InjectMocks
     private PolicySyncWriter policySyncWriter;
@@ -88,6 +92,10 @@ class PolicySyncWriterTest {
         verify(policyRepository).delete(ended);
         verify(policyRepository, never()).delete(applied);
         verify(policyRepository, never()).delete(kept);
+        // 삭제하는 정책의 청크만 함께 지운다 (#180)
+        verify(policyChunkRepository).deleteByPolicyId(ended.getPolicyId());
+        verify(policyChunkRepository, never()).deleteByPolicyId(applied.getPolicyId());
+        verify(policyChunkRepository, never()).deleteByPolicyId(kept.getPolicyId());
     }
 
     @Test
@@ -97,6 +105,7 @@ class PolicySyncWriterTest {
         assertThat(counts).isEqualTo(new PolicySyncWriter.SyncCounts(0, 0, 0));
         verify(policyRepository, never()).findBySource(any());
         verify(policyRepository, never()).delete(any());
+        verify(policyChunkRepository, never()).deleteByPolicyId(any());
     }
 
     @Test

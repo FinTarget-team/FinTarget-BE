@@ -94,6 +94,86 @@ class PolicyDocumentTest {
         assertThat(PolicyDocument.of(youthCenter("나".repeat(100), linksOnly)).sourceLimited()).isFalse();
     }
 
+    // 섹션 정의를 PolicySections로 옮긴 뒤에도(#180) 단건 AI 질문에 넣는 문서가 한 글자도 바뀌지 않아야 한다
+    @Test
+    void 온통청년_문서_전체_결과가_고정된_형식과_같다() {
+        PolicyText text = PolicyText.builder()
+                .supportContent("월 최대 20만원 지원")
+                .eligibilityDetail("무주택 청년")
+                .applyMethod("온라인 신청(https://apply.example.com) 후 서류 제출")
+                .requiredDocuments("임대차계약서")
+                .applyPeriod("20260101 ~ 20261231")
+                .contactInfo("문의처: 1588-0000\n관련 사이트: https://www.example.go.kr")
+                .referenceUrl("https://example.com/ref")
+                .build();
+
+        PolicyDocument document = PolicyDocument.of(youthCenter("청년 월세를 지원하는 사업", text));
+
+        assertThat(document.text()).isEqualTo("""
+                정책명: 청년 월세 지원
+                제공 기관 데이터: 온통청년
+                신청 가능 지역: 서울, 경기
+                나이 범위(정형 값): 만 19세 ~ 만 34세
+
+                [정책 설명]
+                청년 월세를 지원하는 사업
+
+                [지원 내용]
+                월 최대 20만원 지원
+
+                [자격 조건]
+                무주택 청년
+
+                [신청 방법]
+                온라인 신청 후 서류 제출
+
+                [제출 서류]
+                임대차계약서
+
+                [신청 기간]
+                20260101 ~ 20261231
+
+                [문의처]
+                문의처: 1588-0000""");
+        assertThat(document.sourceLimited()).isTrue();
+    }
+
+    @Test
+    void KINFA_문서_전체_결과가_고정된_형식과_같다() {
+        Policy policy = Policy.create("햇살론", "연소득 3,500만원 이하", null, null, null, null, PolicyType.FINANCE_WELFARE,
+                null, "K-1", "KINFA", PolicyText.builder().supportContent("대출 한도: 1000만원\n금리: 연 9%").build());
+
+        assertThat(PolicyDocument.of(policy).text()).isEqualTo("""
+                정책명: 햇살론
+                제공 기관 데이터: 서민금융진흥원(KINFA)
+                신청 가능 지역: 전국
+
+                [지원 대상 상세 조건]
+                연소득 3,500만원 이하
+
+                [지원 내용]
+                대출 한도: 1000만원
+                금리: 연 9%""");
+    }
+
+    @Test
+    void 원문_컬럼이_없는_정책_문서_전체_결과가_고정된_형식과_같다() {
+        Policy policy = Policy.create("짧은 정책", "짧은 설명", 19, null, null, null, PolicyType.ETC,
+                null, "P-2", "YOUTH_CENTER", null);
+
+        PolicyDocument document = PolicyDocument.of(policy);
+
+        assertThat(document.text()).isEqualTo("""
+                정책명: 짧은 정책
+                제공 기관 데이터: 온통청년
+                신청 가능 지역: 전국
+                나이 범위(정형 값): 만 19세 이상
+
+                [정책 설명]
+                짧은 설명""");
+        assertThat(document.sourceLimited()).isTrue();
+    }
+
     @Test
     void 근거_텍스트_합계가_100자_이상이면_원문_부족이_아니다() {
         PolicyText text = PolicyText.builder().supportContent("가".repeat(90)).build();

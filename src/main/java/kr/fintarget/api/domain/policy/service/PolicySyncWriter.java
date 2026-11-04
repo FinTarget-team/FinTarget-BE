@@ -1,5 +1,6 @@
 package kr.fintarget.api.domain.policy.service;
 
+import kr.fintarget.api.domain.policy.chunk.PolicyChunkRepository;
 import kr.fintarget.api.domain.policy.entity.Policy;
 import kr.fintarget.api.domain.policy.repository.PolicyRepository;
 import kr.fintarget.api.domain.policy.repository.UserPolicyRepository;
@@ -14,7 +15,8 @@ import java.util.Optional;
 /**
  * 외부 API에서 받아온 소스 전체 목록을 기준으로 정책 테이블을 맞춘다.
  * - 없는 정책은 추가, 이미 있는 정책은 최신 내용으로 갱신
- * - 목록에서 빠진(종료/판매중단) 정책은 삭제. 단, 사용자가 신청한(user_policy가 참조하는) 정책은 남긴다
+ * - 목록에서 빠진(종료/판매중단) 정책은 삭제. 단, 사용자가 신청한(user_policy가 참조하는) 정책은 남긴다.
+ *   삭제하는 정책의 검색용 청크(policy_chunk)도 함께 지운다 (#180)
  * 호출하는 쪽의 트랜잭션 안에서 실행되어야 한다.
  */
 @Component
@@ -23,6 +25,7 @@ public class PolicySyncWriter {
 
     private final PolicyRepository policyRepository;
     private final UserPolicyRepository userPolicyRepository;
+    private final PolicyChunkRepository policyChunkRepository;
 
     public SyncCounts apply(String source, List<Policy> fetchedPolicies) {
         Map<String, Policy> fetchedByExternalId = new LinkedHashMap<>();
@@ -51,6 +54,8 @@ public class PolicySyncWriter {
             for (Policy stored : policyRepository.findBySource(source)) {
                 if (!fetchedByExternalId.containsKey(stored.getExternalId())
                         && !userPolicyRepository.existsByPolicyPolicyId(stored.getPolicyId())) {
+                    // 검색용 청크도 같은 트랜잭션에서 지운다 (#180). policy_chunk는 FK가 없어 CASCADE로 지워지지 않는다
+                    policyChunkRepository.deleteByPolicyId(stored.getPolicyId());
                     policyRepository.delete(stored);
                     deleted++;
                 }
