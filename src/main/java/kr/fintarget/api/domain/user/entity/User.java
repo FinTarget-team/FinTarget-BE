@@ -1,6 +1,7 @@
 package kr.fintarget.api.domain.user.entity;
 
 import jakarta.persistence.*;
+import kr.fintarget.api.domain.user.code.SocialProvider;
 import kr.fintarget.api.domain.user.validation.BirthYearValidator;
 import lombok.*;
 import java.time.LocalDateTime;
@@ -14,17 +15,22 @@ import java.time.Year;
 @AllArgsConstructor
 public class User {
 
+    // 이메일 컬럼 길이(varchar 255). 이보다 긴 이메일은 저장하지 않는다
+    private static final int MAX_EMAIL_LENGTH = 255;
+
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private String id;
 
+    @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private String provider;
+    private SocialProvider provider;
 
     @Column(nullable = false, unique = true)
     private String providerId;
 
     private String name;
+    // 소셜 제공자에게서 받은 이메일 (#173). 이메일 제공에 동의하지 않았으면 null이며, 프로필 수정으로는 바꿀 수 없다
     private String email;
     private String region;
 
@@ -49,10 +55,26 @@ public class User {
         this.createdAt = LocalDateTime.now();
     }
 
-    public void updateProfile(String name, String email, String region) {
-        if (name != null) this.name = name;
-        if (email != null) this.email = email;
-        if (region != null) this.region = region;
+    /**
+     * 소셜 로그인에서 받은 이메일로, 저장된 이메일이 없을 때만 채운다 (#173). 이미 있는 이메일은 덮어쓰지 않는다.
+     * 값이 바뀌었으면 true
+     */
+    public boolean fillEmailIfAbsent(String socialEmail) {
+        String acceptable = acceptableEmail(socialEmail);
+        if (this.email != null || acceptable == null) {
+            return false;
+        }
+        this.email = acceptable;
+        return true;
+    }
+
+    /** 저장할 수 있는 이메일이면 앞뒤 공백을 제거해 반환하고, 비어 있거나 컬럼 길이를 넘으면 null */
+    public static String acceptableEmail(String email) {
+        if (email == null || email.isBlank()) {
+            return null;
+        }
+        String stripped = email.strip();
+        return stripped.length() <= MAX_EMAIL_LENGTH ? stripped : null;
     }
 
     public void completeOnboarding() {

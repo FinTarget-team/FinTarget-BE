@@ -1,5 +1,6 @@
 package kr.fintarget.api.domain.auth;
 
+import kr.fintarget.api.domain.auth.dto.SocialUserInfo;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
@@ -32,9 +33,10 @@ class NaverOAuthClientTest {
         mockServer.expect(requestTo(PROFILE_URI))
                 .andRespond(withSuccess("{\"response\":{\"id\":\"abc123\"}}", MediaType.APPLICATION_JSON));
 
-        String result = naverOAuthClient.getNaverUserId("fake-access-token");
+        SocialUserInfo result = naverOAuthClient.getNaverUser("fake-access-token");
 
-        assertThat(result).isEqualTo("abc123");
+        assertThat(result.providerId()).isEqualTo("abc123");
+        assertThat(result.email()).isNull();
     }
 
     @Test
@@ -42,7 +44,7 @@ class NaverOAuthClientTest {
         mockServer.expect(requestTo(PROFILE_URI))
                 .andRespond(withSuccess("{\"response\":{}}", MediaType.APPLICATION_JSON));
 
-        assertThatThrownBy(() -> naverOAuthClient.getNaverUserId("fake-access-token"))
+        assertThatThrownBy(() -> naverOAuthClient.getNaverUser("fake-access-token"))
                 .isInstanceOf(NaverOAuthException.class)
                 .hasMessage("네이버 사용자 정보 응답에 id가 없습니다.");
     }
@@ -52,7 +54,7 @@ class NaverOAuthClientTest {
         mockServer.expect(requestTo(PROFILE_URI))
                 .andRespond(withSuccess("{\"response\":{\"id\":null}}", MediaType.APPLICATION_JSON));
 
-        assertThatThrownBy(() -> naverOAuthClient.getNaverUserId("fake-access-token"))
+        assertThatThrownBy(() -> naverOAuthClient.getNaverUser("fake-access-token"))
                 .isInstanceOf(NaverOAuthException.class)
                 .hasMessage("네이버 사용자 정보 응답에 id가 없습니다.");
     }
@@ -62,7 +64,7 @@ class NaverOAuthClientTest {
         mockServer.expect(requestTo(PROFILE_URI))
                 .andRespond(withSuccess("{\"response\":{\"id\":\"\"}}", MediaType.APPLICATION_JSON));
 
-        assertThatThrownBy(() -> naverOAuthClient.getNaverUserId("fake-access-token"))
+        assertThatThrownBy(() -> naverOAuthClient.getNaverUser("fake-access-token"))
                 .isInstanceOf(NaverOAuthException.class)
                 .hasMessage("네이버 사용자 정보 응답에 id가 없습니다.");
 
@@ -70,7 +72,7 @@ class NaverOAuthClientTest {
         mockServer.expect(requestTo(PROFILE_URI))
                 .andRespond(withSuccess("{\"response\":{\"id\":\"   \"}}", MediaType.APPLICATION_JSON));
 
-        assertThatThrownBy(() -> naverOAuthClient.getNaverUserId("fake-access-token"))
+        assertThatThrownBy(() -> naverOAuthClient.getNaverUser("fake-access-token"))
                 .isInstanceOf(NaverOAuthException.class)
                 .hasMessage("네이버 사용자 정보 응답에 id가 없습니다.");
     }
@@ -80,7 +82,7 @@ class NaverOAuthClientTest {
         mockServer.expect(requestTo(PROFILE_URI))
                 .andRespond(withSuccess("{}", MediaType.APPLICATION_JSON));
 
-        assertThatThrownBy(() -> naverOAuthClient.getNaverUserId("fake-access-token"))
+        assertThatThrownBy(() -> naverOAuthClient.getNaverUser("fake-access-token"))
                 .isInstanceOf(NaverOAuthException.class)
                 .hasMessage("네이버 사용자 정보 응답 형식이 올바르지 않습니다.");
     }
@@ -90,7 +92,7 @@ class NaverOAuthClientTest {
         mockServer.expect(requestTo(PROFILE_URI))
                 .andRespond(withStatus(HttpStatus.UNAUTHORIZED));
 
-        assertThatThrownBy(() -> naverOAuthClient.getNaverUserId("fake-access-token"))
+        assertThatThrownBy(() -> naverOAuthClient.getNaverUser("fake-access-token"))
                 .isInstanceOf(NaverOAuthException.class)
                 .hasMessage("유효하지 않은 네이버 액세스 토큰입니다.");
     }
@@ -100,7 +102,23 @@ class NaverOAuthClientTest {
         mockServer.expect(requestTo(PROFILE_URI))
                 .andRespond(withStatus(HttpStatus.INTERNAL_SERVER_ERROR));
 
-        assertThatThrownBy(() -> naverOAuthClient.getNaverUserId("fake-access-token"))
+        assertThatThrownBy(() -> naverOAuthClient.getNaverUser("fake-access-token"))
                 .isNotInstanceOf(NaverOAuthException.class);
+    }
+
+    @Test
+    void 이메일_제공에_동의했으면_이메일을_반환한다() {
+        mockServer.expect(requestTo(PROFILE_URI))
+                .andRespond(withSuccess("{\"response\":{\"id\":\"abc123\",\"email\":\"user@naver.com\"}}", MediaType.APPLICATION_JSON));
+
+        assertThat(naverOAuthClient.getNaverUser("fake-access-token").email()).isEqualTo("user@naver.com");
+    }
+
+    @Test
+    void 이메일이_빈_문자열이면_null을_반환한다() {
+        mockServer.expect(requestTo(PROFILE_URI))
+                .andRespond(withSuccess("{\"response\":{\"id\":\"abc123\",\"email\":\"  \"}}", MediaType.APPLICATION_JSON));
+
+        assertThat(naverOAuthClient.getNaverUser("fake-access-token").email()).isNull();
     }
 }

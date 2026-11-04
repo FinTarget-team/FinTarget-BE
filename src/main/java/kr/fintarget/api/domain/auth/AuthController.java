@@ -10,7 +10,9 @@ import kr.fintarget.api.domain.auth.dto.KakaoLoginRequest;
 import kr.fintarget.api.domain.auth.dto.KakaoTokenLoginRequest;
 import kr.fintarget.api.domain.auth.dto.NaverLoginRequest;
 import kr.fintarget.api.domain.auth.dto.NaverTokenLoginRequest;
+import kr.fintarget.api.domain.auth.dto.SocialUserInfo;
 import kr.fintarget.api.domain.auth.dto.TokenRefreshResponse;
+import kr.fintarget.api.domain.user.code.SocialProvider;
 import kr.fintarget.api.domain.user.entity.User;
 import kr.fintarget.api.domain.user.repository.UserRepository;
 import kr.fintarget.api.security.BlacklistedToken;
@@ -22,6 +24,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
+import java.util.Optional;
 
 @Tag(name = "인증", description = "소셜 로그인, 토큰 재발급, 로그아웃 API. 이 도메인의 엔드포인트는 인증 없이 호출 가능합니다.")
 @RestController
@@ -34,16 +37,25 @@ public class AuthController {
     private final NaverOAuthClient naverOAuthClient;
     private final BlacklistedTokenRepository blacklistedTokenRepository;
 
-    private ResponseEntity<ApiResponse<AuthResponse>> socialLogin(String providerId, String provider) {
-        boolean isNewUser = !userRepository.findByProviderAndProviderId(provider, providerId).isPresent();
-        User user = userRepository.findByProviderAndProviderId(provider, providerId)
-                .orElseGet(() -> userRepository.save(
-                        User.builder()
-                                .provider(provider)
-                                .providerId(providerId)
-                                .build()
-                ));
-        String accessToken = jwtUtil.generateToken(user.getId(), provider);
+    // 이메일은 소셜 제공자에게서 받은 값으로만 저장한다 (#173). 신규 가입이면 함께 저장하고,
+    // 기존 회원은 저장된 이메일이 없을 때만 채운다 (이미 있는 이메일은 덮어쓰지 않음)
+    private ResponseEntity<ApiResponse<AuthResponse>> socialLogin(SocialUserInfo socialUser, SocialProvider provider) {
+        Optional<User> existingUser = userRepository.findByProviderAndProviderId(provider, socialUser.providerId());
+        boolean isNewUser = existingUser.isEmpty();
+        User user;
+        if (isNewUser) {
+            user = userRepository.save(User.builder()
+                    .provider(provider)
+                    .providerId(socialUser.providerId())
+                    .email(User.acceptableEmail(socialUser.email()))
+                    .build());
+        } else {
+            user = existingUser.get();
+            if (user.fillEmailIfAbsent(socialUser.email())) {
+                userRepository.save(user);
+            }
+        }
+        String accessToken = jwtUtil.generateToken(user.getId(), provider.name());
         String refreshToken = jwtUtil.generateRefreshToken(user.getId());
         AuthResponse response = AuthResponse.builder()
                 .isNewUser(isNewUser)
@@ -51,7 +63,7 @@ public class AuthController {
                 .accessToken(accessToken)
                 .refreshToken(refreshToken)
                 .expiresIn(3600)
-                .provider(provider)
+                .provider(provider.name())
                 .build();
         return ResponseEntity.status(isNewUser ? 201 : 200).body(
                 isNewUser ? ApiResponse.created(response) : ApiResponse.ok(response)
@@ -97,8 +109,7 @@ public class AuthController {
     })
     @PostMapping("/kakao/login")
     public ResponseEntity<ApiResponse<AuthResponse>> kakaoLogin(@RequestBody KakaoLoginRequest request) {
-        String kakaoUserId = kakaoOAuthClient.getKakaoUserId(request.getAuthorizationCode());
-        return socialLogin(kakaoUserId, "KAKAO");
+        return socialLogin(kakaoOAuthClient.getKakaoUser(request.getAuthorizationCode()), SocialProvider.KAKAO);
     }
 
     @Operation(
@@ -152,8 +163,7 @@ public class AuthController {
     })
     @PostMapping("/kakao/login/token")
     public ResponseEntity<ApiResponse<AuthResponse>> kakaoTokenLogin(@Valid @RequestBody KakaoTokenLoginRequest request) {
-        String kakaoUserId = kakaoOAuthClient.getKakaoUserIdByAccessToken(request.getAccessToken());
-        return socialLogin(kakaoUserId, "KAKAO");
+        return socialLogin(kakaoOAuthClient.getKakaoUserByAccessToken(request.getAccessToken()), SocialProvider.KAKAO);
     }
 
     @Operation(
@@ -185,7 +195,7 @@ public class AuthController {
     })
     @PostMapping("/naver/login")
     public ResponseEntity<ApiResponse<AuthResponse>> naverLogin(@RequestBody NaverLoginRequest request) {
-        return socialLogin(request.getAuthorizationCode(), "NAVER");
+        return socialLogin(new SocialUserInfo(request.getAuthorizationCode(), null), SocialProvider.NAVER);
     }
 
     @Operation(
@@ -239,8 +249,7 @@ public class AuthController {
     })
     @PostMapping("/naver/login/token")
     public ResponseEntity<ApiResponse<AuthResponse>> naverTokenLogin(@Valid @RequestBody NaverTokenLoginRequest request) {
-        String naverUserId = naverOAuthClient.getNaverUserId(request.getAccessToken());
-        return socialLogin(naverUserId, "NAVER");
+        return socialLogin(naverOAuthClient.getNaverUser(request.getAccessToken()), SocialProvider.NAVER);
     }
 
     @Operation(

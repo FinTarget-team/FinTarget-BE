@@ -4,13 +4,16 @@ import kr.fintarget.api.common.ApiResponse;
 import kr.fintarget.api.domain.auth.dto.AuthResponse;
 import kr.fintarget.api.domain.auth.dto.KakaoTokenLoginRequest;
 import kr.fintarget.api.domain.auth.dto.NaverTokenLoginRequest;
+import kr.fintarget.api.domain.auth.dto.SocialUserInfo;
 import kr.fintarget.api.domain.auth.dto.TokenRefreshResponse;
 import kr.fintarget.api.domain.user.entity.User;
 import kr.fintarget.api.domain.user.repository.UserRepository;
 import kr.fintarget.api.security.BlacklistedTokenRepository;
 import kr.fintarget.api.security.JwtUtil;
+import kr.fintarget.api.domain.user.code.SocialProvider;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -23,6 +26,8 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -91,12 +96,12 @@ class AuthControllerTest {
     void 유효한_카카오_액세스_토큰이면_기존_회원은_200으로_로그인된다() {
         User existingUser = User.builder()
                 .id("user-1")
-                .provider("KAKAO")
+                .provider(SocialProvider.KAKAO)
                 .providerId("kakao-123")
                 .build();
 
-        when(kakaoOAuthClient.getKakaoUserIdByAccessToken("valid-kakao-access-token")).thenReturn("kakao-123");
-        when(userRepository.findByProviderAndProviderId("KAKAO", "kakao-123"))
+        when(kakaoOAuthClient.getKakaoUserByAccessToken("valid-kakao-access-token")).thenReturn(new SocialUserInfo("kakao-123", null));
+        when(userRepository.findByProviderAndProviderId(SocialProvider.KAKAO, "kakao-123"))
                 .thenReturn(Optional.of(existingUser));
         when(jwtUtil.generateToken("user-1", "KAKAO")).thenReturn("access-token");
         when(jwtUtil.generateRefreshToken("user-1")).thenReturn("refresh-token");
@@ -119,12 +124,12 @@ class AuthControllerTest {
     void 유효한_카카오_액세스_토큰이고_신규_사용자면_회원가입_후_201로_응답한다() {
         User savedUser = User.builder()
                 .id("user-2")
-                .provider("KAKAO")
+                .provider(SocialProvider.KAKAO)
                 .providerId("kakao-456")
                 .build();
 
-        when(kakaoOAuthClient.getKakaoUserIdByAccessToken("new-kakao-access-token")).thenReturn("kakao-456");
-        when(userRepository.findByProviderAndProviderId("KAKAO", "kakao-456")).thenReturn(Optional.empty());
+        when(kakaoOAuthClient.getKakaoUserByAccessToken("new-kakao-access-token")).thenReturn(new SocialUserInfo("kakao-456", null));
+        when(userRepository.findByProviderAndProviderId(SocialProvider.KAKAO, "kakao-456")).thenReturn(Optional.empty());
         when(userRepository.save(any(User.class))).thenReturn(savedUser);
         when(jwtUtil.generateToken("user-2", "KAKAO")).thenReturn("access-token");
         when(jwtUtil.generateRefreshToken("user-2")).thenReturn("refresh-token");
@@ -141,7 +146,7 @@ class AuthControllerTest {
 
     @Test
     void 유효하지_않은_카카오_액세스_토큰이면_KakaoOAuthException이_전파된다() {
-        when(kakaoOAuthClient.getKakaoUserIdByAccessToken("expired-kakao-access-token"))
+        when(kakaoOAuthClient.getKakaoUserByAccessToken("expired-kakao-access-token"))
                 .thenThrow(new KakaoOAuthException("유효하지 않거나 만료된 카카오 인증 정보입니다."));
 
         KakaoTokenLoginRequest request = new KakaoTokenLoginRequest();
@@ -156,12 +161,12 @@ class AuthControllerTest {
     void 유효한_네이버_액세스_토큰이면_기존_회원은_200으로_로그인된다() {
         User existingUser = User.builder()
                 .id("user-3")
-                .provider("NAVER")
+                .provider(SocialProvider.NAVER)
                 .providerId("naver-123")
                 .build();
 
-        when(naverOAuthClient.getNaverUserId("valid-naver-access-token")).thenReturn("naver-123");
-        when(userRepository.findByProviderAndProviderId("NAVER", "naver-123"))
+        when(naverOAuthClient.getNaverUser("valid-naver-access-token")).thenReturn(new SocialUserInfo("naver-123", null));
+        when(userRepository.findByProviderAndProviderId(SocialProvider.NAVER, "naver-123"))
                 .thenReturn(Optional.of(existingUser));
         when(jwtUtil.generateToken("user-3", "NAVER")).thenReturn("access-token");
         when(jwtUtil.generateRefreshToken("user-3")).thenReturn("refresh-token");
@@ -184,12 +189,12 @@ class AuthControllerTest {
     void 유효한_네이버_액세스_토큰이고_신규_사용자면_회원가입_후_201로_응답한다() {
         User savedUser = User.builder()
                 .id("user-4")
-                .provider("NAVER")
+                .provider(SocialProvider.NAVER)
                 .providerId("naver-456")
                 .build();
 
-        when(naverOAuthClient.getNaverUserId("new-naver-access-token")).thenReturn("naver-456");
-        when(userRepository.findByProviderAndProviderId("NAVER", "naver-456")).thenReturn(Optional.empty());
+        when(naverOAuthClient.getNaverUser("new-naver-access-token")).thenReturn(new SocialUserInfo("naver-456", null));
+        when(userRepository.findByProviderAndProviderId(SocialProvider.NAVER, "naver-456")).thenReturn(Optional.empty());
         when(userRepository.save(any(User.class))).thenReturn(savedUser);
         when(jwtUtil.generateToken("user-4", "NAVER")).thenReturn("access-token");
         when(jwtUtil.generateRefreshToken("user-4")).thenReturn("refresh-token");
@@ -206,7 +211,7 @@ class AuthControllerTest {
 
     @Test
     void 유효하지_않은_네이버_액세스_토큰이면_NaverOAuthException이_전파된다() {
-        when(naverOAuthClient.getNaverUserId("expired-naver-access-token"))
+        when(naverOAuthClient.getNaverUser("expired-naver-access-token"))
                 .thenThrow(new NaverOAuthException("유효하지 않은 네이버 액세스 토큰입니다."));
 
         NaverTokenLoginRequest request = new NaverTokenLoginRequest();
@@ -215,5 +220,72 @@ class AuthControllerTest {
         assertThatThrownBy(() -> authController.naverTokenLogin(request))
                 .isInstanceOf(NaverOAuthException.class)
                 .hasMessage("유효하지 않은 네이버 액세스 토큰입니다.");
+    }
+
+    @Test
+    void 신규_가입이면_소셜_제공자의_이메일과_provider를_함께_저장한다() {
+        when(kakaoOAuthClient.getKakaoUserByAccessToken("token"))
+                .thenReturn(new SocialUserInfo("kakao-789", "social@kakao.com"));
+        when(userRepository.findByProviderAndProviderId(SocialProvider.KAKAO, "kakao-789")).thenReturn(Optional.empty());
+        when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        authController.kakaoTokenLogin(kakaoRequest("token"));
+
+        ArgumentCaptor<User> saved = ArgumentCaptor.forClass(User.class);
+        verify(userRepository).save(saved.capture());
+        assertThat(saved.getValue().getEmail()).isEqualTo("social@kakao.com");
+        assertThat(saved.getValue().getProvider()).isEqualTo(SocialProvider.KAKAO);
+        assertThat(saved.getValue().getProviderId()).isEqualTo("kakao-789");
+    }
+
+    @Test
+    void 이메일_제공에_동의하지_않은_신규_가입이면_이메일은_null로_저장된다() {
+        when(naverOAuthClient.getNaverUser("token")).thenReturn(new SocialUserInfo("naver-789", null));
+        when(userRepository.findByProviderAndProviderId(SocialProvider.NAVER, "naver-789")).thenReturn(Optional.empty());
+        when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ResponseEntity<ApiResponse<AuthResponse>> response = authController.naverTokenLogin(naverRequest("token"));
+
+        ArgumentCaptor<User> saved = ArgumentCaptor.forClass(User.class);
+        verify(userRepository).save(saved.capture());
+        assertThat(saved.getValue().getEmail()).isNull();
+        assertThat(response.getStatusCode().value()).isEqualTo(201);
+    }
+
+    @Test
+    void 기존_회원의_이메일이_비어_있으면_로그인할_때_소셜_제공자의_이메일로_채운다() {
+        User existingUser = User.builder().id("user-5").provider(SocialProvider.NAVER).providerId("naver-555").build();
+        when(naverOAuthClient.getNaverUser("token")).thenReturn(new SocialUserInfo("naver-555", "social@naver.com"));
+        when(userRepository.findByProviderAndProviderId(SocialProvider.NAVER, "naver-555")).thenReturn(Optional.of(existingUser));
+
+        authController.naverTokenLogin(naverRequest("token"));
+
+        assertThat(existingUser.getEmail()).isEqualTo("social@naver.com");
+        verify(userRepository).save(existingUser);
+    }
+
+    @Test
+    void 기존_회원의_이메일이_있으면_소셜_제공자의_이메일로_덮어쓰지_않는다() {
+        User existingUser = User.builder().id("user-6").provider(SocialProvider.KAKAO).providerId("kakao-666")
+                .email("saved@example.com").build();
+        when(kakaoOAuthClient.getKakaoUserByAccessToken("token")).thenReturn(new SocialUserInfo("kakao-666", "other@kakao.com"));
+        when(userRepository.findByProviderAndProviderId(SocialProvider.KAKAO, "kakao-666")).thenReturn(Optional.of(existingUser));
+
+        authController.kakaoTokenLogin(kakaoRequest("token"));
+
+        assertThat(existingUser.getEmail()).isEqualTo("saved@example.com");
+        verify(userRepository, never()).save(any(User.class));
+    }
+
+    private static KakaoTokenLoginRequest kakaoRequest(String accessToken) {
+        KakaoTokenLoginRequest request = new KakaoTokenLoginRequest();
+        ReflectionTestUtils.setField(request, "accessToken", accessToken);
+        return request;
+    }
+
+    private static NaverTokenLoginRequest naverRequest(String accessToken) {
+        NaverTokenLoginRequest request = new NaverTokenLoginRequest();
+        ReflectionTestUtils.setField(request, "accessToken", accessToken);
+        return request;
     }
 }

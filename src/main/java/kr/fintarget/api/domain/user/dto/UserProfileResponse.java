@@ -14,7 +14,8 @@ public class UserProfileResponse {
     @Schema(description = "이름. 아직 설정하지 않았으면 null입니다.", example = "홍길동", types = {"string", "null"})
     private String name;
 
-    @Schema(description = "이메일. 아직 설정하지 않았으면 null입니다.", example = "user@example.com", types = {"string", "null"})
+    @Schema(description = "소셜 로그인(카카오·네이버)에서 받은 이메일. 이메일 제공에 동의하지 않았으면 null입니다. 프로필 수정으로는 바꿀 수 없습니다.",
+            example = "user@example.com", types = {"string", "null"})
     private String email;
 
     @Schema(description = "거주 지역. 온보딩 5단계를 완료하지 않았으면 null입니다.", example = "SEOUL", types = {"string", "null"})
@@ -51,7 +52,7 @@ public class UserProfileResponse {
                 .name(user.getName())
                 .email(user.getEmail())
                 .region(user.getRegion())
-                .provider(user.getProvider())
+                .provider(user.getProvider().name())
                 .birthYear(user.getBirthYear())
                 .employmentType(user.getEmploymentType())
                 .incomeBracket(incomeBracket != null ? incomeBracket.getCode() : null)

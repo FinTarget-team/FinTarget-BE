@@ -1,5 +1,6 @@
 package kr.fintarget.api.domain.auth;
 
+import kr.fintarget.api.domain.auth.dto.SocialUserInfo;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
@@ -14,7 +15,7 @@ public class NaverOAuthClient {
         this.restClient = restClientBuilder.build();
     }
 
-    public String getNaverUserId(String accessToken) {
+    public SocialUserInfo getNaverUser(String accessToken) {
         Map<String, Object> apiResponse = restClient.get()
                 .uri("https://openapi.naver.com/v1/nid/me")
                 .header("Authorization", "Bearer " + accessToken)
@@ -32,6 +33,8 @@ public class NaverOAuthClient {
         if (id == null || String.valueOf(id).isBlank()) {
             throw new NaverOAuthException("네이버 사용자 정보 응답에 id가 없습니다.");
         }
-        return String.valueOf(id);
+        // 이메일 제공에 동의하지 않으면 email 필드가 오지 않는다 (#173)
+        String email = profile.get("email") instanceof String value && !value.isBlank() ? value.strip() : null;
+        return new SocialUserInfo(String.valueOf(id), email);
     }
 }

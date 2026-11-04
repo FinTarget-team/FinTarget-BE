@@ -1,6 +1,7 @@
 package kr.fintarget.api.domain.user.entity;
 
 import kr.fintarget.api.domain.user.validation.BirthYearValidator;
+import kr.fintarget.api.domain.user.code.SocialProvider;
 import org.junit.jupiter.api.Test;
 
 import java.time.Year;
@@ -10,7 +11,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class UserAgeTest {
 
     private User.UserBuilder user() {
-        return User.builder().id("user-1").provider("KAKAO").providerId("kakao-1");
+        return User.builder().id("user-1").provider(SocialProvider.KAKAO).providerId("kakao-1");
     }
 
     @Test

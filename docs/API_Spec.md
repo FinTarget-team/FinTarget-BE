@@ -78,12 +78,14 @@ Authorization: Bearer {accessToken}
   "data": {
     "userId": "string",
     "name": "string",
-    "email": "string",
+    "email": "user@example.com",
     "region": "string",
-    "provider": "string"
+    "provider": "KAKAO"
   }
 }
 ```
+- `email`: 소셜 로그인(카카오·네이버)에서 받은 이메일. 이메일 제공에 동의하지 않았으면 `null`. 가입 후 이메일이 비어 있으면 다음 로그인 때 제공자 이메일로 채워지며, 이미 있는 이메일은 바뀌지 않음
+- `provider`: 가입에 사용한 소셜 로그인 제공자. `KAKAO` 또는 `NAVER`
 
 ### 프로필 수정
 - **PUT** `/users/me/profile`
@@ -94,6 +96,7 @@ Authorization: Bearer {accessToken}
   "region": "string"
 }
 ```
+- 이메일은 수정할 수 없습니다. 요청에 `email`을 보내도 무시되며 오류는 나지 않습니다.
 
 ---
 

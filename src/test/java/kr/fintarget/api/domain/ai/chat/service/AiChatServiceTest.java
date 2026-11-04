@@ -20,6 +20,7 @@ import kr.fintarget.api.domain.policy.repository.PolicyRepository;
 import kr.fintarget.api.domain.user.entity.User;
 import kr.fintarget.api.domain.user.repository.UserRepository;
 import kr.fintarget.api.domain.user.validation.BirthYearValidator;
+import kr.fintarget.api.domain.user.code.SocialProvider;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -86,9 +87,9 @@ class AiChatServiceTest {
 
     @BeforeEach
     void setUp() {
-        userId = UUID.fromString(userRepository.save(User.builder().provider("kakao").providerId("p-1")
+        userId = UUID.fromString(userRepository.save(User.builder().provider(SocialProvider.KAKAO).providerId("p-1")
                 .birthYear(2000).region("SEOUL").housingStatus("HOMELESS").employmentType("EMPLOYED").build()).getId());
-        otherUserId = UUID.fromString(userRepository.save(User.builder().provider("kakao").providerId("p-2").build()).getId());
+        otherUserId = UUID.fromString(userRepository.save(User.builder().provider(SocialProvider.KAKAO).providerId("p-2").build()).getId());
         PolicyText text = PolicyText.builder().supportContent("월 최대 20만원 월세 지원. ".repeat(10)).build();
         policyId = policyRepository.save(Policy.create("청년 월세 지원", "청년 월세 지원 사업", 19, 34, null, null,
                 PolicyType.HOUSING, null, "P-1", "YOUTH_CENTER", text)).getPolicyId();

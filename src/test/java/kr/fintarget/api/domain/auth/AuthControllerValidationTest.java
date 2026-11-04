@@ -54,7 +54,7 @@ class AuthControllerValidationTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.status").value(400));
 
-        verify(kakaoOAuthClient, never()).getKakaoUserIdByAccessToken(any());
+        verify(kakaoOAuthClient, never()).getKakaoUserByAccessToken(any());
     }
 
     @ParameterizedTest
@@ -69,6 +69,6 @@ class AuthControllerValidationTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.status").value(400));
 
-        verify(naverOAuthClient, never()).getNaverUserId(any());
+        verify(naverOAuthClient, never()).getNaverUser(any());
     }
 }

@@ -11,6 +11,7 @@ import kr.fintarget.api.domain.policy.repository.UserPolicyRepository;
 import kr.fintarget.api.domain.user.entity.User;
 import kr.fintarget.api.domain.user.repository.UserRepository;
 import kr.fintarget.api.domain.user.validation.BirthYearValidator;
+import kr.fintarget.api.domain.user.code.SocialProvider;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -54,7 +55,7 @@ class PolicyServiceTest {
     private User userWith(Integer age, Long income, String region) {
         return User.builder()
                 .id("user-1")
-                .provider("google")
+                .provider(SocialProvider.KAKAO)
                 .providerId("provider-1")
                 .age(age)
                 .income(income)
@@ -106,7 +107,7 @@ class PolicyServiceTest {
 
     @Test
     void 출생연도가_있으면_생일_전후_두_만_나이를_구간으로_넘긴다() {
-        User user = User.builder().id("user-1").provider("google").providerId("provider-1")
+        User user = User.builder().id("user-1").provider(SocialProvider.KAKAO).providerId("provider-1")
                 .birthYear(2000).income(3000000L).region("SEOUL").build();
         int thisYear = Year.now(BirthYearValidator.ZONE).getValue();
         when(userRepository.findById("user-1")).thenReturn(Optional.of(user));

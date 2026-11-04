@@ -43,7 +43,13 @@ public class UserService {
 
         String validatedName = request.getName() != null ? NameValidator.validate(request.getName()) : null;
         String validatedRegion = request.getRegion() != null ? resolveRegion(request.getRegion()) : null;
-        user.updateProfile(validatedName, request.getEmail(), validatedRegion);
+        // 이메일은 소셜 로그인에서 받은 값으로만 저장하므로 프로필 수정으로 바꾸지 않는다 (#173)
+        if (validatedName != null) {
+            user.updateName(validatedName);
+        }
+        if (validatedRegion != null) {
+            user.updateRegion(validatedRegion);
+        }
 
         if (request.getBirthYear() != null) {
             user.updateBirthYear(BirthYearValidator.validate(request.getBirthYear()));
