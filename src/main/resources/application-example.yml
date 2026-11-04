@@ -42,6 +42,8 @@ openai:
   model:
     default: ${OPENAI_MODEL_DEFAULT:gpt-6-luna}   # 정책 AI 질문(#125)은 항상 이 기본 등급 모델을 쓴다
     premium: ${OPENAI_MODEL_PREMIUM:gpt-6.1-sol}
+  # 정책 청크 임베딩 모델 (#181). 1536차원 고정(policy_chunk_embedding.embedding). 바꾸면 다음 실행 때 전체 재임베딩
+  embedding-model: ${OPENAI_EMBEDDING_MODEL:text-embedding-3-small}
   reasoning-effort: low      # gpt-6.1-sol은 none, minimal 미지원
   max-output-tokens: 4000    # 추론 토큰 포함
   connect-timeout: 3s

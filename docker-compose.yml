@@ -1,6 +1,8 @@
 services:
   db:
-    image: postgres:16
+    # pgvector 확장이 포함된 postgres 16 이미지 (#181). 데이터 형식이 postgres:16과 같아 기존 볼륨을 그대로 쓴다.
+    # 기존 볼륨에는 init 스크립트가 돌지 않으므로 확장·테이블은 docs/sql/181_policy_chunk_embedding.sql을 직접 실행한다
+    image: pgvector/pgvector:pg16
     container_name: fintarget-db
     restart: unless-stopped
     environment:
@@ -56,6 +58,7 @@ services:
       BANK_WEBHOOK_KEY: ${BANK_WEBHOOK_KEY:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_MODEL_DEFAULT: ${OPENAI_MODEL_DEFAULT:-}
+      OPENAI_EMBEDDING_MODEL: ${OPENAI_EMBEDDING_MODEL:-}
 
 volumes:
   db-data:

@@ -23,7 +23,8 @@ class OpenAiClientContextTest {
     // RestClient.Builder는 운영에서 spring-boot-starter-restclient 자동 설정이 제공한다 (#105)
     private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
             .withBean(RestClient.Builder.class, RestClient::builder)
-            .withUserConfiguration(OpenAiConfig.class, OpenAiHttpExecutor.class, OpenAiResponsesClient.class);
+            .withUserConfiguration(OpenAiConfig.class, OpenAiHttpExecutor.class, OpenAiResponsesClient.class,
+                    OpenAiEmbeddingClient.class);
 
     @Test
     void 설정과_키가_없어도_기동하고_호출하면_AiUnavailableException(CapturedOutput output) {
@@ -36,6 +37,12 @@ class OpenAiClientContextTest {
 
             assertThat(thrown).isInstanceOf(AiUnavailableException.class).hasMessage(AiUnavailableException.MESSAGE);
             assertThat(((AiClientException) thrown).getReason()).isEqualTo(AiClientException.Reason.DISABLED);
+
+            // 임베딩 클라이언트도 설정 없이 기본 모델로 만들어지고, 호출 시점에만 503 (#181)
+            AiEmbeddingClient embeddingClient = context.getBean(AiEmbeddingClient.class);
+            assertThat(embeddingClient.model()).isEqualTo(OpenAiEmbeddingClient.DEFAULT_MODEL);
+            assertThat(catchThrowable(() -> embeddingClient.embed(List.of("청크"))))
+                    .isInstanceOf(AiUnavailableException.class);
         });
         assertThat(output.getAll().split("AI 기능이 비활성화됩니다", -1)).hasSize(2);
     }
