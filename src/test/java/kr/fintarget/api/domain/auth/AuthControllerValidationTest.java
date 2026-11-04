@@ -3,6 +3,7 @@ package kr.fintarget.api.domain.auth;
 import kr.fintarget.api.domain.user.repository.UserRepository;
 import kr.fintarget.api.security.BlacklistedTokenRepository;
 import kr.fintarget.api.security.JwtUtil;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.NullAndEmptySource;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -16,6 +17,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -70,5 +72,16 @@ class AuthControllerValidationTest {
                 .andExpect(jsonPath("$.status").value(400));
 
         verify(naverOAuthClient, never()).getNaverUser(any());
+    }
+
+    @Test
+    void 삭제된_네이버_인가_코드_로그인은_404이고_계정을_만들거나_토큰을_발급하지_않는다() throws Exception {
+        mockMvc.perform(post("/auth/naver/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"authorizationCode\":\"any-string\",\"state\":\"s\"}"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.status").value(404));
+
+        verifyNoInteractions(userRepository, jwtUtil, naverOAuthClient);
     }
 }
