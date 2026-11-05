@@ -55,6 +55,7 @@ class AuthControllerTest {
     void 리프레시_토큰이_유효하면_jwt_expiration_설정값을_초로_환산해서_반환한다() {
         when(jwtUtil.validateToken("valid-refresh-token")).thenReturn(true);
         when(jwtUtil.getUserId("valid-refresh-token")).thenReturn("user-1");
+        when(userRepository.existsById("user-1")).thenReturn(true);
         when(jwtUtil.generateToken("user-1", "REFRESH")).thenReturn("new-access-token");
         when(jwtUtil.getExpirationMillis()).thenReturn(3_600_000L);
 
@@ -71,6 +72,7 @@ class AuthControllerTest {
     void jwt_expiration_설정이_바뀌면_expiresIn도_그에_맞게_계산된다() {
         when(jwtUtil.validateToken("valid-refresh-token")).thenReturn(true);
         when(jwtUtil.getUserId("valid-refresh-token")).thenReturn("user-1");
+        when(userRepository.existsById("user-1")).thenReturn(true);
         when(jwtUtil.generateToken("user-1", "REFRESH")).thenReturn("new-access-token");
         when(jwtUtil.getExpirationMillis()).thenReturn(7_200_000L);
 
@@ -78,6 +80,21 @@ class AuthControllerTest {
                 authController.refreshToken(Map.of("refreshToken", "valid-refresh-token"));
 
         assertThat(response.getBody().getData().expiresIn()).isEqualTo(7200);
+    }
+
+    @Test
+    void 탈퇴한_사용자의_리프레시_토큰이면_401이고_새_토큰을_발급하지_않는다() {
+        when(jwtUtil.validateToken("withdrawn-refresh-token")).thenReturn(true);
+        when(jwtUtil.getUserId("withdrawn-refresh-token")).thenReturn("withdrawn-user");
+        when(userRepository.existsById("withdrawn-user")).thenReturn(false);
+
+        ResponseEntity<ApiResponse<TokenRefreshResponse>> response =
+                authController.refreshToken(Map.of("refreshToken", "withdrawn-refresh-token"));
+
+        assertThat(response.getStatusCode().value()).isEqualTo(401);
+        assertThat(response.getBody().getMessage()).isEqualTo("Invalid refresh token");
+        assertThat(response.getBody().getData()).isNull();
+        verify(jwtUtil, never()).generateToken(any(), any());
     }
 
     @Test

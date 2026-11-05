@@ -17,6 +17,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Map;
+
 @Tag(name = "사용자", description = "회원 프로필 조회/수정 및 회원 탈퇴 API")
 @SecurityRequirement(name = "bearerAuth")
 @RestController
@@ -145,8 +147,9 @@ public class UserController {
 
     @Operation(
             summary = "회원 탈퇴",
-            description = "사용자 및 연관된 목표/지출/정책/시뮬레이션 데이터를 모두 삭제합니다. " +
-                    "요청에 포함된 Authorization 헤더의 토큰(또는 바디에 담긴 리프레시 토큰)은 블랙리스트에 등록되어 즉시 무효화됩니다. " +
+            description = "사용자와 연관된 목표, 지출, 저장한 정책, 시뮬레이션, 온보딩 답변, 넛지, AI 대화와 사용량 데이터를 모두 삭제합니다. " +
+                    "Authorization 헤더의 액세스 토큰과 바디의 리프레시 토큰({\"refreshToken\": \"...\"}, 선택)은 블랙리스트에 등록되어 즉시 무효화됩니다. " +
+                    "탈퇴한 사용자의 리프레시 토큰은 바디에 보내지 않았더라도 재발급(/auth/token/refresh)에서 401로 거부됩니다. " +
                     "이 작업은 되돌릴 수 없습니다."
     )
     @ApiResponses({
@@ -179,18 +182,30 @@ public class UserController {
     @DeleteMapping("/me")
     public ResponseEntity<ApiResponse<?>> withdraw(
             @AuthenticationPrincipal String userId,
-            @RequestHeader(value = "Authorization", required = false) String authHeader) {
+            @RequestHeader(value = "Authorization", required = false) String authHeader,
+            @RequestBody(required = false) Map<String, String> body) {
 
         userService.withdraw(userId);
 
         if (authHeader != null && authHeader.startsWith("Bearer ")) {
-            String token = authHeader.substring(7);
-            String jti = jwtUtil.getJti(token);
-            if (jti != null && !blacklistedTokenRepository.existsById(jti)) {
-                blacklistedTokenRepository.save(new BlacklistedToken(jti, jwtUtil.getExpirationTime(token)));
-            }
+            blacklistOwnToken(authHeader.substring(7), userId);
+        }
+        if (body != null && body.get("refreshToken") != null) {
+            blacklistOwnToken(body.get("refreshToken"), userId);
         }
 
         return ResponseEntity.ok(ApiResponse.ok(null));
+    }
+
+    // 탈퇴한 본인의 토큰만 무효화한다. 파싱에 실패한 토큰은 로그아웃과 같이 조용히 무시한다
+    private void blacklistOwnToken(String token, String userId) {
+        try {
+            String jti = jwtUtil.getJti(token);
+            if (jti == null || !userId.equals(jwtUtil.getUserId(token))) return;
+            if (!blacklistedTokenRepository.existsById(jti)) {
+                blacklistedTokenRepository.save(new BlacklistedToken(jti, jwtUtil.getExpirationTime(token)));
+            }
+        } catch (Exception ignored) {
+        }
     }
 }

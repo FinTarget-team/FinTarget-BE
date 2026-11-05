@@ -31,5 +31,9 @@ public interface AiDailyUsageRepository extends JpaRepository<AiDailyUsage, UUID
             """)
     int decrement(@Param("userId") String userId, @Param("date") LocalDate date, @Param("feature") AiUsageFeature feature);
 
+    @Modifying
+    @Query("DELETE FROM AiDailyUsage u WHERE u.userId = :userId")
+    int deleteByUserId(@Param("userId") String userId);
+
     Optional<AiDailyUsage> findByUserIdAndUsageDateAndFeature(String userId, LocalDate usageDate, AiUsageFeature feature);
 }

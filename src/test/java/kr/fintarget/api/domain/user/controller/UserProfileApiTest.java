@@ -1,8 +1,13 @@
 package kr.fintarget.api.domain.user.controller;
 
 import kr.fintarget.api.common.exception.GlobalExceptionHandler;
+import kr.fintarget.api.domain.ai.chat.repository.AiConversationMessageRepository;
+import kr.fintarget.api.domain.ai.chat.repository.AiConversationRepository;
+import kr.fintarget.api.domain.ai.usage.AiDailyUsageRepository;
 import kr.fintarget.api.domain.expense.repository.ExpenseRepository;
 import kr.fintarget.api.domain.goal.repository.GoalRepository;
+import kr.fintarget.api.domain.nudge.repository.NudgeRepository;
+import kr.fintarget.api.domain.onboarding.repository.OnboardingAnswerRepository;
 import kr.fintarget.api.domain.policy.repository.UserPolicyRepository;
 import kr.fintarget.api.domain.simulation.repository.SimulationRepository;
 import kr.fintarget.api.domain.user.UserController;
@@ -62,6 +67,16 @@ class UserProfileApiTest {
     private UserPolicyRepository userPolicyRepository;
     @MockitoBean
     private SimulationRepository simulationRepository;
+    @MockitoBean
+    private OnboardingAnswerRepository onboardingAnswerRepository;
+    @MockitoBean
+    private NudgeRepository nudgeRepository;
+    @MockitoBean
+    private AiConversationMessageRepository aiConversationMessageRepository;
+    @MockitoBean
+    private AiConversationRepository aiConversationRepository;
+    @MockitoBean
+    private AiDailyUsageRepository aiDailyUsageRepository;
     @MockitoBean
     private BlacklistedTokenRepository blacklistedTokenRepository;
     @MockitoBean

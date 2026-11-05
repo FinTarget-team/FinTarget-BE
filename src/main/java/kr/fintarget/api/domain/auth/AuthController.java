@@ -230,7 +230,7 @@ public class AuthController {
             ),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(
                     responseCode = "401",
-                    description = "리프레시 토큰이 유효하지 않거나 만료됨/블랙리스트에 등록됨",
+                    description = "리프레시 토큰이 유효하지 않거나 만료됨/블랙리스트에 등록됨/탈퇴한 사용자",
                     content = @Content(examples = @ExampleObject(
                             name = "유효하지 않은 리프레시 토큰",
                             value = """
@@ -246,6 +246,10 @@ public class AuthController {
             return ResponseEntity.status(401).body(ApiResponse.error(401, "Invalid refresh token"));
         }
         String userId = jwtUtil.getUserId(refreshToken);
+        // 탈퇴한 사용자의 리프레시 토큰으로는 재발급하지 않는다 (#193)
+        if (!userRepository.existsById(userId)) {
+            return ResponseEntity.status(401).body(ApiResponse.error(401, "Invalid refresh token"));
+        }
         String newAccessToken = jwtUtil.generateToken(userId, "REFRESH");
         int expiresIn = (int) (jwtUtil.getExpirationMillis() / 1000);
         return ResponseEntity.ok(ApiResponse.ok(new TokenRefreshResponse(newAccessToken, expiresIn)));
