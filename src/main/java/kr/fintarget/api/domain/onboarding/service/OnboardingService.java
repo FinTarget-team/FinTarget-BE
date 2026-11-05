@@ -111,14 +111,13 @@ public class OnboardingService {
         validateAnswerRequest(request);
         validatePreviousStepCompleted(userId, request.getStep());
 
-        // 답변 DB 저장
-        OnboardingAnswer answer = new OnboardingAnswer(
-                UUID.fromString(userId),
-                request.getStep(),
-                request.getValue()
-        );
-
-        onboardingAnswerRepository.save(answer);
+        // 답변 DB 저장. 같은 단계를 다시 제출하면 새로 쌓지 않고 기존 답변을 갱신한다 (#195)
+        UUID uid = UUID.fromString(userId);
+        onboardingAnswerRepository.findFirstByUserIdAndStepOrderByCreatedAtDesc(uid, request.getStep())
+                .ifPresentOrElse(
+                        answer -> answer.updateValue(request.getValue()),
+                        () -> onboardingAnswerRepository.save(new OnboardingAnswer(uid, request.getStep(), request.getValue()))
+                );
 
         // step별 답변을 User 엔티티에 반영 (STEP_NAME: name, STEP_AGE: birthYear, STEP_EMPLOYMENT: employmentType, STEP_INCOME: income, STEP_REGION: region, STEP_HOUSING: housingStatus)
         applyAnswerToUser(userId, request.getStep(), request.getValue());

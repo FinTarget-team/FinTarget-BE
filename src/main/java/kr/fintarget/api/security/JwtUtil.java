@@ -14,6 +14,12 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class JwtUtil {
 
+    // 토큰 용도. 리프레시 토큰으로 API를 호출하거나 액세스 토큰으로 재발급받지 못하게 구분한다 (#195)
+    static final String TYPE_CLAIM = "type";
+    static final String TYPE_ACCESS = "access";
+    static final String TYPE_REFRESH = "refresh";
+    static final String PROVIDER_CLAIM = "provider";
+
     private final BlacklistedTokenRepository blacklistedTokenRepository;
 
     @Value("${jwt.secret}")
@@ -33,7 +39,8 @@ public class JwtUtil {
         return Jwts.builder()
                 .subject(userId)
                 .id(UUID.randomUUID().toString())
-                .claim("provider", provider)
+                .claim(TYPE_CLAIM, TYPE_ACCESS)
+                .claim(PROVIDER_CLAIM, provider)
                 .issuedAt(new Date())
                 .expiration(new Date(System.currentTimeMillis() + expiration))
                 .signWith(getKey())
@@ -44,6 +51,7 @@ public class JwtUtil {
         return Jwts.builder()
                 .subject(userId)
                 .id(UUID.randomUUID().toString())
+                .claim(TYPE_CLAIM, TYPE_REFRESH)
                 .issuedAt(new Date())
                 .expiration(new Date(System.currentTimeMillis() + expiration * 7))
                 .signWith(getKey())
@@ -63,17 +71,37 @@ public class JwtUtil {
         return exp.toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime();
     }
 
-    public boolean validateToken(String token) {
+    /** API 인증용. 서명, 만료, 블랙리스트에 더해 액세스 토큰인지 확인한다 */
+    public boolean validateAccessToken(String token) {
+        return validate(token, TYPE_ACCESS);
+    }
+
+    /** 액세스 토큰 재발급용. 서명, 만료, 블랙리스트에 더해 리프레시 토큰인지 확인한다 */
+    public boolean validateRefreshToken(String token) {
+        return validate(token, TYPE_REFRESH);
+    }
+
+    private boolean validate(String token, String expectedType) {
         try {
             Claims claims = getClaims(token);
             String jti = claims.getId();
             if (jti != null && blacklistedTokenRepository.existsById(jti)) {
                 return false;
             }
-            return true;
-        } catch (JwtException e) {
+            return expectedType.equals(typeOf(claims));
+        } catch (JwtException | IllegalArgumentException e) {
             return false;
         }
+    }
+
+    // #195 이전에 발급된 토큰에는 type이 없다. 액세스 토큰에만 provider가 있으므로 그것으로 구분해 배포 후에도 다시 로그인하지 않게 한다.
+    // 이전 리프레시 토큰이 모두 만료되면(액세스 유효기간 × 7) 이 분기를 지운다
+    private static String typeOf(Claims claims) {
+        String type = claims.get(TYPE_CLAIM, String.class);
+        if (type != null) {
+            return type;
+        }
+        return claims.get(PROVIDER_CLAIM) != null ? TYPE_ACCESS : TYPE_REFRESH;
     }
 
     private Claims getClaims(String token) {

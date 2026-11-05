@@ -100,7 +100,7 @@ class BankWebhookControllerTest {
 
     @Test
     void 사용자_JWT로는_호출할_수_없다() throws Exception {
-        when(jwtUtil.validateToken("user-token")).thenReturn(true);
+        when(jwtUtil.validateAccessToken("user-token")).thenReturn(true);
         when(jwtUtil.getUserId("user-token")).thenReturn(USER_ID.toString());
 
         mockMvc.perform(post(URL).contentType(MediaType.APPLICATION_JSON).content("[" + validItem() + "]")

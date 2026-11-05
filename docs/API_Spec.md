@@ -64,6 +64,7 @@ Authorization: Bearer {accessToken}
 ```
 - 리프레시 토큰이 유효하지 않거나 만료됐거나 블랙리스트에 있으면 401 (`Invalid refresh token`)
 - 탈퇴한 사용자의 리프레시 토큰도 401
+- 액세스 토큰을 보내면 401. 반대로 리프레시 토큰으로는 다른 API를 호출할 수 없음 (401)
 
 ### 로그아웃
 - **POST** `/auth/logout`
@@ -190,6 +191,7 @@ Authorization: Bearer {accessToken}
 - 7단계 `value`는 목표 금액(원, 숫자 문자열, 1원 이상 50억 원 이하)
 - 7단계(마지막) 제출 시 온보딩이 완료되고 목표(Goal)가 자동 생성됨: `title` "내 목표", `currentAmount` 0, `deadline` 1년 후, `deadlineDefaulted` true
 - 7단계를 다시 제출하면 새로 만들지 않고 기존 목표의 `targetAmount`만 갱신
+- 같은 단계를 다시 제출하면 답변을 새로 쌓지 않고 기존 답변을 마지막 값으로 갱신 (사용자당 단계별 1건)
 
 ---
 
