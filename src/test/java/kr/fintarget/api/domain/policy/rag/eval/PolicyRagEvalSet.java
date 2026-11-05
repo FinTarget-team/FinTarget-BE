@@ -106,8 +106,11 @@ public record PolicyRagEvalSet(String description, Map<String, String> guide,
         }
     }
 
+    /**
+     * PROFILE_INCOMPLETE(나이·소득 없음)는 서비스 단계에서만 나오므로 2단계 b({@link PolicyRagE2eEvalSet})에서만 쓴다.
+     */
     public enum Category {
-        SINGLE_MATCH, MULTI_MATCH, NO_RELEVANT, NOT_IN_SOURCE, PROFILE_CHECK, INJECTION, SAME_NAME_REGION
+        SINGLE_MATCH, MULTI_MATCH, NO_RELEVANT, NOT_IN_SOURCE, PROFILE_CHECK, INJECTION, SAME_NAME_REGION, PROFILE_INCOMPLETE
     }
 
     /**
