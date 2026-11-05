@@ -82,17 +82,26 @@ public final class PolicySearchEvalRunner {
 
     /** 검색 결과를 채점용 항목으로 바꾼다 (조건 재계산 포함) */
     public List<ResultItem> toItems(SearchCase c, List<PolicySearchHit> hits) {
-        User user = prepared.get(c.id()).user();
-        User.AgeRange ageRange = user.ageRange();
         List<ResultItem> items = new ArrayList<>(hits.size());
         for (PolicySearchHit hit : hits) {
             Policy policy = hit.policy();
-            EligibilityCheck.Result check = EligibilityCheck.check(ageRange.lower(), ageRange.upper(), user.getIncome(),
-                    user.getRegion(), policy.getMinAge(), policy.getMaxAge(), policy.getIncomeLimit(), policy.getRegion());
+            EligibilityCheck.Result check = check(c, policy);
             items.add(new ResultItem(loaded.keyOf(policy), policy.getName(), hit.distance(), check.eligible(),
                     check.regionFallback()));
         }
         return items;
+    }
+
+    /** 문항 프로필 기준으로 정책 조건을 다시 계산한다 ({@link EligibilityCheck}) */
+    public boolean eligible(SearchCase c, Policy policy) {
+        return check(c, policy).eligible();
+    }
+
+    private EligibilityCheck.Result check(SearchCase c, Policy policy) {
+        User user = prepared.get(c.id()).user();
+        User.AgeRange ageRange = user.ageRange();
+        return EligibilityCheck.check(ageRange.lower(), ageRange.upper(), user.getIncome(), user.getRegion(),
+                policy.getMinAge(), policy.getMaxAge(), policy.getIncomeLimit(), policy.getRegion());
     }
 
     public CaseScore score(SearchCase c, List<ResultItem> items) {
