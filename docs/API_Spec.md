@@ -62,9 +62,12 @@ Authorization: Bearer {accessToken}
   "refreshToken": "string"
 }
 ```
+- 리프레시 토큰이 유효하지 않거나 만료됐거나 블랙리스트에 있으면 401 (`Invalid refresh token`)
+- 탈퇴한 사용자의 리프레시 토큰도 401
 
 ### 로그아웃
 - **POST** `/auth/logout`
+- Authorization 헤더의 액세스 토큰과 바디의 리프레시 토큰(`{"refreshToken": "string"}`, 선택)을 블랙리스트에 등록
 
 ---
 
@@ -99,6 +102,19 @@ Authorization: Bearer {accessToken}
 }
 ```
 - 이메일은 수정할 수 없습니다. 요청에 `email`을 보내도 무시되며 오류는 나지 않습니다.
+
+### 회원 탈퇴
+- **DELETE** `/users/me`
+- Request Body (선택):
+```json
+{
+  "refreshToken": "string"
+}
+```
+- 삭제되는 데이터: 회원 정보, 목표, 지출, 저장한 정책, 시뮬레이션 기록, 온보딩 답변, 넛지 알림, AI 정책 도우미 대화, AI 하루 사용량
+- Authorization 헤더의 액세스 토큰과 바디의 리프레시 토큰을 블랙리스트에 등록합니다. 다른 사용자의 토큰은 무시합니다.
+- 바디를 보내지 않아도 탈퇴한 사용자의 리프레시 토큰은 토큰 갱신에서 401로 거부됩니다.
+- Response (200): `data: null`. 되돌릴 수 없습니다.
 
 ---
 

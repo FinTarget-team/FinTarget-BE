@@ -21,4 +21,9 @@ public interface AiConversationMessageRepository extends JpaRepository<AiConvers
     @Query("delete from AiConversationMessage m where m.conversationId in "
             + "(select c.conversationId from AiConversation c where c.expiresAt <= :now)")
     int deleteOfExpiredConversations(LocalDateTime now);
+
+    @Modifying
+    @Query("delete from AiConversationMessage m where m.conversationId in "
+            + "(select c.conversationId from AiConversation c where c.userId = :userId)")
+    int deleteOfUserConversations(UUID userId);
 }

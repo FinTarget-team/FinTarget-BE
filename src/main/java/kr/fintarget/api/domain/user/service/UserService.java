@@ -10,8 +10,13 @@ import kr.fintarget.api.domain.user.entity.User;
 import kr.fintarget.api.domain.user.repository.UserRepository;
 import kr.fintarget.api.domain.user.validation.BirthYearValidator;
 import kr.fintarget.api.domain.user.validation.NameValidator;
+import kr.fintarget.api.domain.ai.chat.repository.AiConversationMessageRepository;
+import kr.fintarget.api.domain.ai.chat.repository.AiConversationRepository;
+import kr.fintarget.api.domain.ai.usage.AiDailyUsageRepository;
 import kr.fintarget.api.domain.expense.repository.ExpenseRepository;
 import kr.fintarget.api.domain.goal.repository.GoalRepository;
+import kr.fintarget.api.domain.nudge.repository.NudgeRepository;
+import kr.fintarget.api.domain.onboarding.repository.OnboardingAnswerRepository;
 import kr.fintarget.api.domain.policy.repository.UserPolicyRepository;
 import kr.fintarget.api.domain.simulation.repository.SimulationRepository;
 import lombok.RequiredArgsConstructor;
@@ -29,6 +34,11 @@ public class UserService {
     private final ExpenseRepository expenseRepository;
     private final UserPolicyRepository userPolicyRepository;
     private final SimulationRepository simulationRepository;
+    private final OnboardingAnswerRepository onboardingAnswerRepository;
+    private final NudgeRepository nudgeRepository;
+    private final AiConversationMessageRepository aiConversationMessageRepository;
+    private final AiConversationRepository aiConversationRepository;
+    private final AiDailyUsageRepository aiDailyUsageRepository;
 
     public UserProfileResponse getProfile(String userId) {
         User user = userRepository.findById(userId)
@@ -112,6 +122,12 @@ public class UserService {
         goalRepository.deleteByUserId(uid);
         userPolicyRepository.deleteByUserId(uid);
         expenseRepository.deleteByUserId(uid);
+        // 온보딩 답변, 넛지, AI 대화(메시지 → 대화 순), AI 사용량도 탈퇴 시 함께 지운다 (#193)
+        onboardingAnswerRepository.deleteByUserId(uid);
+        nudgeRepository.deleteByUserId(userId);
+        aiConversationMessageRepository.deleteOfUserConversations(uid);
+        aiConversationRepository.deleteByUserId(uid);
+        aiDailyUsageRepository.deleteByUserId(userId);
 
         userRepository.delete(user);
     }

@@ -3,7 +3,7 @@
 # 실제 비밀값은 넣지 않는다. 외부 API·DB를 실제로 호출하는 테스트는 없다.
 spring:
   datasource:
-    url: jdbc:h2:mem:fintarget-test;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1
+    url: jdbc:h2:mem:fintarget-test;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1;NON_KEYWORDS=VALUE
     username: sa
     password:
   jpa:
