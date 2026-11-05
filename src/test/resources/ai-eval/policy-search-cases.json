@@ -1,0 +1,71 @@
+{
+  "description": "통합 정책 RAG 검색 평가셋 (#184 1단계). 질문은 사람이 작성하고 정답(relevant)은 풀링으로 라벨링한다. 정책은 정책 키(\"출처:외부ID\")로 가리키며 스냅샷(AI_EVAL_SNAPSHOT_DIR)에 있어야 한다.",
+  "guide": {
+    "id": "문항 ID. 파일 안에서 중복 불가. 유형 접두사 권장 (name-01, benefit-01, region-01, loan-01, unrelated-01, ambiguous-01)",
+    "type": "POLICY_NAME(정책명 직접) / BENEFIT_SITUATION(혜택·상황) / REGION(지역 조건) / LOAN(대출·금융) / UNRELATED(무관) / AMBIGUOUS(짧거나 모호). UNRELATED·AMBIGUOUS는 Recall·MRR 계산에서 제외",
+    "profile": "아래 profiles의 키. 후보 정책 필터(나이·소득·지역)가 이 프로필로 결정된다",
+    "question": "사용자가 앱에 입력할 문장 그대로",
+    "relevant": "정답 정책 키 목록. 그 프로필 지역에서 신청할 수 있는 정책만 넣는다 (같은 이름의 다른 지역 정책은 넣지 않음). 비어 있으면 아직 라벨링 전이며 Recall 계산에서 제외(라벨 없음으로 집계)",
+    "loanIntent": "선택. 대출을 찾는 질문이면 true. KINFA 쏠림 판정에서 제외한다. 생략하면 type이 LOAN일 때만 true",
+    "note": "라벨 근거 한 줄 (검수자가 바뀌어도 판단이 같도록)"
+  },
+  "profiles": {
+    "seoul-25": {"region": "SEOUL", "age": 25, "income": 2500000, "note": "기준 프로필"},
+    "busan-29": {"region": "BUSAN", "age": 29, "income": 3000000, "note": "지역 정책이 많은 지역"},
+    "gyeonggi-34": {"region": "GYEONGGI", "age": 34, "income": 4000000, "note": "30대"},
+    "chungnam-22": {"region": "CHUNGNAM", "age": 22, "income": 1000000, "note": "저소득 학생"},
+    "jeonnam-39": {"region": "JEONNAM", "age": 39, "income": 3000000, "note": "청년 연령 상한 경계 (나이 구간 38~39)"},
+    "ulsan-high": {"region": "ULSAN", "age": 30, "income": 7000000, "note": "소득 조건 탈락 확인"},
+    "incomplete": {"region": "SEOUL", "age": null, "income": null, "note": "나이·소득 없음. 후보가 비어 검색하지 않는다 (답변 평가의 PROFILE_INCOMPLETE)"}
+  },
+  "cases": [
+    {
+      "id": "example-name",
+      "type": "POLICY_NAME",
+      "profile": "seoul-25",
+      "question": "(예시) 청년 월세 한시 특별지원 알려줘",
+      "relevant": [],
+      "note": "형식 예시. 실제 문항으로 바꾼다"
+    },
+    {
+      "id": "example-benefit",
+      "type": "BENEFIT_SITUATION",
+      "profile": "busan-29",
+      "question": "(예시) 자취하는데 월세가 너무 부담돼",
+      "relevant": [],
+      "note": "형식 예시. 실제 문항으로 바꾼다"
+    },
+    {
+      "id": "example-region",
+      "type": "REGION",
+      "profile": "chungnam-22",
+      "question": "(예시) 전세 보증금 반환보증 보증료 지원받을 수 있어?",
+      "relevant": [],
+      "note": "형식 예시. 같은 이름의 지역별 정책 중 충남에서 신청할 수 있는 건만 정답"
+    },
+    {
+      "id": "example-loan",
+      "type": "LOAN",
+      "profile": "gyeonggi-34",
+      "question": "(예시) 창업 자금 빌릴 수 있는 곳 있어?",
+      "relevant": [],
+      "note": "형식 예시. 실제 문항으로 바꾼다"
+    },
+    {
+      "id": "example-unrelated",
+      "type": "UNRELATED",
+      "profile": "seoul-25",
+      "question": "(예시) 자동차 보험료 할인받는 방법",
+      "relevant": [],
+      "note": "형식 예시. 결과가 없거나 거리가 먼 것이 기대 행동"
+    },
+    {
+      "id": "example-ambiguous",
+      "type": "AMBIGUOUS",
+      "profile": "jeonnam-39",
+      "question": "(예시) 지원금",
+      "relevant": [],
+      "note": "형식 예시. 상위 결과 분포만 기록"
+    }
+  ]
+}
