@@ -61,8 +61,8 @@ public class PolicyChunkEmbeddingRepository {
         });
     }
 
-    /** pgvector 입력 형식 "[0.1,0.2,...]" */
-    static String toVectorLiteral(float[] vector) {
+    /** pgvector 입력 형식 "[0.1,0.2,...]". 검색(#182)도 질문 벡터를 같은 형식으로 넘긴다 */
+    public static String toVectorLiteral(float[] vector) {
         StringBuilder sb = new StringBuilder(vector.length * 12).append('[');
         for (int i = 0; i < vector.length; i++) {
             if (i > 0) {
