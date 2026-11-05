@@ -13,22 +13,23 @@ import java.util.regex.Pattern;
  * 평가 답변 자동 채점 (#126). 문자열 포함 여부만 보는 1차 검사이며, 원문 근거 일치·지어냄 판정은 사람이 리포트를 보고 확정한다.
  *
  * <p>비교 전에 공백과 쉼표를 지운다 ("2,000만 원"과 "2000만원"을 같게 본다).
+ * 표현 목록과 정규화는 통합 정책 AI 답변 평가(#184, PolicyRagScorer)도 같은 기준으로 쓰도록 public이다.
  */
-final class PolicyQaScorer {
+public final class PolicyQaScorer {
 
     // "원문에서 확인할 수 없습니다"(프롬프트 규칙 1)와 같은 뜻의 표현
-    static final List<String> NOT_IN_SOURCE_MARKERS = List.of(
+    public static final List<String> NOT_IN_SOURCE_MARKERS = List.of(
             "확인할수없", "확인되지않", "나와있지않", "명시되어있지않", "기재되어있지않", "포함되어있지않",
             "안내되어있지않", "찾을수없", "정보가없", "내용이없", "언급되어있지않", "적혀있지않");
     // 판단에 필요한 항목을 확인해야 한다는 안내 (프롬프트 규칙 2, 3)
-    static final List<String> NEEDS_CHECK_MARKERS = List.of(
+    public static final List<String> NEEDS_CHECK_MARKERS = List.of(
             "확인이필요", "확인해야", "확인하셔야", "확인필요", "확인해주", "확인하시", "확인하신", "확인을받", "확인받",
             "확인하는것이");
     // 이 정책에 대한 질문만 답할 수 있다는 안내 (프롬프트 규칙 4)
     static final List<String> OFF_TOPIC_MARKERS = List.of(
             "이정책", "해당정책", "정책에대한질문", "정책에관한질문", "정책관련", "정책과관련");
     // 자격을 단정하는 표현 (프롬프트 규칙 2 위반 의심). 신청 방법 안내 문장에도 걸릴 수 있어 사람이 다시 본다
-    static final List<String> DEFINITIVE_MARKERS = List.of(
+    public static final List<String> DEFINITIVE_MARKERS = List.of(
             "신청가능합니다", "신청하실수있습니다", "신청할수있습니다", "신청하실수있어요", "대상입니다", "대상이맞습니다",
             "대상이맞아요", "자격이됩니다", "자격이있습니다", "받으실수있습니다", "지원받으실수있습니다");
     // 프롬프트 자리표시자가 답변에 남으면 안 된다
@@ -79,7 +80,7 @@ final class PolicyQaScorer {
         return new Score(failures.isEmpty(), List.copyOf(failures), List.copyOf(warnings), sentences);
     }
 
-    static String normalize(String text) {
+    public static String normalize(String text) {
         return text.replaceAll("[\\s,]", "");
     }
 
