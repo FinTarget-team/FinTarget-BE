@@ -3,6 +3,9 @@ package kr.fintarget.api.domain.policy.search;
 import kr.fintarget.api.domain.ai.client.AiClientException;
 import kr.fintarget.api.domain.ai.client.AiEmbeddingClient;
 import kr.fintarget.api.domain.ai.client.AiUnavailableException;
+import kr.fintarget.api.domain.ai.usage.AiUsageFeature;
+import kr.fintarget.api.domain.ai.usage.AiUsageLimitExceededException;
+import kr.fintarget.api.domain.ai.usage.AiUsageLimiter;
 import kr.fintarget.api.domain.policy.entity.Policy;
 import kr.fintarget.api.domain.policy.entity.PolicyType;
 import kr.fintarget.api.domain.policy.search.PolicyChunkSearchRepository.ChunkMatch;
@@ -13,6 +16,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
@@ -23,6 +27,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -45,8 +50,16 @@ class PolicySearchServiceTest {
     @Mock
     private AiEmbeddingClient embeddingClient;
 
+    @Mock
+    private AiUsageLimiter usageLimiter;
+
     private PolicySearchService service(int k, double maxDistance, int chunkMultiplier) {
-        return new PolicySearchService(policyService, searchRepository, embeddingClient, k, maxDistance, chunkMultiplier);
+        return service(k, maxDistance, chunkMultiplier, 50);
+    }
+
+    private PolicySearchService service(int k, double maxDistance, int chunkMultiplier, int dailyLimit) {
+        return new PolicySearchService(policyService, searchRepository, embeddingClient, usageLimiter,
+                k, maxDistance, chunkMultiplier, dailyLimit);
     }
 
     private Policy policy(String name) {
@@ -71,6 +84,8 @@ class PolicySearchServiceTest {
 
         verify(embeddingClient, never()).embed(anyList());
         verify(searchRepository, never()).search(anyList(), any(), anyInt());
+        // 임베딩을 호출하지 않으므로 검색 한도도 차감하지 않는다 (#183)
+        verifyNoInteractions(usageLimiter);
     }
 
     @Test
@@ -161,8 +176,59 @@ class PolicySearchServiceTest {
     }
 
     @Test
+    void 후보가_있으면_검색_한도를_1회_차감한다() {
+        when(policyService.findCandidatePolicies(USER_ID, null)).thenReturn(List.of(policy("정책 A")));
+        stubEmbedding();
+        when(searchRepository.search(anyList(), eq(VECTOR), anyInt())).thenReturn(List.of());
+
+        service(5, 0.5, 3, 50).search(USER_ID, "질문");
+
+        verify(usageLimiter).acquire(USER_ID, AiUsageFeature.POLICY_SEARCH, 50);
+        verify(usageLimiter, never()).release(any());
+    }
+
+    @Test
+    void 검색_한도를_넘으면_임베딩을_호출하지_않고_429_예외() {
+        when(policyService.findCandidatePolicies(USER_ID, null)).thenReturn(List.of(policy("정책 A")));
+        when(usageLimiter.acquire(USER_ID, AiUsageFeature.POLICY_SEARCH, 50))
+                .thenThrow(new AiUsageLimitExceededException(AiUsageFeature.POLICY_SEARCH));
+
+        assertThatThrownBy(() -> service(5, 0.5, 3).search(USER_ID, "질문"))
+                .isInstanceOf(AiUsageLimitExceededException.class);
+
+        verify(embeddingClient, never()).embed(anyList());
+    }
+
+    @Test
+    void 임베딩_호출이_실패하면_차감한_검색_횟수를_되돌린다() {
+        AiUsageLimiter.Ticket ticket = new AiUsageLimiter.Ticket(USER_ID, LocalDate.of(2026, 11, 5), AiUsageFeature.POLICY_SEARCH);
+        when(policyService.findCandidatePolicies(USER_ID, null)).thenReturn(List.of(policy("정책 A")));
+        when(usageLimiter.acquire(USER_ID, AiUsageFeature.POLICY_SEARCH, 50)).thenReturn(ticket);
+        when(embeddingClient.embed(List.of("질문")))
+                .thenThrow(new AiUnavailableException(AiClientException.Reason.DISABLED));
+
+        assertThatThrownBy(() -> service(5, 0.5, 3).search(USER_ID, "질문"))
+                .isInstanceOf(AiUnavailableException.class);
+
+        verify(usageLimiter).release(ticket);
+    }
+
+    @Test
+    void 후보를_받아_검색하면_검색_한도를_차감하지_않는다() {
+        Policy a = policy("정책 A");
+        stubEmbedding();
+        when(searchRepository.search(anyList(), eq(VECTOR), anyInt()))
+                .thenReturn(List.of(match(a, "전체", "청크", 0.1)));
+
+        assertThat(service(5, 0.5, 3).searchCandidates(List.of(a), "질문")).hasSize(1);
+
+        verifyNoInteractions(usageLimiter, policyService);
+    }
+
+    @Test
     void k와_배수_설정값이_1보다_작으면_기동에_실패한다() {
         assertThatThrownBy(() -> service(0, 0.5, 3)).isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> service(5, 0.5, 0)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> service(5, 0.5, 3, 0)).isInstanceOf(IllegalArgumentException.class);
     }
 }

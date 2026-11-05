@@ -35,6 +35,7 @@ public class PolicySearchController {
                     + "신청 가능한 정책을 고르고, 그 안에서 저장된 원문과 질문의 유사도로 순위를 매깁니다. "
                     + "답변을 생성하지 않고 정책 목록만 돌려줍니다. "
                     + "나이나 소득 정보가 없는 사용자와, 질문과 가까운 정책이 없는 경우에는 results가 빈 배열입니다(오류가 아닙니다). "
+                    + "사용자별 하루 검색 횟수 제한이 있습니다(기본 50회, KST 자정 초기화). 후보 정책이 없어 AI를 호출하지 않은 요청과 AI 호출이 실패한 요청은 횟수에서 빠집니다. "
                     + "질문을 임베딩하는 AI 호출이 있어 응답까지 1초 이상 걸릴 수 있습니다."
     )
     @io.swagger.v3.oas.annotations.responses.ApiResponses({
@@ -58,6 +59,15 @@ public class PolicySearchController {
                                     }
                                     """)
                     })),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "429",
+                    description = "오늘 검색 가능 횟수를 모두 사용함 (#183)",
+                    content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE, examples = @ExampleObject(value = """
+                            {
+                              "status": 429,
+                              "message": "오늘 검색할 수 있는 횟수를 모두 사용했습니다. 내일 다시 시도해주세요.",
+                              "data": null
+                            }
+                            """))),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "502",
                     description = "임베딩 호출 실패 (OpenAI 오류·타임아웃)",
                     content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE, examples = @ExampleObject(value = """
