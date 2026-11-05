@@ -74,7 +74,7 @@ class AiChatControllerTest {
 
     @BeforeEach
     void setUp() {
-        when(jwtUtil.validateToken("token")).thenReturn(true);
+        when(jwtUtil.validateAccessToken("token")).thenReturn(true);
         when(jwtUtil.getUserId("token")).thenReturn(USER_ID.toString());
     }
 

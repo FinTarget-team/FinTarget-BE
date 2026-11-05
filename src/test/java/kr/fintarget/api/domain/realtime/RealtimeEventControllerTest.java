@@ -71,9 +71,9 @@ class RealtimeEventControllerTest {
     void setUp() {
         userA = UUID.randomUUID().toString();
         userB = UUID.randomUUID().toString();
-        when(jwtUtil.validateToken("token-a")).thenReturn(true);
+        when(jwtUtil.validateAccessToken("token-a")).thenReturn(true);
         when(jwtUtil.getUserId("token-a")).thenReturn(userA);
-        when(jwtUtil.validateToken("token-b")).thenReturn(true);
+        when(jwtUtil.validateAccessToken("token-b")).thenReturn(true);
         when(jwtUtil.getUserId("token-b")).thenReturn(userB);
     }
 

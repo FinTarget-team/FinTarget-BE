@@ -72,7 +72,7 @@ class AdminPolicyEmbeddingControllerSecurityTest {
 
     @Test
     void 일반_사용자_JWT로는_호출할_수_없다() throws Exception {
-        when(jwtUtil.validateToken("user-token")).thenReturn(true);
+        when(jwtUtil.validateAccessToken("user-token")).thenReturn(true);
         when(jwtUtil.getUserId("user-token")).thenReturn("user-1");
 
         mockMvc.perform(post(URL).header("Authorization", "Bearer user-token"))

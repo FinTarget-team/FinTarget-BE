@@ -161,6 +161,22 @@ class OnboardingServiceTest {
     }
 
     @Test
+    void 같은_단계를_다시_제출하면_새로_저장하지_않고_기존_답변을_갱신한다() {
+        String userId = UUID.randomUUID().toString();
+        User user = User.builder().id(userId).provider(SocialProvider.KAKAO).providerId("provider-1").build();
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        OnboardingAnswer existing = new OnboardingAnswer(UUID.fromString(userId), STEP_NAME, "홍길동");
+        when(onboardingAnswerRepository.findFirstByUserIdAndStepOrderByCreatedAtDesc(UUID.fromString(userId), STEP_NAME))
+                .thenReturn(Optional.of(existing));
+
+        onboardingService.submitAnswer(userId, answerRequest(STEP_NAME, "김철수"));
+
+        assertThat(existing.getValue()).isEqualTo("김철수");
+        assertThat(user.getName()).isEqualTo("김철수");
+        verify(onboardingAnswerRepository, never()).save(any());
+    }
+
+    @Test
     void step2_답변_제출시_1단계를_완료하지_않았으면_예외가_발생한다() {
         String userId = UUID.randomUUID().toString();
 
