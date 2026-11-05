@@ -18,6 +18,8 @@ public class Goal {
 
     // 목표 금액 상한(50억 원). 오입력(0 추가 등) 방지 목적의 안전장치
     public static final long MAX_TARGET_AMOUNT = 5_000_000_000L;
+    // 목표 제목 최대 길이. DB 컬럼(255자)을 넘는 값이 500으로 끝나지 않도록 요청 단계에서 막는다 (#191)
+    public static final int MAX_TITLE_LENGTH = 30;
     static final String DEFAULT_TITLE = "내 목표";
     static final int DEFAULT_DEADLINE_YEARS = 1;
 

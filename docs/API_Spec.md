@@ -240,7 +240,7 @@ Authorization: Bearer {accessToken}
 
 | 필드 | 필수 | 규칙 |
 |---|---|---|
-| `title` | O | 공백만으로 된 문자열 불가 |
+| `title` | O | 앞뒤 공백을 뺀 뒤 1~30자. 공백만으로 된 문자열 불가. 앞뒤 공백은 빼고 저장 |
 | `targetAmount` | O | 1원 이상 50억 원 이하 |
 | `currentAmount` | O | 현재까지 모은 금액(원). 0 이상 |
 | `deadline` | O | `yyyy-MM-dd` |
@@ -250,6 +250,7 @@ Authorization: Bearer {accessToken}
 | 상황 | 상태 | 메시지 |
 |---|---|---|
 | `title` 누락, 공백 | 400 | `목표 제목을 입력해주세요.` |
+| `title` 30자 초과 | 400 | `목표 제목은 30자 이하로 입력해주세요.` |
 | `targetAmount` 누락, 0 이하 | 400 | `목표 금액은 0보다 커야 합니다` |
 | `targetAmount` 50억 원 초과 | 400 | `목표 금액은 50억 원 이하로 입력해주세요` |
 | `currentAmount` 누락 | 400 | `현재 모은 금액을 입력해주세요.` |
