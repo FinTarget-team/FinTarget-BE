@@ -39,7 +39,7 @@ public class GoalController {
             ),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(
                     responseCode = "400",
-                    description = "입력값 검증 실패 (title·currentAmount·deadline 누락, currentAmount 음수, targetAmount 범위 초과 등)",
+                    description = "입력값 검증 실패 (title·currentAmount·deadline 누락, title 30자 초과, currentAmount 음수, targetAmount 범위 초과 등)",
                     content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE, examples = {
                             @ExampleObject(name = "제목 누락", value = """
                                     {
