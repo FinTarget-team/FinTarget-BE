@@ -40,3 +40,6 @@ src/main/resources/application.yml
 
 ### Env ###
 .env
+
+### AI 평가 스냅샷 (#184, 운영 정책 데이터 내보내기. 커밋하지 않음) ###
+/ai-eval-snapshot/

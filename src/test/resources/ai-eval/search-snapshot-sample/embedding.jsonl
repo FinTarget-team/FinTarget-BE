@@ -1,0 +1,4 @@
+{"chunkId":"00000000-0000-0000-0000-000000000001","model":"text-embedding-3-small","embedding":"[1,0,0]"}
+{"chunkId":"00000000-0000-0000-0000-000000000002","model":"text-embedding-3-small","embedding":"[0.8,0.6,0]"}
+{"chunkId":"00000000-0000-0000-0000-000000000003","model":"text-embedding-3-small","embedding":"[0,1,0]"}
+{"chunkId":"00000000-0000-0000-0000-000000000004","model":"text-embedding-3-small","embedding":"[1,0,0]"}
