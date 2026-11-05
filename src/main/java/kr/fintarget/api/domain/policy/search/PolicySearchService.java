@@ -25,7 +25,7 @@ import java.util.UUID;
  *   <li>그 후보 안에서만 질문 벡터에 가까운 청크를 조회하고, 정책별 최고 점수로 묶는다</li>
  * </ol>
  *
- * <p>정책별 묶기·유사도 하한·k 적용을 Java에서 하는 이유는 {@link PolicyChunkSearchRepository} 참고.
+ * <p>정책별 묶기·유사도 하한·k 적용을 Java에서 하는 이유는 {@link JdbcPolicyChunkSearchRepository} 참고.
  * k와 하한값은 설정값이며 최종값은 검색 평가(#184)로 정한다.
  */
 @Slf4j
