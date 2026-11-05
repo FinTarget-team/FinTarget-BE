@@ -3,6 +3,7 @@ import kr.fintarget.api.common.ApiResponse;
 import kr.fintarget.api.domain.ai.chat.service.AiChatNotFoundException;
 import kr.fintarget.api.domain.ai.client.AiCallFailedException;
 import kr.fintarget.api.domain.ai.client.AiUnavailableException;
+import kr.fintarget.api.domain.ai.usage.AiUsageLimitExceededException;
 import kr.fintarget.api.domain.auth.KakaoOAuthException;
 import kr.fintarget.api.domain.auth.NaverOAuthException;
 import lombok.extern.slf4j.Slf4j;
@@ -44,6 +45,11 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(AiUnavailableException.class)
     public ResponseEntity<ApiResponse<?>> handleAiUnavailable(AiUnavailableException e) {
         return ResponseEntity.status(503).body(ApiResponse.error(503, e.getMessage()));
+    }
+    // 사용자별 일일 AI 호출 한도 초과 (#183). OpenAI 쪽 한도(AiUnavailableException, 503)와 구분한다
+    @ExceptionHandler(AiUsageLimitExceededException.class)
+    public ResponseEntity<ApiResponse<?>> handleAiUsageLimitExceeded(AiUsageLimitExceededException e) {
+        return ResponseEntity.status(429).body(ApiResponse.error(429, e.getMessage()));
     }
     @ExceptionHandler(AiCallFailedException.class)
     public ResponseEntity<ApiResponse<?>> handleAiCallFailed(AiCallFailedException e) {

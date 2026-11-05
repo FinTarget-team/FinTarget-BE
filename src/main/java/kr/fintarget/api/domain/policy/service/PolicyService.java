@@ -39,13 +39,18 @@ public class PolicyService {
      */
     @Transactional(readOnly = true)
     public List<Policy> findCandidatePolicies(String userId, String policyType) {
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
+        return findCandidatePolicies(findUser(userId), policyType);
+    }
 
-        User.AgeRange ageRange = user.ageRange();
-        if (ageRange == null || user.getIncome() == null) {
+    /**
+     * 이미 조회한 사용자로 후보 정책을 찾는다. 통합 AI 답변(#183)이 조건 정보 부족 여부를 먼저 판단하느라 사용자를 읽어 둔 경우에 쓴다.
+     */
+    @Transactional(readOnly = true)
+    public List<Policy> findCandidatePolicies(User user, String policyType) {
+        if (!hasMatchingProfile(user)) {
             return List.of();
         }
+        User.AgeRange ageRange = user.ageRange();
 
         // 지역은 조회 후 거른다. 목록 API가 페이지네이션 없이 전체를 반환하므로 결과는 DB에서 거르는 것과 같다.
         // 페이지네이션을 도입하면 페이지 크기·전체 건수가 어긋나므로 그때는 지역을 쿼리 조건으로 옮겨야 한다 (예: policy_region 정규화)
@@ -53,6 +58,19 @@ public class PolicyService {
                 .stream()
                 .filter(policy -> policy.appliesToRegion(user.getRegion()))
                 .toList();
+    }
+
+    /**
+     * 맞춤 조건을 판단할 수 있는 사용자인지 (나이 구간과 소득이 모두 있음). 맞춤 정책 목록, 정책 검색(#182), 통합 AI 답변(#183)이 같은 기준을 쓴다.
+     */
+    public static boolean hasMatchingProfile(User user) {
+        return user.ageRange() != null && user.getIncome() != null;
+    }
+
+    @Transactional(readOnly = true)
+    public User findUser(String userId) {
+        return userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
     }
 
     private PolicyType parsePolicyType(String policyType) {

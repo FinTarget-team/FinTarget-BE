@@ -79,7 +79,7 @@ public class OpenAiResponsesClient implements AiTextClient {
                 model,
                 request.systemPrompt(),
                 input,
-                properties.maxOutputTokens(),
+                request.maxOutputTokens() == null ? properties.maxOutputTokens() : request.maxOutputTokens(),
                 new OpenAiResponsesRequest.Reasoning(properties.reasoningEffort()),
                 false);
     }

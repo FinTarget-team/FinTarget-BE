@@ -85,6 +85,20 @@ class OpenAiResponsesClientTest {
     }
 
     @Test
+    void 요청에_출력상한을_지정하면_설정값_대신_그_값을_보낸다() {
+        OpenAiResponsesClient client = client();
+        server.expect(requestTo(URL))
+                .andExpect(jsonPath("$.max_output_tokens").value(1000))
+                .andRespond(withSuccess(COMPLETED, MediaType.APPLICATION_JSON));
+
+        client.generate(new AiTextRequest(null, List.of(AiMessage.user("질문")), null, 1000));
+
+        server.verify();
+        assertThat(catchThrowable(() -> new AiTextRequest(null, List.of(AiMessage.user("질문")), null, 0)))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
     void 시스템_프롬프트가_없으면_instructions를_보내지_않는다() {
         OpenAiResponsesClient client = client();
         server.expect(requestTo(URL))

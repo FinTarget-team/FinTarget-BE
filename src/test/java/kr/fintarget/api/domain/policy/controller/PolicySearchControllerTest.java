@@ -4,6 +4,8 @@ import kr.fintarget.api.common.exception.GlobalExceptionHandler;
 import kr.fintarget.api.domain.ai.client.AiCallFailedException;
 import kr.fintarget.api.domain.ai.client.AiClientException;
 import kr.fintarget.api.domain.ai.client.AiUnavailableException;
+import kr.fintarget.api.domain.ai.usage.AiUsageFeature;
+import kr.fintarget.api.domain.ai.usage.AiUsageLimitExceededException;
 import kr.fintarget.api.domain.policy.entity.Policy;
 import kr.fintarget.api.domain.policy.entity.PolicyType;
 import kr.fintarget.api.domain.policy.search.PolicySearchHit;
@@ -170,5 +172,17 @@ class PolicySearchControllerTest {
                 """)
                 .andExpect(status().isBadGateway())
                 .andExpect(jsonPath("$.status").value(502));
+    }
+
+    @Test
+    void 검색_일일_한도를_넘으면_429() throws Exception {
+        when(policySearchService.search(anyString(), anyString()))
+                .thenThrow(new AiUsageLimitExceededException(AiUsageFeature.POLICY_SEARCH));
+
+        search("""
+                {"question": "질문"}
+                """)
+                .andExpect(status().isTooManyRequests())
+                .andExpect(jsonPath("$.message").value("오늘 검색할 수 있는 횟수를 모두 사용했습니다. 내일 다시 시도해주세요."));
     }
 }
