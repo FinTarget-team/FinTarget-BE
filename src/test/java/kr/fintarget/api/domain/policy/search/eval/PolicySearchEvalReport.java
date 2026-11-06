@@ -56,6 +56,7 @@ public final class PolicySearchEvalReport {
             row.put("k", r.config().k());
             row.put("maxDistance", r.config().maxDistance());
             row.put("chunkMultiplier", r.config().chunkMultiplier());
+            row.put("excludeKinfaWithoutLoanIntent", r.config().excludeKinfaWithoutLoanIntent());
             row.put("production", r.config().isProduction());
             row.put("recallAtK", r.recallAtK());
             row.put("wideRecallAtK", r.wideRecallAtK());
@@ -66,6 +67,10 @@ public final class PolicySearchEvalReport {
             row.put("unrelatedEmpty", r.summary().unrelatedEmpty());
             row.put("violations", r.summary().violations());
             row.put("kinfaSkewedCases", r.summary().kinfaSkewedCases());
+            row.put("unrelatedWithResults", r.summary().unrelatedWithResults());
+            row.put("nonLoanKinfaShare", r.summary().nonLoanKinfaShare());
+            row.put("labeledEmptyCases", r.summary().labeledEmptyCases());
+            row.put("labeledEmptyPassed", r.summary().labeledEmptyPassed());
             row.put("meetsTarget", r.meetsTarget());
             configs.add(row);
         }
@@ -80,7 +85,9 @@ public final class PolicySearchEvalReport {
             row.put("profile", c.profile());
             row.put("question", c.question());
             row.put("relevant", c.relevant().stream().map(PolicyKey::toString).toList());
+            row.put("labeled", c.labeled());
             row.put("scored", score.scored());
+            row.put("emptyPassed", score.emptyPassed());
             row.put("recall", score.recall());
             row.put("firstRelevantRank", score.firstRelevantRank());
             row.put("results", report.wideResults().get(c.id()).stream().map(item -> Map.of(
@@ -97,6 +104,8 @@ public final class PolicySearchEvalReport {
         json.put("cases", s.cases());
         json.put("scoredCases", s.scoredCases());
         json.put("unlabeledCases", s.unlabeledCases());
+        json.put("labeledEmptyCases", s.labeledEmptyCases());
+        json.put("labeledEmptyPassed", s.labeledEmptyPassed());
         json.put("recall", s.recall());
         json.put("nameRecall", s.nameRecall());
         json.put("mrr", s.mrr());
@@ -117,22 +126,42 @@ public final class PolicySearchEvalReport {
                 .append("문항, 정답 있는 문항 ").append(wide.scoredCases()).append(")\n");
         context.forEach((key, value) -> md.append("- ").append(key).append(": ").append(value).append('\n'));
         if (wide.unlabeledCases() > 0) {
-            md.append("\n> 정답(relevant)이 비어 있는 문항 ").append(wide.unlabeledCases())
+            md.append("\n> 아직 라벨링하지 않은 문항(labeled=false) ").append(wide.unlabeledCases())
                     .append("건은 Recall·MRR에서 빠졌습니다. 풀 결과로 라벨링한 뒤 다시 실행하세요.\n");
         }
 
-        // #184에서 비교하기로 한 세 지표를 앞에 둔다: Recall@5, 무관 질문 오탐 수, 대출 의도 없는 문항의 KINFA 비율
+        // #184에서 비교하기로 한 세 지표를 앞에 둔다: Recall@5, 무관 질문 오탐 수, 대출 의도 없는 문항의 KINFA 비율.
+        // 구어체(BENEFIT_SITUATION)는 실사용에 가장 가까운 유형이라 따로 뗀다
         md.append("\n## 조합 비교 (#184)\n\n")
-                .append("★ = 현재 운영 기본값. `KINFA조건부` = 질문에 대출 의도가 없으면 KINFA를 후보에서 제외 (평가 전용)\n\n")
-                .append("| 조합 | Recall@5 | 무관 오탐 | KINFA 비율(대출 의도 없는 문항) | MRR | 평균 결과 수 | 정답 문항 0건 | 조건 위반 |\n")
-                .append("|---|---|---|---|---|---|---|---|\n");
+                .append("★ = 현재 운영 기본값. `KINFA조건부` = 질문에 대출 의도가 없으면 KINFA를 후보에서 제외 (평가 전용).\n")
+                .append("KINFA 비율은 조건부 조합에서 정의상 0%라 `해당 없음(제외 적용)`으로 적는다.\n\n")
+                .append("| 조합 | Recall@5 | 구어체 Recall@5 | 구어체 0건 | 무관 오탐 | KINFA 비율(대출 의도 없는 문항) | MRR | 평균 결과 수 | 정답 문항 0건 | 조건 위반 |\n")
+                .append("|---|---|---|---|---|---|---|---|---|---|\n");
         report.configs().stream()
                 .sorted(comparisonOrder())
-                .forEach(r -> md.append(String.format(Locale.ROOT, "| %s%s | %.3f | %d | %s | %.3f | %.1f | %d | %d |%n",
-                        r.config().label(), r.config().isProduction() ? " ★" : "",
-                        r.summary().recall().getOrDefault(5, 0.0), r.summary().unrelatedWithResults(),
-                        share(r.summary().nonLoanKinfaShare()), r.summary().mrr(), r.averageResults(),
-                        r.scoredEmpty(), r.summary().violations())));
+                .forEach(r -> {
+                    TypeSummary colloquial = r.summary().byType().get(CaseType.BENEFIT_SITUATION);
+                    md.append(String.format(Locale.ROOT, "| %s%s | %.3f | %s | %s | %d | %s | %.3f | %.1f | %d | %d |%n",
+                            r.config().label(), r.config().isProduction() ? " ★" : "",
+                            r.summary().recall().getOrDefault(5, 0.0),
+                            colloquial == null ? "-" : rate(colloquial.recallAt5()),
+                            colloquial == null ? "-" : colloquial.emptyResultCases() + "/" + colloquial.cases(),
+                            r.summary().unrelatedWithResults(),
+                            r.config().excludeKinfaWithoutLoanIntent()
+                                    ? "해당 없음(제외 적용)" : share(r.summary().nonLoanKinfaShare()),
+                            r.summary().mrr(), r.averageResults(), r.scoredEmpty(), r.summary().violations()));
+                });
+
+        Summary wideSummary = report.wideSummary();
+        if (wideSummary.labeledEmptyCases() > 0) {
+            md.append("\n### 정답 0건 문항 (Recall·MRR 제외)\n\n")
+                    .append("정답이 없는 것이 맞다고 라벨한 문항이다. 결과가 0건이면 통과다.\n\n")
+                    .append("| 조합 | 통과 | 조건 위반 |\n|---|---|---|\n");
+            report.configs().stream().sorted(comparisonOrder())
+                    .forEach(r -> md.append(String.format(Locale.ROOT, "| %s | %d/%d | %d |%n",
+                            r.config().label(), r.summary().labeledEmptyPassed(),
+                            r.summary().labeledEmptyCases(), r.summary().violations())));
+        }
 
         md.append("\n## 설정값 비교 (전체 지표)\n\n")
                 .append("잠정 목표: Recall@k ≥ 0.90, 하한 손실 ≤ 2%p, 조건 위반 0. ★ = 현재 운영 기본값\n\n")
@@ -234,6 +263,10 @@ public final class PolicySearchEvalReport {
                 .thenComparingInt(r -> r.config().k())
                 .thenComparingDouble(r -> r.config().maxDistance())
                 .thenComparingInt(r -> r.config().chunkMultiplier());
+    }
+
+    private static String rate(Double value) {
+        return value == null ? "-" : String.format(Locale.ROOT, "%.3f", value);
     }
 
     private static String share(Double value) {
