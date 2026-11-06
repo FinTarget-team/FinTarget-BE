@@ -185,6 +185,34 @@ class PolicySearchEvalRunnerTest {
         assertThat(json.get("cases").get(1).get("results").get(0).get("key").asText()).isEqualTo("KINFA:14|청년 전세 대출");
     }
 
+    // 채점 대상 문항이 없으면 리포트는 "-", results.json은 null로 적는다
+    @Test
+    void 채점_대상이_없는_지표는_대시와_null로_적는다() throws Exception {
+        SearchCase unlabeledOnly = new SearchCase("benefit-09", CaseType.BENEFIT_SITUATION, "seoul-25", "월세",
+                List.of(), null, false, "라벨링 전");
+        PolicySearchEvalRunner only = runnerFor(unlabeledOnly);
+        Report report = only.run(List.of(SearchConfig.PRODUCTION));
+
+        ConfigResult result = report.configs().getFirst();
+        assertThat(result.recallAtK()).isNull();
+        assertThat(result.wideRecallAtK()).isNull();
+        assertThat(result.loss()).isNull();
+        assertThat(result.meetsTarget()).isFalse();
+
+        PolicySearchEvalReport.write(tempDir, only.evalSet(), report, Map.of("스냅샷", "sample"));
+
+        String md = Files.readString(tempDir.resolve("report.md"), StandardCharsets.UTF_8);
+        // 0.000이 아니라 "-"
+        assertThat(md).contains("| k=5 d=0.50 m=3 ★ | - |").doesNotContain("| 0.000 |");
+
+        JsonNode json = new ObjectMapper().readTree(tempDir.resolve("results.json").toFile());
+        JsonNode config = json.get("configs").get(0);
+        assertThat(config.get("recallAtK").isNull()).isTrue();
+        assertThat(config.get("wideRecallAtK").isNull()).isTrue();
+        assertThat(config.get("loss").isNull()).isTrue();
+        assertThat(config.get("mrr").isNull()).isTrue();
+    }
+
     @Test
     void 설정값_조합은_환경_변수가_없으면_기본_격자다() {
         List<SearchConfig> grid = SearchConfig.gridFromEnv();

@@ -125,8 +125,8 @@ public final class PolicySearchScorer {
             }
             List<CaseScore> scoredOfType = ofType.stream().filter(CaseScore::scored).toList();
             byType.put(type, new TypeSummary(ofType.size(), scoredOfType.size(),
-                    scoredOfType.isEmpty() ? null : mean(scoredOfType, s -> s.recall().get(5)),
-                    scoredOfType.isEmpty() ? null : mean(scoredOfType, CaseScore::reciprocalRank),
+                    mean(scoredOfType, s -> s.recall().get(5)),
+                    mean(scoredOfType, CaseScore::reciprocalRank),
                     (int) ofType.stream().filter(s -> s.resultCount() == 0).count()));
         }
         List<Double> relevantDistances = scored.stream().flatMap(s -> s.relevantDistances().stream()).toList();
@@ -138,7 +138,7 @@ public final class PolicySearchScorer {
         return new Summary(scores.size(), scored.size(),
                 (int) scores.stream()
                         .filter(s -> s.evalCase().type().scoredForRecall() && !s.evalCase().labeled()).count(),
-                recall, nameRecall, scored.isEmpty() ? 0.0 : mean(scored, CaseScore::reciprocalRank),
+                recall, nameRecall, mean(scored, CaseScore::reciprocalRank),
                 scores.stream().mapToInt(s -> s.violations().size()).sum(),
                 scores.stream().filter(s -> !s.violations().isEmpty()).map(s -> s.evalCase().id()).toList(),
                 scores.stream().mapToInt(CaseScore::regionFallbacks).sum(),
@@ -182,9 +182,10 @@ public final class PolicySearchScorer {
         return name == null ? "" : name.replaceAll("\\s+", "");
     }
 
-    private static double mean(List<CaseScore> scores, ToDoubleFunction<CaseScore> value) {
+    /** 평균. 대상이 없으면 null — "측정하지 않음"과 "측정했는데 0"을 구분한다 */
+    private static Double mean(List<CaseScore> scores, ToDoubleFunction<CaseScore> value) {
         OptionalDouble average = scores.stream().mapToDouble(value).average();
-        return average.orElse(0.0);
+        return average.isPresent() ? average.getAsDouble() : null;
     }
 
     /**
@@ -227,11 +228,13 @@ public final class PolicySearchScorer {
     /**
      * @param unrelatedWithResults 무관 문항 중 결과가 1건 이상 나온 문항 수 (오탐. 적을수록 좋다)
      * @param nonLoanKinfaShare    대출 의도 없는 문항의 상위 SKEW_TOP건 중 KINFA 비율 평균 (없으면 null)
+     * @param recall               k → Recall@k 평균. 채점 대상이 없으면 값이 null이다
+     * @param mrr                  MRR 평균. 채점 대상이 없으면 null
      * @param labeledEmptyCases    정답 0건으로 라벨한 문항 수
      * @param labeledEmptyPassed   그중 결과가 0건으로 나와 통과한 문항 수
      */
     public record Summary(int cases, int scoredCases, int unlabeledCases, Map<Integer, Double> recall,
-                          Map<Integer, Double> nameRecall, double mrr, int violations, List<String> violationCases,
+                          Map<Integer, Double> nameRecall, Double mrr, int violations, List<String> violationCases,
                           int regionFallbacks, List<String> kinfaSkewedCases, int unrelatedEmpty,
                           int unrelatedWithResults, Double nonLoanKinfaShare,
                           int labeledEmptyCases, int labeledEmptyPassed,

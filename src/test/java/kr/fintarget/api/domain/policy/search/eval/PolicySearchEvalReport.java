@@ -141,15 +141,15 @@ public final class PolicySearchEvalReport {
                 .sorted(comparisonOrder())
                 .forEach(r -> {
                     TypeSummary colloquial = r.summary().byType().get(CaseType.BENEFIT_SITUATION);
-                    md.append(String.format(Locale.ROOT, "| %s%s | %.3f | %s | %s | %d | %s | %.3f | %.1f | %d | %d |%n",
+                    md.append(String.format(Locale.ROOT, "| %s%s | %s | %s | %s | %d | %s | %s | %.1f | %d | %d |%n",
                             r.config().label(), r.config().isProduction() ? " ★" : "",
-                            r.summary().recall().getOrDefault(5, 0.0),
+                            rate(r.summary().recall().get(5)),
                             colloquial == null ? "-" : rate(colloquial.recallAt5()),
                             colloquial == null ? "-" : colloquial.emptyResultCases() + "/" + colloquial.cases(),
                             r.summary().unrelatedWithResults(),
                             r.config().excludeKinfaWithoutLoanIntent()
                                     ? "해당 없음(제외 적용)" : share(r.summary().nonLoanKinfaShare()),
-                            r.summary().mrr(), r.averageResults(), r.scoredEmpty(), r.summary().violations()));
+                            rate(r.summary().mrr()), r.averageResults(), r.scoredEmpty(), r.summary().violations()));
                 });
 
         Summary wideSummary = report.wideSummary();
@@ -170,11 +170,11 @@ public final class PolicySearchEvalReport {
         report.configs().stream()
                 .sorted(comparisonOrder())
                 .forEach(r -> md.append(String.format(Locale.ROOT,
-                        "| %d%s | %.2f | %d | %s | %.3f | %.3f | %.1f | %.3f | %.1f | %d | %d | %d | %d | %s |%n",
+                        "| %d%s | %.2f | %d | %s | %s | %s | %s | %s | %.1f | %d | %d | %d | %d | %s |%n",
                         r.config().k(), r.config().isProduction() ? " ★" : "", r.config().maxDistance(),
                         r.config().chunkMultiplier(), r.config().excludeKinfaWithoutLoanIntent() ? "O" : "-",
-                        r.recallAtK(), r.wideRecallAtK(), r.loss() * 100,
-                        r.summary().mrr(), r.averageResults(), r.scoredEmpty(), r.summary().unrelatedEmpty(),
+                        rate(r.recallAtK()), rate(r.wideRecallAtK()), percentPoints(r.loss()),
+                        rate(r.summary().mrr()), r.averageResults(), r.scoredEmpty(), r.summary().unrelatedEmpty(),
                         r.summary().violations(), r.summary().kinfaSkewedCases().size(), r.meetsTarget() ? "충족" : "-")));
 
         md.append("\n### 대출 의도 판정\n\n")
@@ -193,15 +193,15 @@ public final class PolicySearchEvalReport {
         md.append("| 지표 | @3 | @5 | @10 |\n|---|---|---|---|\n");
         md.append("| Recall | ").append(ks(wide.recall())).append(" |\n");
         md.append("| 이름 단위 Recall | ").append(ks(wide.nameRecall())).append(" |\n");
-        md.append(String.format(Locale.ROOT, "%n- MRR: %.3f%n- 조건 위반: %d건 %s%n- 지역 전국 처리(코드 아닌 지역 값): %d건%n- KINFA 쏠림 문항: %s%n",
-                wide.mrr(), wide.violations(), wide.violationCases(), wide.regionFallbacks(), wide.kinfaSkewedCases()));
+        md.append(String.format(Locale.ROOT, "%n- MRR: %s%n- 조건 위반: %d건 %s%n- 지역 전국 처리(코드 아닌 지역 값): %d건%n- KINFA 쏠림 문항: %s%n",
+                rate(wide.mrr()), wide.violations(), wide.violationCases(), wide.regionFallbacks(), wide.kinfaSkewedCases()));
 
         md.append("\n### 유형별\n\n| 유형 | 문항 | 정답 있는 문항 | Recall@5 | MRR |\n|---|---|---|---|---|\n");
         for (Map.Entry<CaseType, TypeSummary> entry : wide.byType().entrySet()) {
             TypeSummary t = entry.getValue();
             md.append(String.format(Locale.ROOT, "| %s | %d | %d | %s | %s |%n", entry.getKey(), t.cases(), t.scoredCases(),
-                    t.recallAt5() == null ? "-" : String.format(Locale.ROOT, "%.3f", t.recallAt5()),
-                    t.mrr() == null ? "-" : String.format(Locale.ROOT, "%.3f", t.mrr())));
+                    rate(t.recallAt5()),
+                    rate(t.mrr())));
         }
 
         md.append("\n### 거리 분포 (0.05 구간, 하한 정할 때 참고)\n\n| 구간 | 정답 | 정답 아님 | 무관 문항 1위 |\n|---|---|---|---|\n");
@@ -265,6 +265,11 @@ public final class PolicySearchEvalReport {
                 .thenComparingInt(r -> r.config().chunkMultiplier());
     }
 
+    /** 하한 손실(%p). 측정하지 않았으면 "-" */
+    private static String percentPoints(Double value) {
+        return value == null ? "-" : String.format(Locale.ROOT, "%.1f", value * 100);
+    }
+
     private static String rate(Double value) {
         return value == null ? "-" : String.format(Locale.ROOT, "%.3f", value);
     }
@@ -275,7 +280,7 @@ public final class PolicySearchEvalReport {
 
     private static String ks(Map<Integer, Double> byK) {
         return PolicySearchScorer.RECALL_KS.stream()
-                .map(k -> byK.containsKey(k) ? String.format(Locale.ROOT, "%.3f", byK.get(k)) : "-")
+                .map(k -> rate(byK.get(k)))
                 .collect(Collectors.joining(" | "));
     }
 }

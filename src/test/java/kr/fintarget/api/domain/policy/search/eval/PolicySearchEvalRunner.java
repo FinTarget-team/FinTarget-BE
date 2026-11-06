@@ -154,10 +154,11 @@ public final class PolicySearchEvalRunner {
                     }
                 }
             }
-            double recall = scored == 0 ? 0 : recallSum / scored;
-            double wideRecall = scored == 0 ? 0 : wideRecallSum / scored;
+            Double recall = scored == 0 ? null : recallSum / scored;
+            Double wideRecall = scored == 0 ? null : wideRecallSum / scored;
+            Double loss = recall == null || wideRecall == null ? null : wideRecall - recall;
             configResults.add(new ConfigResult(config, PolicySearchScorer.summarize(scores), recall, wideRecall,
-                    wideRecall - recall, evalSet.cases().isEmpty() ? 0 : (double) resultCount / evalSet.cases().size(),
+                    loss, evalSet.cases().isEmpty() ? 0 : (double) resultCount / evalSet.cases().size(),
                     scoredEmpty));
         }
         return new Report(wideResults, wideScores, PolicySearchScorer.summarize(wideScores), configResults);
@@ -189,12 +190,19 @@ public final class PolicySearchEvalRunner {
      * @param averageResults 문항당 평균 결과 수 (전체 문항)
      * @param scoredEmpty   정답이 있는 문항인데 결과가 0건인 수
      */
-    public record ConfigResult(SearchConfig config, Summary summary, double recallAtK, double wideRecallAtK, double loss,
-                               double averageResults, int scoredEmpty) {
+    /**
+     * @param recallAtK     Recall@k 평균. 채점 대상 문항이 없으면 null (측정하지 않음)
+     * @param wideRecallAtK 하한 없는 검색의 Recall@k. 같은 조건에서 null
+     * @param loss          하한 때문에 잃은 Recall(%p 아님, 0~1). 둘 중 하나라도 null이면 null
+     */
+    public record ConfigResult(SearchConfig config, Summary summary, Double recallAtK, Double wideRecallAtK,
+                               Double loss, double averageResults, int scoredEmpty) {
 
         /** 잠정 목표: Recall@k ≥ 0.9, 하한 손실 ≤ 2%p, 조건 위반 0 */
         public boolean meetsTarget() {
-            return recallAtK >= 0.9 && loss <= 0.02 + 1e-9 && summary.violations() == 0;
+            // 측정하지 않은 조합(채점 대상 0건)은 충족으로 보지 않는다
+            return recallAtK != null && loss != null
+                    && recallAtK >= 0.9 && loss <= 0.02 + 1e-9 && summary.violations() == 0;
         }
     }
 }

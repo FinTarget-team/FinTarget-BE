@@ -140,10 +140,28 @@ class PolicySearchScorerTest {
         assertThat(summary.scoredCases()).isZero();
         assertThat(summary.labeledEmptyCases()).isEqualTo(2);
         assertThat(summary.labeledEmptyPassed()).isEqualTo(1);
-        // 채점 대상이 없으면 Recall 평균은 0.0으로 나온다 (기존 mean 동작).
-        // "측정 안 됨"과 "측정했는데 0"이 같은 값이라 리포트는 scoredCases를 함께 봐야 한다
-        assertThat(summary.recall().get(5)).isZero();
+        // 채점 대상이 없으면 Recall·MRR은 null이다 ("측정 안 됨"과 "측정했는데 0"을 구분한다)
         assertThat(summary.scoredCases()).isZero();
+        assertThat(summary.recall().get(5)).isNull();
+        assertThat(summary.mrr()).isNull();
+    }
+
+    // 리포트가 "-"로 적을 수 있게, 측정하지 않은 지표는 null로 돌려준다
+    @Test
+    void 채점_대상이_없으면_Recall과_MRR은_null이다() {
+        Summary empty = PolicySearchScorer.summarize(List.of());
+        assertThat(empty.recall().get(5)).isNull();
+        assertThat(empty.nameRecall().get(5)).isNull();
+        assertThat(empty.mrr()).isNull();
+
+        CaseScore unlabeled = PolicySearchScorer.score(
+                searchCase("b1", CaseType.BENEFIT_SITUATION, List.of()), ranked(A), POOL, NAMES);
+        Summary onlyUnlabeled = PolicySearchScorer.summarize(List.of(unlabeled));
+        assertThat(onlyUnlabeled.recall().get(5)).isNull();
+        assertThat(onlyUnlabeled.mrr()).isNull();
+        // 유형별 지표도 같다
+        assertThat(onlyUnlabeled.byType().get(CaseType.BENEFIT_SITUATION).recallAt5()).isNull();
+        assertThat(onlyUnlabeled.byType().get(CaseType.BENEFIT_SITUATION).mrr()).isNull();
     }
 
     @Test
