@@ -213,6 +213,37 @@ class PolicySearchEvalRunnerTest {
         assertThat(config.get("mrr").isNull()).isTrue();
     }
 
+    /**
+     * 라벨링 전 문항만 있으면 recallAtK·wideRecallAtK·loss·mrr이 모두 null이다.
+     * 격자 탐색(63조합)과 #184 비교(8조합)가 그 상태에서도 정렬·리포트까지 NPE 없이 끝나야 한다.
+     */
+    @Test
+    void 라벨링_전_문항만_있어도_격자_탐색과_조합_비교가_끝난다() throws Exception {
+        SearchCase unlabeledOnly = new SearchCase("benefit-09", CaseType.BENEFIT_SITUATION, "seoul-25", "월세",
+                List.of(), null, false, "라벨링 전");
+        PolicySearchEvalRunner only = runnerFor(unlabeledOnly);
+
+        Report grid = only.run(SearchConfig.gridFromEnv());
+        assertThat(grid.configs()).hasSize(3 * 7 * 3);
+        assertThat(grid.configs()).allSatisfy(r -> {
+            assertThat(r.recallAtK()).isNull();
+            assertThat(r.wideRecallAtK()).isNull();
+            assertThat(r.loss()).isNull();
+            assertThat(r.meetsTarget()).isFalse();
+        });
+
+        Report comparison = only.run(SearchConfig.comparisonSet());
+        assertThat(comparison.configs()).hasSize(8);
+
+        // 정렬과 리포트 생성까지 (조합 비교 표·설정값 비교 표·유형별·거리 분포 전부 지나간다)
+        PolicySearchEvalReport.write(tempDir, only.evalSet(), grid, Map.of("스냅샷", "sample"));
+        PolicySearchEvalReport.write(tempDir, only.evalSet(), comparison, Map.of("스냅샷", "sample"));
+
+        String md = Files.readString(tempDir.resolve("report.md"), StandardCharsets.UTF_8);
+        assertThat(md).contains("아직 라벨링하지 않은 문항(labeled=false) 1건")
+                .contains("| k=5 d=0.50 m=3 ★ | - |");
+    }
+
     @Test
     void 설정값_조합은_환경_변수가_없으면_기본_격자다() {
         List<SearchConfig> grid = SearchConfig.gridFromEnv();
