@@ -122,7 +122,7 @@
       "id": "benefit-04",
       "type": "BENEFIT_SITUATION",
       "profile": "jeonnam-39",
-      "question": "농사 지으면서 받을 수 있는 지원 있어?",
+      "question": "시골 내려가서 농사 지어볼까 하는데 지원받을 수 있는 거 있어?",
       "relevant": [],
       "labeled": false,
       "note": "청년농어업인·귀농귀어 관련. 전남 지역 정책 포함"
@@ -140,7 +140,7 @@
       "id": "benefit-06",
       "type": "BENEFIT_SITUATION",
       "profile": "gyeonggi-34",
-      "question": "목돈 모으고 싶은데 도움되는 제도 있어?",
+      "question": "돈 좀 모으고 싶은데 나라에서 도와주는 거 있어?",
       "relevant": [],
       "labeled": false,
       "note": "적금·자산형성 정책. 대출 상품이 상위를 차지하면 쏠림으로 기록"
