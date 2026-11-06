@@ -18,7 +18,7 @@ import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
 /**
- * 액세스 토큰과 리프레시 토큰을 용도에 맞게만 통과시키는지, #195 이전에 발급된 토큰도 용도대로 동작하는지 확인한다.
+ * 액세스 토큰과 리프레시 토큰을 용도에 맞게만 통과시키고, type이 없는 이전 형식 토큰은 거부하는지 확인한다.
  */
 @ExtendWith(MockitoExtension.class)
 class JwtUtilTest {
@@ -38,8 +38,8 @@ class JwtUtilTest {
         lenient().when(blacklistedTokenRepository.existsById(anyString())).thenReturn(false);
     }
 
-    // #195 이전 형식: type 없음. 액세스 토큰에만 provider가 있다
-    private static String legacyToken(boolean withProvider) {
+    // #195 이전 형식: type 없음. 액세스 토큰에만 provider가 있었다
+    private static String tokenWithoutType(boolean withProvider) {
         var builder = Jwts.builder()
                 .subject("user-1")
                 .id(UUID.randomUUID().toString())
@@ -76,19 +76,33 @@ class JwtUtilTest {
     }
 
     @Test
-    void 이전에_발급된_액세스_토큰은_provider로_구분해_인증에만_쓸_수_있다() {
-        String legacyAccess = legacyToken(true);
+    void type이_없는_이전_형식_액세스_토큰은_인증과_재발급_모두_거부한다() {
+        String legacyAccess = tokenWithoutType(true);
 
-        assertThat(jwtUtil.validateAccessToken(legacyAccess)).isTrue();
+        assertThat(jwtUtil.validateAccessToken(legacyAccess)).isFalse();
         assertThat(jwtUtil.validateRefreshToken(legacyAccess)).isFalse();
     }
 
     @Test
-    void 이전에_발급된_리프레시_토큰은_재발급에만_쓸_수_있다() {
-        String legacyRefresh = legacyToken(false);
+    void type이_없는_이전_형식_리프레시_토큰은_인증과_재발급_모두_거부한다() {
+        String legacyRefresh = tokenWithoutType(false);
 
-        assertThat(jwtUtil.validateRefreshToken(legacyRefresh)).isTrue();
         assertThat(jwtUtil.validateAccessToken(legacyRefresh)).isFalse();
+        assertThat(jwtUtil.validateRefreshToken(legacyRefresh)).isFalse();
+    }
+
+    @Test
+    void type이_알_수_없는_값이면_거부한다() {
+        String unknown = Jwts.builder()
+                .subject("user-1")
+                .id(UUID.randomUUID().toString())
+                .claim("type", "admin")
+                .expiration(new Date(System.currentTimeMillis() + 60_000))
+                .signWith(Keys.hmacShaKeyFor(SECRET.getBytes()))
+                .compact();
+
+        assertThat(jwtUtil.validateAccessToken(unknown)).isFalse();
+        assertThat(jwtUtil.validateRefreshToken(unknown)).isFalse();
     }
 
     @Test

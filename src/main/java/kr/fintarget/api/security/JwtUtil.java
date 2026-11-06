@@ -88,20 +88,11 @@ public class JwtUtil {
             if (jti != null && blacklistedTokenRepository.existsById(jti)) {
                 return false;
             }
-            return expectedType.equals(typeOf(claims));
+            // type이 없거나 다른 용도면 거부한다. #195 이전 형식(type 없음) 호환은 모든 이전 토큰이 만료돼 제거했다 (#197)
+            return expectedType.equals(claims.get(TYPE_CLAIM, String.class));
         } catch (JwtException | IllegalArgumentException e) {
             return false;
         }
-    }
-
-    // #195 이전에 발급된 토큰에는 type이 없다. 액세스 토큰에만 provider가 있으므로 그것으로 구분해 배포 후에도 다시 로그인하지 않게 한다.
-    // 이전 리프레시 토큰이 모두 만료되면(액세스 유효기간 × 7) 이 분기를 지운다
-    private static String typeOf(Claims claims) {
-        String type = claims.get(TYPE_CLAIM, String.class);
-        if (type != null) {
-            return type;
-        }
-        return claims.get(PROVIDER_CLAIM) != null ? TYPE_ACCESS : TYPE_REFRESH;
     }
 
     private Claims getClaims(String token) {
