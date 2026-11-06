@@ -52,23 +52,23 @@ class PolicySearchEvalSetTest {
 
     @Test
     void 대출_의도는_생략하면_LOAN_유형만_참이다() {
-        assertThat(new SearchCase("a", CaseType.LOAN, "p", "q", null, null, null).isLoanIntent()).isTrue();
-        assertThat(new SearchCase("b", CaseType.BENEFIT_SITUATION, "p", "q", null, null, null).isLoanIntent()).isFalse();
-        assertThat(new SearchCase("c", CaseType.BENEFIT_SITUATION, "p", "q", null, true, null).isLoanIntent()).isTrue();
+        assertThat(new SearchCase("a", CaseType.LOAN, "p", "q", null, null, false, null).isLoanIntent()).isTrue();
+        assertThat(new SearchCase("b", CaseType.BENEFIT_SITUATION, "p", "q", null, null, false, null).isLoanIntent()).isFalse();
+        assertThat(new SearchCase("c", CaseType.BENEFIT_SITUATION, "p", "q", null, true, false, null).isLoanIntent()).isTrue();
     }
 
     @Test
     void 문항_ID_중복_없는_프로필_무관_문항의_정답을_거부한다() {
         Map<String, Profile> profiles = Map.of("p", new Profile("SEOUL", 25, 1L, null));
-        SearchCase ok = new SearchCase("a", CaseType.POLICY_NAME, "p", "q", null, null, null);
+        SearchCase ok = new SearchCase("a", CaseType.POLICY_NAME, "p", "q", null, null, false, null);
 
         assertThatThrownBy(() -> new PolicySearchEvalSet("d", Map.of(), profiles, List.of(ok, ok)))
                 .hasMessageContaining("중복");
         assertThatThrownBy(() -> new PolicySearchEvalSet("d", Map.of(), profiles,
-                List.of(new SearchCase("b", CaseType.POLICY_NAME, "없음", "q", null, null, null))))
+                List.of(new SearchCase("b", CaseType.POLICY_NAME, "없음", "q", null, null, false, null))))
                 .hasMessageContaining("없는 프로필");
         assertThatThrownBy(() -> new PolicySearchEvalSet("d", Map.of(), profiles,
-                List.of(new SearchCase("c", CaseType.UNRELATED, "p", "q", List.of(PolicyKey.parse("KINFA:x")), null, null))))
+                List.of(new SearchCase("c", CaseType.UNRELATED, "p", "q", List.of(PolicyKey.parse("KINFA:x")), null, true, null))))
                 .hasMessageContaining("정답을 두지 않는다");
         assertThatThrownBy(() -> new Profile("NOWHERE", 25, 1L, null)).hasMessageContaining("지역 코드");
     }
@@ -78,7 +78,7 @@ class PolicySearchEvalSetTest {
         Map<String, Profile> profiles = Map.of("p", new Profile("SEOUL", 25, 1L, null));
         PolicyKey known = PolicyKey.parse("KINFA:k");
         PolicySearchEvalSet evalSet = new PolicySearchEvalSet("d", Map.of(), profiles, List.of(
-                new SearchCase("a", CaseType.POLICY_NAME, "p", "q", List.of(known, PolicyKey.parse("KINFA:gone")), null, null)));
+                new SearchCase("a", CaseType.POLICY_NAME, "p", "q", List.of(known, PolicyKey.parse("KINFA:gone")), null, true, null)));
 
         assertThat(evalSet.unknownKeys(List.of(known))).containsExactly("a → KINFA:gone");
     }

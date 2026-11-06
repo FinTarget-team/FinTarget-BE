@@ -39,11 +39,11 @@ class PolicySearchPoolTest {
 
     // 질문 벡터는 월세 쪽([1,0,0])인데 낱말은 "전세 대출" → 벡터 1위는 월세, 키워드 1위는 전세 대출
     private static final SearchCase MIXED = new SearchCase("loan-01", CaseType.LOAN, "seoul-25", "전세 대출이 필요해요",
-            List.of(KINFA_LOAN, BUSAN_MOVING), null, "부산 정책은 일부러 잘못 넣은 라벨");
+            List.of(KINFA_LOAN, BUSAN_MOVING), null, true, "부산 정책은 일부러 잘못 넣은 라벨");
     private static final SearchCase BUSAN_WORDS = new SearchCase("region-01", CaseType.REGION, "seoul-25", "부산 이사비",
-            List.of(), null, null);
+            List.of(), null, false, null);
     private static final SearchCase UNRELATED = new SearchCase("unrelated-01", CaseType.UNRELATED, "seoul-25", "날씨",
-            List.of(), null, null);
+            List.of(), null, false, null);
 
     private static final PolicySearchEvalSet EVAL_SET = new PolicySearchEvalSet("테스트", Map.of(),
             Map.of("seoul-25", new Profile("SEOUL", 25, 2_500_000L, null)), List.of(MIXED, BUSAN_WORDS, UNRELATED));
@@ -125,5 +125,29 @@ class PolicySearchPoolTest {
                 "1. `YOUTH_CENTER:R-1` 청년 월세 지원 (SEOUL)\n   - 벡터 1위 (거리 0.0000) · 키워드 -\n   - 원문: [지원 내용] / 월 20만원\n",
                 "2. **[현재 정답]** `KINFA:14|청년 전세 대출` 청년 전세 대출 (전국)\n   - 벡터 2위 (거리 1.0000) · 키워드 1위 (전세, 대출)\n");
         assertThat(Files.exists(tempDir.resolve("pool.json"))).isTrue();
+    }
+
+    // 풀에는 거리 상한이 없다. 실제 제약은 벡터 상위 몇 건까지 담는지다 (#184 1-2)
+    @Test
+    void 풀은_거리_상한_없이_벡터_상위_건수로만_끊는다() {
+        assertThat(SearchConfig.WIDE.maxDistance()).isEqualTo(2.0);  // 코사인 거리 최대값 = 자르지 않음
+
+        // 벡터 1건만 담으면 거리가 먼 후보는 풀에 없다
+        CasePool narrow = pool.build(1, 0).stream().filter(c -> c.evalCase().id().equals("loan-01")).findFirst().orElseThrow();
+        assertThat(narrow.items()).hasSize(1);
+        // 넓히면 더 담긴다
+        CasePool wide = pool.build(20, 0).stream().filter(c -> c.evalCase().id().equals("loan-01")).findFirst().orElseThrow();
+        assertThat(wide.items()).hasSizeGreaterThan(narrow.items().size());
+    }
+
+    @Test
+    void 풀_크기는_환경_변수가_없으면_기본값이다() {
+        assertThat(System.getenv(PolicySearchPool.ENV_VECTOR_TOP)).isNull();
+
+        List<CasePool> pools = pool.buildFromEnv();
+
+        assertThat(pools).isNotEmpty();
+        assertThat(PolicySearchPool.VECTOR_TOP).isEqualTo(20);
+        assertThat(PolicySearchPool.KEYWORD_TOP).isEqualTo(10);
     }
 }

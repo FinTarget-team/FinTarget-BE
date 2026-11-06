@@ -30,8 +30,14 @@ class PolicySearchScorerTest {
     private static final Map<PolicyKey, String> NAMES = Map.of(A, "정책 A", B, "정책 B", C, "대출 C", D, "대출 D",
             BUSAN_FEE, "보증료 지원", SEOUL_FEE, "보증료 지원");
 
+    /** 정답을 넣으면 라벨링을 마친 문항, 비우면 라벨링 전 문항 */
     private static SearchCase searchCase(String id, CaseType type, List<PolicyKey> relevant) {
-        return new SearchCase(id, type, "seoul-25", "질문", relevant, null, null);
+        return new SearchCase(id, type, "seoul-25", "질문", relevant, null, !relevant.isEmpty(), null);
+    }
+
+    /** 정답이 없는 것이 맞다고 라벨한 문항 (labeled=true, relevant 비움) */
+    private static SearchCase labeledEmptyCase(String id, CaseType type) {
+        return new SearchCase(id, type, "seoul-25", "질문", List.of(), null, true, null);
     }
 
     private static ResultItem item(PolicyKey key, double distance) {
@@ -96,6 +102,63 @@ class PolicySearchScorerTest {
         assertThat(summary.mrr()).isEqualTo(1.0);
     }
 
+    // 라벨링 전(labeled=false)과 정답 없음이 맞는 문항(labeled=true, relevant 빔)을 구분한다 (#184 2-1)
+    @Test
+    void 정답_0건으로_라벨한_문항은_라벨링_전과_다르게_센다() {
+        CaseScore unlabeled = PolicySearchScorer.score(
+                searchCase("b1", CaseType.BENEFIT_SITUATION, List.of()), ranked(A), POOL, NAMES);
+        CaseScore labeledEmpty = PolicySearchScorer.score(
+                labeledEmptyCase("region-04", CaseType.REGION), ranked(), POOL, NAMES);
+
+        assertThat(unlabeled.evalCase().labeled()).isFalse();
+        assertThat(unlabeled.emptyPassed()).isNull();
+        assertThat(labeledEmpty.evalCase().labeled()).isTrue();
+        assertThat(labeledEmpty.evalCase().labeledEmpty()).isTrue();
+
+        Summary summary = PolicySearchScorer.summarize(List.of(unlabeled, labeledEmpty));
+        // 정답 0건 문항은 "라벨링 전"으로 세지 않는다
+        assertThat(summary.unlabeledCases()).isEqualTo(1);
+        assertThat(summary.labeledEmptyCases()).isEqualTo(1);
+    }
+
+    // 정답 0건 문항은 Recall·MRR에서 빠지고 "결과 0건이면 통과"로 채점한다 (#184 2-2)
+    @Test
+    void 정답_0건_문항은_결과가_없으면_통과하고_있으면_실패한다() {
+        CaseScore passed = PolicySearchScorer.score(
+                labeledEmptyCase("region-04", CaseType.REGION), ranked(), POOL, NAMES);
+        CaseScore failed = PolicySearchScorer.score(
+                labeledEmptyCase("region-04", CaseType.REGION), ranked(A), POOL, NAMES);
+
+        assertThat(passed.emptyPassed()).isTrue();
+        assertThat(failed.emptyPassed()).isFalse();
+        // Recall·MRR 대상이 아니다
+        assertThat(passed.scored()).isFalse();
+        assertThat(failed.scored()).isFalse();
+        assertThat(passed.recall()).isEmpty();
+
+        Summary summary = PolicySearchScorer.summarize(List.of(passed, failed));
+        assertThat(summary.scoredCases()).isZero();
+        assertThat(summary.labeledEmptyCases()).isEqualTo(2);
+        assertThat(summary.labeledEmptyPassed()).isEqualTo(1);
+        // 채점 대상이 없으면 Recall 평균은 0.0으로 나온다 (기존 mean 동작).
+        // "측정 안 됨"과 "측정했는데 0"이 같은 값이라 리포트는 scoredCases를 함께 봐야 한다
+        assertThat(summary.recall().get(5)).isZero();
+        assertThat(summary.scoredCases()).isZero();
+    }
+
+    @Test
+    void 유형별로_결과_0건_문항_수를_센다() {
+        CaseScore withResults = PolicySearchScorer.score(
+                searchCase("b1", CaseType.BENEFIT_SITUATION, List.of(A)), ranked(A), POOL, NAMES);
+        CaseScore empty = PolicySearchScorer.score(
+                searchCase("b2", CaseType.BENEFIT_SITUATION, List.of(A)), ranked(), POOL, NAMES);
+
+        Summary summary = PolicySearchScorer.summarize(List.of(withResults, empty));
+
+        assertThat(summary.byType().get(CaseType.BENEFIT_SITUATION).emptyResultCases()).isEqualTo(1);
+        assertThat(summary.byType().get(CaseType.BENEFIT_SITUATION).cases()).isEqualTo(2);
+    }
+
     @Test
     void 조건에_맞지_않는_결과와_지역_전국_처리_건수를_센다() {
         List<ResultItem> results = List.of(
@@ -120,7 +183,7 @@ class PolicySearchScorerTest {
         CaseScore benefit = PolicySearchScorer.score(searchCase("b1", CaseType.BENEFIT_SITUATION, List.of(A)), results, POOL, NAMES);
         CaseScore loan = PolicySearchScorer.score(searchCase("l1", CaseType.LOAN, List.of(C)), results, POOL, NAMES);
         CaseScore loanIntent = PolicySearchScorer.score(
-                new SearchCase("b2", CaseType.BENEFIT_SITUATION, "seoul-25", "질문", List.of(A), true, null), results, POOL, NAMES);
+                new SearchCase("b2", CaseType.BENEFIT_SITUATION, "seoul-25", "질문", List.of(A), true, true, null), results, POOL, NAMES);
 
         assertThat(benefit.kinfaShareTop()).isCloseTo(0.6, within(1e-9));
         assertThat(benefit.kinfaShareCandidates()).isCloseTo(0.2, within(1e-9));

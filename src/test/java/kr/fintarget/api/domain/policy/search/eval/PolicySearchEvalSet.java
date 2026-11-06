@@ -86,16 +86,23 @@ public record PolicySearchEvalSet(String description, Map<String, String> guide,
     }
 
     /**
-     * @param relevant   정답 정책 키. 그 프로필에서 신청할 수 있는 정책만. 비어 있으면 라벨링 전
+     * @param relevant   정답 정책 키. 그 프로필에서 신청할 수 있는 정책만
      * @param loanIntent 대출을 찾는 질문이면 true (KINFA 쏠림 판정 제외). null이면 type이 LOAN일 때 true
+     * @param labeled    라벨링을 마쳤는지. 생략하면 false(라벨링 전).
+     *                   {@code relevant}가 비었는지로 판정하면 "라벨링 전"과 "정답 없음이 맞는 문항"이
+     *                   구분되지 않아(예: region-04) 정답 0건 문항이 채점에서 빠진다
      */
     public record SearchCase(String id, CaseType type, String profile, String question, List<PolicyKey> relevant,
-                             Boolean loanIntent, String note) {
+                             Boolean loanIntent, Boolean labeled, String note) {
 
         public SearchCase {
             relevant = relevant == null ? List.of() : List.copyOf(relevant);
+            labeled = labeled != null && labeled;
             if (new HashSet<>(relevant).size() != relevant.size()) {
                 throw new IllegalStateException("정답 정책 키 중복: " + id);
+            }
+            if (!labeled && !relevant.isEmpty()) {
+                throw new IllegalStateException("정답을 넣었으면 labeled를 true로 둬야 합니다: " + id);
             }
         }
 
@@ -103,8 +110,14 @@ public record PolicySearchEvalSet(String description, Map<String, String> guide,
             return loanIntent != null ? loanIntent : type == CaseType.LOAN;
         }
 
-        public boolean labeled() {
-            return !relevant.isEmpty();
+        /** 정답이 없는 것이 맞다고 라벨한 문항. Recall·MRR 대신 "결과 0건이면 통과"로 채점한다 */
+        public boolean labeledEmpty() {
+            return labeled && relevant.isEmpty();
+        }
+
+        /** Recall·MRR 채점 대상 (라벨링을 마쳤고 정답이 1건 이상) */
+        public boolean hasRelevant() {
+            return labeled && !relevant.isEmpty();
         }
     }
 

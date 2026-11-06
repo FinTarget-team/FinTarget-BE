@@ -26,7 +26,8 @@ import java.util.function.ToDoubleFunction;
  *   <li>KINFA 쏠림: 대출 의도가 없는 문항에서 상위 {@value #SKEW_TOP}건 중 KINFA 비율이 후보 중 KINFA 비율의 {@value #SKEW_FACTOR}배 초과</li>
  *   <li>거리 분포: 정답 결과·정답 아닌 결과·무관 문항 1위의 거리</li>
  * </ul>
- * Recall·MRR·이름 Recall은 정답이 있는 문항(type이 Recall 대상이고 relevant가 비어 있지 않음)만 평균한다.
+ * Recall·MRR·이름 Recall은 정답이 있는 문항(type이 Recall 대상이고 labeled이며 relevant가 비어 있지 않음)만 평균한다.
+ * 정답 0건으로 라벨한 문항(labeled이고 relevant가 빈 문항)은 Recall 대신 "결과 0건이면 통과"로 센다.
  * 목표 기준값(Recall@k ≥ 0.9, KINFA 2배)은 잠정값이다.
  */
 public final class PolicySearchScorer {
@@ -47,7 +48,8 @@ public final class PolicySearchScorer {
      */
     public static CaseScore score(SearchCase evalCase, List<ResultItem> ranked, CandidatePool pool,
                                   Map<PolicyKey, String> names) {
-        boolean scored = evalCase.type().scoredForRecall() && evalCase.labeled();
+        // Recall·MRR은 정답이 1건 이상 라벨된 문항만 센다. 정답 0건 문항은 아래 emptyPassed로 따로 채점한다
+        boolean scored = evalCase.type().scoredForRecall() && evalCase.hasRelevant();
         Set<PolicyKey> relevant = Set.copyOf(evalCase.relevant());
 
         Map<Integer, Double> recall = new LinkedHashMap<>();
@@ -99,9 +101,12 @@ public final class PolicySearchScorer {
         }
         Double top1Distance = ranked.isEmpty() ? null : ranked.getFirst().distance();
 
+        // 정답 없음이 맞다고 라벨한 문항은 결과가 0건이어야 통과다 (조건 위반은 violations로 함께 본다)
+        Boolean emptyPassed = evalCase.labeledEmpty() ? ranked.isEmpty() : null;
+
         return new CaseScore(evalCase, scored, recall, nameRecall, reciprocalRank, firstRelevantRank, violations,
                 regionFallbacks, ranked.size(), kinfaShareTop, kinfaShareCandidates, kinfaSkewed, top1Distance,
-                relevantDistances, otherDistances);
+                relevantDistances, otherDistances, emptyPassed);
     }
 
     public static Summary summarize(List<CaseScore> scores) {
@@ -121,7 +126,8 @@ public final class PolicySearchScorer {
             List<CaseScore> scoredOfType = ofType.stream().filter(CaseScore::scored).toList();
             byType.put(type, new TypeSummary(ofType.size(), scoredOfType.size(),
                     scoredOfType.isEmpty() ? null : mean(scoredOfType, s -> s.recall().get(5)),
-                    scoredOfType.isEmpty() ? null : mean(scoredOfType, CaseScore::reciprocalRank)));
+                    scoredOfType.isEmpty() ? null : mean(scoredOfType, CaseScore::reciprocalRank),
+                    (int) ofType.stream().filter(s -> s.resultCount() == 0).count()));
         }
         List<Double> relevantDistances = scored.stream().flatMap(s -> s.relevantDistances().stream()).toList();
         List<Double> otherDistances = scored.stream().flatMap(s -> s.otherDistances().stream()).toList();
@@ -130,7 +136,8 @@ public final class PolicySearchScorer {
                 .map(CaseScore::top1Distance).toList();
 
         return new Summary(scores.size(), scored.size(),
-                (int) scores.stream().filter(s -> s.evalCase().type().scoredForRecall() && !s.scored()).count(),
+                (int) scores.stream()
+                        .filter(s -> s.evalCase().type().scoredForRecall() && !s.evalCase().labeled()).count(),
                 recall, nameRecall, scored.isEmpty() ? 0.0 : mean(scored, CaseScore::reciprocalRank),
                 scores.stream().mapToInt(s -> s.violations().size()).sum(),
                 scores.stream().filter(s -> !s.violations().isEmpty()).map(s -> s.evalCase().id()).toList(),
@@ -142,6 +149,8 @@ public final class PolicySearchScorer {
                         .filter(s -> s.evalCase().type() == CaseType.UNRELATED && s.resultCount() > 0).count(),
                 // 대출 의도 없는 문항의 상위 SKEW_TOP건 중 KINFA 비율 평균 (결과가 있는 문항만)
                 nonLoanKinfaShare(scores),
+                (int) scores.stream().filter(s -> s.evalCase().labeledEmpty()).count(),
+                (int) scores.stream().filter(s -> Boolean.TRUE.equals(s.emptyPassed())).count(),
                 byType, histogram(relevantDistances), histogram(otherDistances), histogram(unrelatedTop1));
     }
 
@@ -199,12 +208,14 @@ public final class PolicySearchScorer {
      * @param violations        조건에 맞지 않는 결과의 정책 키
      * @param kinfaShareTop     상위 SKEW_TOP건 중 KINFA 비율 (결과가 없으면 null)
      * @param otherDistances    정답이 아닌 결과의 거리
+     * @param emptyPassed       정답 0건으로 라벨한 문항의 통과 여부 (결과가 0건이면 true).
+     *                          그 외 문항은 null
      */
     public record CaseScore(SearchCase evalCase, boolean scored, Map<Integer, Double> recall,
                             Map<Integer, Double> nameRecall, double reciprocalRank, Integer firstRelevantRank,
                             List<PolicyKey> violations, int regionFallbacks, int resultCount, Double kinfaShareTop,
                             Double kinfaShareCandidates, boolean kinfaSkewed, Double top1Distance,
-                            List<Double> relevantDistances, List<Double> otherDistances) {
+                            List<Double> relevantDistances, List<Double> otherDistances, Boolean emptyPassed) {
     }
 
     /**
@@ -216,11 +227,14 @@ public final class PolicySearchScorer {
     /**
      * @param unrelatedWithResults 무관 문항 중 결과가 1건 이상 나온 문항 수 (오탐. 적을수록 좋다)
      * @param nonLoanKinfaShare    대출 의도 없는 문항의 상위 SKEW_TOP건 중 KINFA 비율 평균 (없으면 null)
+     * @param labeledEmptyCases    정답 0건으로 라벨한 문항 수
+     * @param labeledEmptyPassed   그중 결과가 0건으로 나와 통과한 문항 수
      */
     public record Summary(int cases, int scoredCases, int unlabeledCases, Map<Integer, Double> recall,
                           Map<Integer, Double> nameRecall, double mrr, int violations, List<String> violationCases,
                           int regionFallbacks, List<String> kinfaSkewedCases, int unrelatedEmpty,
                           int unrelatedWithResults, Double nonLoanKinfaShare,
+                          int labeledEmptyCases, int labeledEmptyPassed,
                           Map<CaseType, TypeSummary> byType, Map<String, Integer> relevantDistanceHistogram,
                           Map<String, Integer> otherDistanceHistogram, Map<String, Integer> unrelatedTop1Histogram) {
     }
@@ -228,6 +242,9 @@ public final class PolicySearchScorer {
     /**
      * @param recallAt5 Recall@5 평균 (정답 있는 문항이 없으면 null)
      */
-    public record TypeSummary(int cases, int scoredCases, Double recallAt5, Double mrr) {
+    /**
+     * @param emptyResultCases 이 유형에서 결과가 0건인 문항 수 (하한에 걸려 아무것도 못 찾은 문항)
+     */
+    public record TypeSummary(int cases, int scoredCases, Double recallAt5, Double mrr, int emptyResultCases) {
     }
 }

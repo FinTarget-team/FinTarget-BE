@@ -41,17 +41,17 @@ class PolicySearchEvalRunnerTest {
     private static final PolicyKey KINFA_LOAN = new PolicyKey("KINFA", "14|청년 전세 대출");
 
     private static final SearchCase RENT = new SearchCase("benefit-01", CaseType.BENEFIT_SITUATION, "seoul-25", "월세",
-            List.of(SEOUL_RENT), null, null);
+            List.of(SEOUL_RENT), null, true, null);
     // 정답 2건 중 월세(거리 0.4)는 하한 0.3에서 잘린다
     private static final SearchCase LOAN = new SearchCase("loan-01", CaseType.LOAN, "seoul-25", "전세 대출",
-            List.of(KINFA_LOAN, SEOUL_RENT), null, null);
+            List.of(KINFA_LOAN, SEOUL_RENT), null, true, null);
     private static final SearchCase UNRELATED = new SearchCase("unrelated-01", CaseType.UNRELATED, "seoul-25", "날씨",
-            List.of(), null, null);
+            List.of(), null, false, null);
     private static final SearchCase UNLABELED = new SearchCase("benefit-02", CaseType.BENEFIT_SITUATION, "seoul-25", "월세",
-            List.of(), null, "라벨링 전");
+            List.of(), null, false, "라벨링 전");
     // 나이·소득이 없으면 후보가 비어 임베딩을 호출하지 않는다 (캐시에 없는 질문이어도 실패하지 않음)
     private static final SearchCase INCOMPLETE = new SearchCase("ambiguous-01", CaseType.AMBIGUOUS, "incomplete", "지원금",
-            List.of(), null, null);
+            List.of(), null, false, null);
 
     private static final PolicySearchEvalSet EVAL_SET = new PolicySearchEvalSet("테스트", Map.of(),
             Map.of("seoul-25", new Profile("SEOUL", 25, 2_500_000L, null),
@@ -61,7 +61,9 @@ class PolicySearchEvalRunnerTest {
     private static final QuestionEmbeddingCache CACHE = QuestionEmbeddingCache.inMemory("text-embedding-3-small", Map.of(
             "월세", new float[]{1f, 0f, 0f},
             "전세 대출", new float[]{0f, 1f, 0f},
-            "날씨", new float[]{0f, 0f, 1f}));
+            "날씨", new float[]{0f, 0f, 1f},
+            // 대출 의도 단어가 없는데 벡터는 KINFA 대출 쪽 (KINFA 제외 시점 판별용)
+            "보증금 지원", new float[]{0f, 1f, 0f}));
 
     private static final SearchConfig K1 = new SearchConfig(1, 0.5, 3);
     private static final SearchConfig K2_TIGHT = new SearchConfig(2, 0.3, 3);
@@ -77,12 +79,20 @@ class PolicySearchEvalRunnerTest {
     Path tempDir;
 
     private PolicySearchEvalRunner runner;
+    private PolicySearchSnapshotLoader.Loaded loaded;
 
     @BeforeEach
     void setUp() {
-        PolicySearchSnapshotLoader.Loaded loaded =
-                PolicySearchSnapshotLoader.load(PolicySearchSnapshot.load(PolicySearchSnapshotTest.SAMPLE), policyRepository);
+        loaded = PolicySearchSnapshotLoader.load(PolicySearchSnapshot.load(PolicySearchSnapshotTest.SAMPLE), policyRepository);
         runner = new PolicySearchEvalRunner(EVAL_SET, loaded, policyService, CACHE.client(), Year.now(BirthYearValidator.ZONE));
+    }
+
+    /** 적재한 스냅샷을 그대로 쓰면서 문항만 바꾼 러너 (스냅샷을 두 번 적재하면 keyOf가 깨진다) */
+    private PolicySearchEvalRunner runnerFor(SearchCase... cases) {
+        PolicySearchEvalSet evalSet = new PolicySearchEvalSet("테스트", Map.of(),
+                Map.of("seoul-25", new Profile("SEOUL", 25, 2_500_000L, null)), List.of(cases));
+        return new PolicySearchEvalRunner(evalSet, loaded, policyService, CACHE.client(),
+                Year.now(BirthYearValidator.ZONE));
     }
 
     @Test
@@ -123,6 +133,37 @@ class PolicySearchEvalRunnerTest {
         assertThat(byConfig.get(K2).scoredEmpty()).isZero();
     }
 
+    /**
+     * KINFA 제외는 정책별 묶기·상위 k 선정 "전"(후보 단계)에 일어나야 한다 (#184 1-1).
+     *
+     * <p>판별 방법: 질문 "보증금 지원"은 KINFA 대출 쪽 벡터([0,1,0])지만 대출 의도 단어가 없다.
+     * k=1에서 KINFA가 1위이므로, 결과에서 KINFA만 지우는 방식이면 0건이 된다.
+     * 후보에서 빼는 방식이면 빈자리를 월세가 채워 1건이 나온다.
+     */
+    @Test
+    void KINFA_조건부_제외는_후보_단계에서_일어나_빈자리를_다른_정책이_채운다() {
+        SearchCase deposit = new SearchCase("benefit-03", CaseType.BENEFIT_SITUATION, "seoul-25",
+                "보증금 지원", List.of(SEOUL_RENT), null, true, "대출 의도 없는데 KINFA가 1위인 질문");
+        PolicySearchEvalRunner only = runnerFor(deposit);
+
+        assertThat(LoanIntent.of(deposit.question())).isFalse();
+        // 제외하지 않으면 KINFA가 1위
+        assertThat(only.search(deposit, new SearchConfig(1, 1.5, 3)))
+                .extracting(hit -> loaded.keyOf(hit.policy())).containsExactly(KINFA_LOAN);
+        // 제외하면 0건이 아니라 월세 1건 (= 선정 전에 빠졌다는 뜻)
+        assertThat(only.search(deposit, new SearchConfig(1, 1.5, 3, true)))
+                .extracting(hit -> loaded.keyOf(hit.policy())).containsExactly(SEOUL_RENT);
+    }
+
+    @Test
+    void 대출_의도가_있는_질문은_KINFA를_빼지_않는다() {
+        // 질문에 "대출"이 있으면 조건부 조합에서도 KINFA가 남는다
+        assertThat(LoanIntent.of(LOAN.question())).isTrue();
+
+        assertThat(runner.search(LOAN, new SearchConfig(1, 1.5, 3, true)))
+                .extracting(hit -> loaded.keyOf(hit.policy())).containsExactly(KINFA_LOAN);
+    }
+
     @Test
     void 리포트_파일을_쓴다() throws Exception {
         Report report = runner.run(List.of(K2_TIGHT, SearchConfig.PRODUCTION));
@@ -133,7 +174,7 @@ class PolicySearchEvalRunnerTest {
         assertThat(md).contains("## 설정값 비교", "| 2 | 0.30 | 3 | - | 0.750 | 1.000 | 25.0 |", "| 5 ★ | 0.50 | 3 | - |",
                 // #184 조합 비교 표와 대출 의도 판정
                 "## 조합 비교 (#184)", "| k=5 d=0.50 m=3 ★ | 1.000 |", "### 대출 의도 판정",
-                "정답(relevant)이 비어 있는 문항 1건", "### loan-01 (LOAN, seoul-25)", "| 2 | 0.4000 | O | 청년 월세 지원 | `YOUTH_CENTER:R-1` |",
+                "아직 라벨링하지 않은 문항(labeled=false) 1건", "### loan-01 (LOAN, seoul-25)", "| 2 | 0.4000 | O | 청년 월세 지원 | `YOUTH_CENTER:R-1` |",
                 // 표 칸 안의 '|'는 이스케이프한다
                 "| 1 | 0.0000 | O | 청년 전세 대출 | `KINFA:14\\|청년 전세 대출` |", "- 정답: `KINFA:14|청년 전세 대출`",
                 "- 스냅샷: sample");
