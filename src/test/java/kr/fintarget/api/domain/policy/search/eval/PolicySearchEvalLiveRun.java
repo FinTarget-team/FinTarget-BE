@@ -47,7 +47,7 @@ class PolicySearchEvalLiveRun {
 
         PolicySearchEvalRunner runner = new PolicySearchEvalRunner(evalSet, env.loaded(), policyService,
                 env.cache().client(), Year.now(BirthYearValidator.ZONE));
-        List<SearchConfig> configs = SearchConfig.gridFromEnv();
+        List<SearchConfig> configs = SearchConfig.fromEnv();
         PolicySearchEvalRunner.Report report = runner.run(configs);
 
         Path dir = SearchEvalEnvironment.outputDir("search");

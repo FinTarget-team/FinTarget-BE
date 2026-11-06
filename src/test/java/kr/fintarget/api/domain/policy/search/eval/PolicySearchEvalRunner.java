@@ -77,7 +77,21 @@ public final class PolicySearchEvalRunner {
         // usageLimiter는 search()에서만 쓰므로 null로 둔다 (searchCandidates는 한도를 차감하지 않음). dailyLimit도 쓰이지 않는다
         PolicySearchService service = new PolicySearchService(policyService, loaded.searchRepository(), embeddings,
                 null, config.k(), config.maxDistance(), config.chunkMultiplier(), 1);
-        return service.searchCandidates(prepared.get(c.id()).candidates(), c.question());
+        return service.searchCandidates(candidatesFor(c, config), c.question());
+    }
+
+    /**
+     * config가 KINFA 조건부 제외를 쓰면 후보에서 KINFA를 뺀다 (#184 비교용).
+     * 운영 코드는 손대지 않고 후보 목록만 바꿔, 검색 로직 자체는 운영과 같게 유지한다.
+     */
+    private List<Policy> candidatesFor(SearchCase c, SearchConfig config) {
+        List<Policy> candidates = prepared.get(c.id()).candidates();
+        if (!config.excludesKinfaFor(c.question())) {
+            return candidates;
+        }
+        return candidates.stream()
+                .filter(policy -> !PolicySearchScorer.KINFA.equals(loaded.keyOf(policy).source()))
+                .toList();
     }
 
     /** 검색 결과를 채점용 항목으로 바꾼다 (조건 재계산 포함) */

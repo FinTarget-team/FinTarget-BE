@@ -121,20 +121,44 @@ public final class PolicySearchEvalReport {
                     .append("건은 Recall·MRR에서 빠졌습니다. 풀 결과로 라벨링한 뒤 다시 실행하세요.\n");
         }
 
-        md.append("\n## 설정값 비교\n\n")
-                .append("잠정 목표: Recall@k ≥ 0.90, 하한 손실 ≤ 2%p, 조건 위반 0. ★ = 현재 운영 기본값\n\n")
-                .append("| k | 하한 | 배수 | Recall@k | 하한 없는 Recall@k | 손실(%p) | MRR | 평균 결과 수 | 정답 문항 0건 | 무관 0건 | 조건 위반 | KINFA 쏠림 | 목표 |\n")
-                .append("|---|---|---|---|---|---|---|---|---|---|---|---|---|\n");
+        // #184에서 비교하기로 한 세 지표를 앞에 둔다: Recall@5, 무관 질문 오탐 수, 대출 의도 없는 문항의 KINFA 비율
+        md.append("\n## 조합 비교 (#184)\n\n")
+                .append("★ = 현재 운영 기본값. `KINFA조건부` = 질문에 대출 의도가 없으면 KINFA를 후보에서 제외 (평가 전용)\n\n")
+                .append("| 조합 | Recall@5 | 무관 오탐 | KINFA 비율(대출 의도 없는 문항) | MRR | 평균 결과 수 | 정답 문항 0건 | 조건 위반 |\n")
+                .append("|---|---|---|---|---|---|---|---|\n");
         report.configs().stream()
-                .sorted(Comparator.comparingInt((ConfigResult r) -> r.config().k())
-                        .thenComparingDouble(r -> r.config().maxDistance())
-                        .thenComparingInt(r -> r.config().chunkMultiplier()))
+                .sorted(comparisonOrder())
+                .forEach(r -> md.append(String.format(Locale.ROOT, "| %s%s | %.3f | %d | %s | %.3f | %.1f | %d | %d |%n",
+                        r.config().label(), r.config().isProduction() ? " ★" : "",
+                        r.summary().recall().getOrDefault(5, 0.0), r.summary().unrelatedWithResults(),
+                        share(r.summary().nonLoanKinfaShare()), r.summary().mrr(), r.averageResults(),
+                        r.scoredEmpty(), r.summary().violations())));
+
+        md.append("\n## 설정값 비교 (전체 지표)\n\n")
+                .append("잠정 목표: Recall@k ≥ 0.90, 하한 손실 ≤ 2%p, 조건 위반 0. ★ = 현재 운영 기본값\n\n")
+                .append("| k | 하한 | 배수 | KINFA조건부 | Recall@k | 하한 없는 Recall@k | 손실(%p) | MRR | 평균 결과 수 | 정답 문항 0건 | 무관 0건 | 조건 위반 | KINFA 쏠림 | 목표 |\n")
+                .append("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n");
+        report.configs().stream()
+                .sorted(comparisonOrder())
                 .forEach(r -> md.append(String.format(Locale.ROOT,
-                        "| %d%s | %.2f | %d | %.3f | %.3f | %.1f | %.3f | %.1f | %d | %d | %d | %d | %s |%n",
+                        "| %d%s | %.2f | %d | %s | %.3f | %.3f | %.1f | %.3f | %.1f | %d | %d | %d | %d | %s |%n",
                         r.config().k(), r.config().isProduction() ? " ★" : "", r.config().maxDistance(),
-                        r.config().chunkMultiplier(), r.recallAtK(), r.wideRecallAtK(), r.loss() * 100,
+                        r.config().chunkMultiplier(), r.config().excludeKinfaWithoutLoanIntent() ? "O" : "-",
+                        r.recallAtK(), r.wideRecallAtK(), r.loss() * 100,
                         r.summary().mrr(), r.averageResults(), r.scoredEmpty(), r.summary().unrelatedEmpty(),
                         r.summary().violations(), r.summary().kinfaSkewedCases().size(), r.meetsTarget() ? "충족" : "-")));
+
+        md.append("\n### 대출 의도 판정\n\n")
+                .append("`KINFA조건부` 조합이 쓴 판정 결과다. 오탐·누락이 있으면 ")
+                .append("`LoanIntent.KEYWORDS`를 고친다.\n\n")
+                .append("| 문항 | 대출 의도 | 걸린 표현 | 질문 |\n|---|---|---|---|\n");
+        report.wideScores().forEach(score -> {
+            var c = score.evalCase();
+            List<String> matched = LoanIntent.matched(c.question());
+            md.append(String.format(Locale.ROOT, "| %s | %s | %s | %s |%n", c.id(),
+                    LoanIntent.of(c.question()) ? "O" : "-",
+                    matched.isEmpty() ? "-" : String.join(", ", matched), c.question()));
+        });
 
         md.append("\n## 하한 없는 검색 (").append(SearchConfig.WIDE.label()).append(")\n\n");
         md.append("| 지표 | @3 | @5 | @10 |\n|---|---|---|---|\n");
@@ -202,6 +226,18 @@ public final class PolicySearchEvalReport {
     // KINFA 외부 ID에 '|'가 들어 있어 표 칸 안에서는 이스케이프한다 (정답 줄·results.json은 원래 키)
     static String cell(String text) {
         return text == null ? "" : text.replace("|", "\\|").replace("\n", " ");
+    }
+
+    /** 기준선 → 하한 상향 → KINFA 조건부 순으로 읽히도록 정렬한다 */
+    private static Comparator<ConfigResult> comparisonOrder() {
+        return Comparator.comparing((ConfigResult r) -> r.config().excludeKinfaWithoutLoanIntent())
+                .thenComparingInt(r -> r.config().k())
+                .thenComparingDouble(r -> r.config().maxDistance())
+                .thenComparingInt(r -> r.config().chunkMultiplier());
+    }
+
+    private static String share(Double value) {
+        return value == null ? "-" : String.format(Locale.ROOT, "%.1f%%", value * 100);
     }
 
     private static String ks(Map<Integer, Double> byK) {

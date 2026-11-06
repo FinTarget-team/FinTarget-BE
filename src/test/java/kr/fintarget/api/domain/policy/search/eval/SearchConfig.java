@@ -6,9 +6,18 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * 비교할 검색 설정값 1조합 (#184). PolicySearchService의 policy.search.k, max-distance, chunk-multiplier와 같다.
+ * 비교할 검색 설정값 1조합 (#184). k, maxDistance, chunkMultiplier는 PolicySearchService의
+ * policy.search.* 와 같다.
+ *
+ * @param excludeKinfaWithoutLoanIntent 질문에 대출 의도가 없으면 KINFA 정책을 후보에서 빼고 검색한다.
+ *                                      운영에는 없는 동작이며 비교용으로만 쓴다 ({@link LoanIntent})
  */
-public record SearchConfig(int k, double maxDistance, int chunkMultiplier) {
+public record SearchConfig(int k, double maxDistance, int chunkMultiplier, boolean excludeKinfaWithoutLoanIntent) {
+
+    /** 기존 3값 조합 (KINFA 제외 없음) */
+    public SearchConfig(int k, double maxDistance, int chunkMultiplier) {
+        this(k, maxDistance, chunkMultiplier, false);
+    }
 
     /** 현재 운영 기본값 (PolicySearchService DEFAULT_K, DEFAULT_MAX_DISTANCE, DEFAULT_CHUNK_MULTIPLIER) */
     public static final SearchConfig PRODUCTION = new SearchConfig(5, 0.5, 3);
@@ -44,6 +53,17 @@ public record SearchConfig(int k, double maxDistance, int chunkMultiplier) {
         return configs;
     }
 
+    /**
+     * 돌릴 조합을 정한다. k·하한·배수 환경 변수가 하나라도 있으면 그 값들의 격자를, 없으면
+     * {@link #comparisonSet()}(#184에서 비교하기로 한 8조합)을 쓴다.
+     */
+    public static List<SearchConfig> fromEnv() {
+        boolean overridden = System.getenv(ENV_K) != null
+                || System.getenv(ENV_MAX_DISTANCE) != null
+                || System.getenv(ENV_MULTIPLIER) != null;
+        return overridden ? gridFromEnv() : comparisonSet();
+    }
+
     /** 환경 변수(쉼표 구분)로 조합을 만든다. 없으면 k {3,5,7} × 하한 {0.30~0.60, 0.05 간격} × 배수 {2,3,5} */
     public static List<SearchConfig> gridFromEnv() {
         return grid(csv(ENV_K, DEFAULT_K).stream().map(Integer::parseInt).toList(),
@@ -56,7 +76,30 @@ public record SearchConfig(int k, double maxDistance, int chunkMultiplier) {
     }
 
     public String label() {
-        return String.format(Locale.ROOT, "k=%d d=%.2f m=%d", k, maxDistance, chunkMultiplier);
+        return String.format(Locale.ROOT, "k=%d d=%.2f m=%d%s", k, maxDistance, chunkMultiplier,
+                excludeKinfaWithoutLoanIntent ? " KINFA조건부" : "");
+    }
+
+    /** 이 조합에서 해당 문항의 KINFA를 후보에서 빼야 하는지 */
+    public boolean excludesKinfaFor(String question) {
+        return excludeKinfaWithoutLoanIntent && !LoanIntent.of(question);
+    }
+
+    /**
+     * 이슈 #184에서 비교하기로 한 조합.
+     * 1) 기준선(운영), 2) 하한만 상향 0.60/0.65/0.70, 3) KINFA 조건부 제외 + 같은 하한 상향
+     */
+    public static List<SearchConfig> comparisonSet() {
+        List<SearchConfig> configs = new ArrayList<>();
+        configs.add(PRODUCTION);
+        for (double distance : List.of(0.60, 0.65, 0.70)) {
+            configs.add(new SearchConfig(PRODUCTION.k(), distance, PRODUCTION.chunkMultiplier()));
+        }
+        // 기준선 하한(0.50)에도 KINFA 조건부를 적용해, 하한 상향과 KINFA 제외의 효과를 분리해 본다
+        for (double distance : List.of(0.50, 0.60, 0.65, 0.70)) {
+            configs.add(new SearchConfig(PRODUCTION.k(), distance, PRODUCTION.chunkMultiplier(), true));
+        }
+        return configs;
     }
 
     private static List<String> csv(String name, String defaultValue) {

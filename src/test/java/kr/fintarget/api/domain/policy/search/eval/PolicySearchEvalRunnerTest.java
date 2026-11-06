@@ -130,7 +130,9 @@ class PolicySearchEvalRunnerTest {
         PolicySearchEvalReport.write(tempDir, EVAL_SET, report, Map.of("스냅샷", "sample"));
 
         String md = Files.readString(tempDir.resolve("report.md"), StandardCharsets.UTF_8);
-        assertThat(md).contains("## 설정값 비교", "| 2 | 0.30 | 3 | 0.750 | 1.000 | 25.0 |", "| 5 ★ | 0.50 | 3 |",
+        assertThat(md).contains("## 설정값 비교", "| 2 | 0.30 | 3 | - | 0.750 | 1.000 | 25.0 |", "| 5 ★ | 0.50 | 3 | - |",
+                // #184 조합 비교 표와 대출 의도 판정
+                "## 조합 비교 (#184)", "| k=5 d=0.50 m=3 ★ | 1.000 |", "### 대출 의도 판정",
                 "정답(relevant)이 비어 있는 문항 1건", "### loan-01 (LOAN, seoul-25)", "| 2 | 0.4000 | O | 청년 월세 지원 | `YOUTH_CENTER:R-1` |",
                 // 표 칸 안의 '|'는 이스케이프한다
                 "| 1 | 0.0000 | O | 청년 전세 대출 | `KINFA:14\\|청년 전세 대출` |", "- 정답: `KINFA:14|청년 전세 대출`",

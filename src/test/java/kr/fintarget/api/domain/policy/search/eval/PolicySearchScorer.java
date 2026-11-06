@@ -137,7 +137,25 @@ public final class PolicySearchScorer {
                 scores.stream().mapToInt(CaseScore::regionFallbacks).sum(),
                 scores.stream().filter(CaseScore::kinfaSkewed).map(s -> s.evalCase().id()).toList(),
                 (int) scores.stream().filter(s -> s.evalCase().type() == CaseType.UNRELATED && s.resultCount() == 0).count(),
+                // 무관 질문 오탐: 결과가 하나라도 나온 UNRELATED 문항 수 (적을수록 좋다)
+                (int) scores.stream()
+                        .filter(s -> s.evalCase().type() == CaseType.UNRELATED && s.resultCount() > 0).count(),
+                // 대출 의도 없는 문항의 상위 SKEW_TOP건 중 KINFA 비율 평균 (결과가 있는 문항만)
+                nonLoanKinfaShare(scores),
                 byType, histogram(relevantDistances), histogram(otherDistances), histogram(unrelatedTop1));
+    }
+
+    /**
+     * 대출 의도가 없는 문항의 KINFA 비율 평균. 결과가 없는 문항은 비율이 없어 제외한다.
+     * 문항이 하나도 없으면 null (KINFA를 후보에서 모두 뺀 조합에서는 0.0이 된다)
+     */
+    private static Double nonLoanKinfaShare(List<CaseScore> scores) {
+        List<Double> shares = scores.stream()
+                .filter(s -> !s.evalCase().isLoanIntent())
+                .map(CaseScore::kinfaShareTop)
+                .filter(java.util.Objects::nonNull)
+                .toList();
+        return shares.isEmpty() ? null : shares.stream().mapToDouble(Double::doubleValue).average().orElseThrow();
     }
 
     /** 0.05 단위 구간별 개수. 키는 구간 하한 ("0.10"은 [0.10, 0.15)). NaN은 "NaN" */
@@ -195,9 +213,14 @@ public final class PolicySearchScorer {
      * @param unlabeledCases Recall 대상 유형인데 정답이 비어 있는 문항 수 (라벨링 전)
      * @param unrelatedEmpty 무관 문항 중 결과가 0건인 문항 수 (유사도 하한으로 걸러짐)
      */
+    /**
+     * @param unrelatedWithResults 무관 문항 중 결과가 1건 이상 나온 문항 수 (오탐. 적을수록 좋다)
+     * @param nonLoanKinfaShare    대출 의도 없는 문항의 상위 SKEW_TOP건 중 KINFA 비율 평균 (없으면 null)
+     */
     public record Summary(int cases, int scoredCases, int unlabeledCases, Map<Integer, Double> recall,
                           Map<Integer, Double> nameRecall, double mrr, int violations, List<String> violationCases,
                           int regionFallbacks, List<String> kinfaSkewedCases, int unrelatedEmpty,
+                          int unrelatedWithResults, Double nonLoanKinfaShare,
                           Map<CaseType, TypeSummary> byType, Map<String, Integer> relevantDistanceHistogram,
                           Map<String, Integer> otherDistanceHistogram, Map<String, Integer> unrelatedTop1Histogram) {
     }
