@@ -34,6 +34,9 @@ public final class PolicySearchPool {
 
     public static final int VECTOR_TOP = 20;
     public static final int KEYWORD_TOP = 10;
+
+    public static final String ENV_VECTOR_TOP = "AI_EVAL_POOL_VECTOR_TOP";
+    public static final String ENV_KEYWORD_TOP = "AI_EVAL_POOL_KEYWORD_TOP";
     static final int SNIPPET_LENGTH = 160;
 
     private static final Pattern SPLIT = Pattern.compile("[^\\p{L}\\p{N}]+");
@@ -62,6 +65,30 @@ public final class PolicySearchPool {
             firstChunks.putIfAbsent(key, chunk.content());
         }
         joined.forEach((key, text) -> texts.put(key, normalize(text.toString())));
+    }
+
+    /**
+     * 환경 변수로 풀 크기를 정한다 ({@value #ENV_VECTOR_TOP}, {@value #ENV_KEYWORD_TOP}).
+     *
+     * <p>풀에는 거리 상한이 없다({@link SearchConfig#WIDE}의 하한 2.0은 코사인 거리 최대값이라 아무것도 자르지 않는다).
+     * 실제 제약은 <b>벡터 상위 몇 건까지 담는지</b>다. 구어체 질문은 KINFA 대출이 상위를 차지해
+     * 정답이 20위 근처로 밀리므로(2026-11-06 풀: benefit-01의 "2026 청년 월세 지원"이 벡터 20위),
+     * 라벨링 전에 이 값을 키워 다시 만드는 것이 안전하다.
+     */
+    public List<CasePool> buildFromEnv() {
+        return build(intEnv(ENV_VECTOR_TOP, VECTOR_TOP), intEnv(ENV_KEYWORD_TOP, KEYWORD_TOP));
+    }
+
+    private static int intEnv(String name, int defaultValue) {
+        String value = System.getenv(name);
+        if (value == null || value.isBlank()) {
+            return defaultValue;
+        }
+        int parsed = Integer.parseInt(value.trim());
+        if (parsed < 1) {
+            throw new IllegalArgumentException(name + "은 1 이상이어야 합니다: " + parsed);
+        }
+        return parsed;
     }
 
     public List<CasePool> build(int vectorTop, int keywordTop) {

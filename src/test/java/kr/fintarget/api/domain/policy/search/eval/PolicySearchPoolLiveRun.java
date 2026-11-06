@@ -44,8 +44,7 @@ class PolicySearchPoolLiveRun {
 
         PolicySearchEvalRunner runner = new PolicySearchEvalRunner(evalSet, env.loaded(), policyService,
                 env.cache().client(), Year.now(BirthYearValidator.ZONE));
-        List<PolicySearchPool.CasePool> pools = new PolicySearchPool(runner, env.snapshot())
-                .build(PolicySearchPool.VECTOR_TOP, PolicySearchPool.KEYWORD_TOP);
+        List<PolicySearchPool.CasePool> pools = new PolicySearchPool(runner, env.snapshot()).buildFromEnv();
 
         Path dir = SearchEvalEnvironment.outputDir("pool");
         PolicySearchPoolReport.write(dir, pools, env.context());
