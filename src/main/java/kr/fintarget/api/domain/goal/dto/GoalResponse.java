@@ -8,7 +8,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 
 public record GoalResponse(
-        @Schema(description = "목표 ID (UUID)", example = "3fa85f64-5717-4562-b3fc-2c963f66afa6")
+        @Schema(description = "목표 ID (UUID). 목표 수정에서 목표 금액이나 마감일을 다시 정하면 새 값으로 바뀝니다", example = "3fa85f64-5717-4562-b3fc-2c963f66afa6")
         UUID goalId,
         @Schema(description = "목표 제목", example = "내 집 마련")
         String title,
@@ -20,7 +20,7 @@ public record GoalResponse(
         LocalDate deadline,
         @Schema(description = "마감일이 온보딩 자동 생성 시 채워진 기본값(생성일 + 1년)인지 여부. true면 사용자가 정한 마감일이 아니므로 시뮬레이션 성공 확률을 노출하지 않는 것을 권장합니다. 목표 수정(PUT /api/goals)으로 저장하면 마감일을 바꾸지 않았더라도 사용자가 확인한 것으로 보고 false가 됩니다. 온보딩 7단계 재제출(금액만 갱신)로는 바뀌지 않습니다.", example = "false")
         boolean deadlineDefaulted,
-        @Schema(description = "목표 상태", example = "ACTIVE", allowableValues = {"ACTIVE", "COMPLETED", "ABANDONED"})
+        @Schema(description = "목표 상태. 목표 API는 진행 중인 목표만 반환하므로 응답에서는 ACTIVE입니다. ARCHIVED는 다시 정해 보관된 이전 목표", example = "ACTIVE", allowableValues = {"ACTIVE", "COMPLETED", "ABANDONED", "ARCHIVED"})
         String status,
         @Schema(description = "목표 생성 시각", example = "2026-01-10T09:00:00")
         LocalDateTime createdAt,

@@ -9,6 +9,7 @@ import kr.fintarget.api.domain.simulation.repository.SimulationRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -20,6 +21,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -39,7 +41,7 @@ class GoalServiceTest {
     @Test
     void 온보딩_목표가_없으면_기본값으로_새_목표를_생성한다() {
         UUID userId = UUID.randomUUID();
-        when(goalRepository.findByUserId(userId)).thenReturn(Optional.empty());
+        when(goalRepository.findActiveByUserId(userId)).thenReturn(Optional.empty());
 
         goalService.upsertFromOnboarding(userId, 30_000_000L);
 
@@ -59,7 +61,7 @@ class GoalServiceTest {
         UUID userId = UUID.randomUUID();
         LocalDate deadline = LocalDate.of(2028, 12, 31);
         Goal existing = new Goal(userId, "전세 자금", 10_000_000L, 2_000_000L, deadline);
-        when(goalRepository.findByUserId(userId)).thenReturn(Optional.of(existing));
+        when(goalRepository.findActiveByUserId(userId)).thenReturn(Optional.of(existing));
 
         goalService.upsertFromOnboarding(userId, 50_000_000L);
 
@@ -89,7 +91,7 @@ class GoalServiceTest {
     @Test
     void 목표_금액이_정확히_상한이면_생성된다() {
         UUID userId = UUID.randomUUID();
-        when(goalRepository.findByUserId(userId)).thenReturn(Optional.empty());
+        when(goalRepository.findActiveByUserId(userId)).thenReturn(Optional.empty());
 
         goalService.upsertFromOnboarding(userId, Goal.MAX_TARGET_AMOUNT);
 
@@ -99,7 +101,7 @@ class GoalServiceTest {
     @Test
     void 목표_생성_API도_상한을_넘으면_예외가_발생한다() {
         UUID userId = UUID.randomUUID();
-        when(goalRepository.findByUserId(userId)).thenReturn(Optional.empty());
+        when(goalRepository.findActiveByUserId(userId)).thenReturn(Optional.empty());
 
         GoalCreateRequest request = new GoalCreateRequest(
                 "내 집 마련", Goal.MAX_TARGET_AMOUNT + 1, 0L, LocalDate.of(2030, 1, 1));
@@ -114,7 +116,8 @@ class GoalServiceTest {
     void 마감일을_바꿔_수정하면_기본_마감일_플래그가_해제된다() {
         UUID userId = UUID.randomUUID();
         Goal goal = Goal.createFromOnboarding(userId, 30_000_000L);
-        when(goalRepository.findByUserId(userId)).thenReturn(Optional.of(goal));
+        when(goalRepository.findActiveByUserId(userId)).thenReturn(Optional.of(goal));
+        when(goalRepository.save(any(Goal.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         GoalResponse response = goalService.updateGoal(userId, new GoalUpdateRequest(
                 "내 집 마련", 30_000_000L, 0L, LocalDate.of(2030, 6, 30)));
@@ -127,10 +130,10 @@ class GoalServiceTest {
         UUID userId = UUID.randomUUID();
         Goal goal = Goal.createFromOnboarding(userId, 30_000_000L);
         LocalDate defaultDeadline = goal.getDeadline();
-        when(goalRepository.findByUserId(userId)).thenReturn(Optional.of(goal));
+        when(goalRepository.findActiveByUserId(userId)).thenReturn(Optional.of(goal));
 
         GoalResponse response = goalService.updateGoal(userId, new GoalUpdateRequest(
-                "내 집 마련", 40_000_000L, 1_000_000L, defaultDeadline));
+                "내 집 마련", 30_000_000L, 1_000_000L, defaultDeadline));
 
         assertThat(response.deadlineDefaulted()).isFalse();
         assertThat(response.deadline()).isEqualTo(defaultDeadline);
@@ -140,11 +143,101 @@ class GoalServiceTest {
     void 온보딩_재제출로_금액만_갱신하면_기본_마감일_플래그가_유지된다() {
         UUID userId = UUID.randomUUID();
         Goal goal = Goal.createFromOnboarding(userId, 30_000_000L);
-        when(goalRepository.findByUserId(userId)).thenReturn(Optional.of(goal));
+        when(goalRepository.findActiveByUserId(userId)).thenReturn(Optional.of(goal));
 
         goalService.upsertFromOnboarding(userId, 50_000_000L);
 
         assertThat(goal.isDeadlineDefaulted()).isTrue();
         assertThat(goal.getTargetAmount()).isEqualTo(50_000_000L);
+    }
+
+    @Test
+    void 목표_금액을_바꾸면_기존_목표를_보관하고_새_목표를_만든다() {
+        UUID userId = UUID.randomUUID();
+        LocalDate deadline = LocalDate.of(2028, 12, 31);
+        Goal existing = new Goal(userId, "전세 자금", 30_000_000L, 2_000_000L, deadline);
+        when(goalRepository.findActiveByUserId(userId)).thenReturn(Optional.of(existing));
+        when(goalRepository.save(any(Goal.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        GoalResponse response = goalService.updateGoal(userId, new GoalUpdateRequest(
+                "내 집 마련", 80_000_000L, 5_000_000L, deadline));
+
+        assertThat(existing.getStatus()).isEqualTo(Goal.GoalStatus.ARCHIVED);
+        assertThat(existing.getTitle()).isEqualTo("전세 자금");
+        assertThat(existing.getTargetAmount()).isEqualTo(30_000_000L);
+
+        ArgumentCaptor<Goal> captor = ArgumentCaptor.forClass(Goal.class);
+        verify(goalRepository).save(captor.capture());
+        Goal created = captor.getValue();
+        assertThat(created).isNotSameAs(existing);
+        assertThat(created.getUserId()).isEqualTo(userId);
+        assertThat(created.getStatus()).isEqualTo(Goal.GoalStatus.ACTIVE);
+        assertThat(created.isDeadlineDefaulted()).isFalse();
+        assertThat(response.title()).isEqualTo("내 집 마련");
+        assertThat(response.targetAmount()).isEqualTo(80_000_000L);
+        assertThat(response.currentAmount()).isEqualTo(5_000_000L);
+    }
+
+    @Test
+    void 마감일을_바꾸면_기존_목표를_보관하고_새_목표를_만든다() {
+        UUID userId = UUID.randomUUID();
+        Goal existing = new Goal(userId, "전세 자금", 30_000_000L, 0L, LocalDate.of(2028, 12, 31));
+        when(goalRepository.findActiveByUserId(userId)).thenReturn(Optional.of(existing));
+        when(goalRepository.save(any(Goal.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        GoalResponse response = goalService.updateGoal(userId, new GoalUpdateRequest(
+                "전세 자금", 30_000_000L, 0L, LocalDate.of(2029, 6, 30)));
+
+        assertThat(existing.getStatus()).isEqualTo(Goal.GoalStatus.ARCHIVED);
+        assertThat(existing.getDeadline()).isEqualTo(LocalDate.of(2028, 12, 31));
+        assertThat(response.deadline()).isEqualTo(LocalDate.of(2029, 6, 30));
+        verify(goalRepository).save(any(Goal.class));
+    }
+
+    @Test
+    void 새_목표를_저장하기_전에_기존_목표_보관을_먼저_반영한다() {
+        // flush는 INSERT를 UPDATE보다 먼저 실행하므로, 보관을 먼저 반영하지 않으면 진행 중 목표 유니크 인덱스에 걸린다
+        UUID userId = UUID.randomUUID();
+        Goal existing = new Goal(userId, "전세 자금", 30_000_000L, 0L, LocalDate.of(2028, 12, 31));
+        when(goalRepository.findActiveByUserId(userId)).thenReturn(Optional.of(existing));
+        when(goalRepository.save(any(Goal.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        goalService.updateGoal(userId, new GoalUpdateRequest(
+                "전세 자금", 50_000_000L, 0L, LocalDate.of(2028, 12, 31)));
+
+        InOrder order = inOrder(goalRepository);
+        order.verify(goalRepository).flush();
+        order.verify(goalRepository).save(any(Goal.class));
+    }
+
+    @Test
+    void 제목과_모은_금액만_바꾸면_같은_목표를_수정한다() {
+        UUID userId = UUID.randomUUID();
+        LocalDate deadline = LocalDate.of(2028, 12, 31);
+        Goal existing = new Goal(userId, "전세 자금", 30_000_000L, 0L, deadline);
+        when(goalRepository.findActiveByUserId(userId)).thenReturn(Optional.of(existing));
+
+        GoalResponse response = goalService.updateGoal(userId, new GoalUpdateRequest(
+                "내 전세 자금", 30_000_000L, 7_000_000L, deadline));
+
+        verify(goalRepository, never()).save(any());
+        verify(goalRepository, never()).flush();
+        assertThat(existing.getStatus()).isEqualTo(Goal.GoalStatus.ACTIVE);
+        assertThat(existing.getTitle()).isEqualTo("내 전세 자금");
+        assertThat(existing.getCurrentAmount()).isEqualTo(7_000_000L);
+        assertThat(response.title()).isEqualTo("내 전세 자금");
+    }
+
+    @Test
+    void 진행_중인_목표가_있으면_새로_생성할_수_없다() {
+        UUID userId = UUID.randomUUID();
+        when(goalRepository.findActiveByUserId(userId)).thenReturn(Optional.of(
+                new Goal(userId, "전세 자금", 30_000_000L, 0L, LocalDate.of(2028, 12, 31))));
+
+        assertThatThrownBy(() -> goalService.createGoal(userId, new GoalCreateRequest(
+                "내 집 마련", 50_000_000L, 0L, LocalDate.of(2030, 1, 1))))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("이미 목표가 존재합니다.");
+        verify(goalRepository, never()).save(any());
     }
 }

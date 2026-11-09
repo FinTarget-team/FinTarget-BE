@@ -35,7 +35,8 @@ public class SimulationController {
                     + "userPolicyId를 함께 보내면 정책의 혜택 금액(월 지급액·지원 기간·1회 지급액)을 반영한 예상 달성일과 달성 확률도 계산합니다. "
                     + "정책 반영 계산은 지원 기간이 끝나는 시점과 1회 지급을 반영하려고 한 달씩 진행하며, 정책을 안 보내면 기존 공식을 그대로 씁니다. "
                     + "정책에 금액으로 환산된 혜택이 없으면(대출·현물·서비스 정책, 혜택 금액이 아직 정리되지 않은 정책) "
-                    + "policyCompletionDate와 policySuccessProbability는 null이고 나머지 결과만 반환됩니다."
+                    + "policyCompletionDate와 policySuccessProbability는 null이고 나머지 결과만 반환됩니다. "
+                    + "goalId는 진행 중인 목표여야 하며, 목표 금액·마감일을 다시 정해 보관된 이전 목표로는 실행할 수 없습니다."
     )
     @io.swagger.v3.oas.annotations.responses.ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(
@@ -46,6 +47,7 @@ public class SimulationController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(
                     responseCode = "400",
                     description = "요청 값이 유효성 검증을 통과하지 못했거나, goalId/userPolicyId에 해당하는 리소스가 존재하지 않거나, "
+                            + "goalId가 보관된 이전 목표이거나, "
                             + "연이율이 유한한 범위를 벗어남. 아래 예시 중 하나가 message로 반환됨(여러 항목이 동시에 잘못됐어도 하나만 반환됨)",
                     content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE, examples = {
                             @ExampleObject(name = "목표 미선택", value = """
@@ -94,6 +96,13 @@ public class SimulationController {
                                     {
                                       "status": 400,
                                       "message": "존재하지 않는 목표입니다.",
+                                      "data": null
+                                    }
+                                    """),
+                            @ExampleObject(name = "보관된 이전 목표", value = """
+                                    {
+                                      "status": 400,
+                                      "message": "현재 진행 중인 목표가 아닙니다. 최신 목표로 다시 시도해주세요.",
                                       "data": null
                                     }
                                     """),
@@ -163,7 +172,8 @@ public class SimulationController {
 
     @Operation(
             summary = "특정 목표의 시뮬레이션 이력 조회",
-            description = "지정한 목표(goalId)에 대해 실행한 시뮬레이션 이력만 조회합니다. "
+            description = "지정한 목표(goalId)에 대해 실행한 시뮬레이션 이력만 조회합니다. 목표 금액·마감일을 다시 정하면 goalId가 바뀌므로, "
+                    + "현재 goalId로 조회하면 현재 목표의 기록만 반환됩니다. 보관된 이전 목표의 goalId로도 조회할 수 있습니다. "
                     + "goalId가 존재하지 않거나 본인 소유가 아니어도 에러 없이 빈 배열이 반환됩니다."
     )
     @io.swagger.v3.oas.annotations.responses.ApiResponses({

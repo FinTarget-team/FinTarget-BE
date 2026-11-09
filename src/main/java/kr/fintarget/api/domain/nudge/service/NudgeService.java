@@ -69,8 +69,8 @@ public class NudgeService {
      */
     private void generateGoalDeadlineNudge(String userId) {
         UUID uid = UUID.fromString(userId);
-        Goal goal = goalRepository.findByUserId(uid).orElse(null);
-        if (goal == null || goal.getStatus() != Goal.GoalStatus.ACTIVE) return;
+        Goal goal = goalRepository.findActiveByUserId(uid).orElse(null);
+        if (goal == null) return;
 
         long dDay = ChronoUnit.DAYS.between(LocalDate.now(), goal.getDeadline());
         if (dDay < 0 || dDay > 30) return;

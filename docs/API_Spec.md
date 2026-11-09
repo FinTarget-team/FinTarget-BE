@@ -197,7 +197,8 @@ Authorization: Bearer {accessToken}
 
 ## 4. 목표 (Goal)
 
-> 사용자당 목표는 1개입니다. 그래서 목표 API는 경로에 ID 없이 로그인 사용자의 목표를 대상으로 동작합니다.
+> 사용자당 진행 중인 목표는 1개입니다. 그래서 목표 API는 경로에 ID 없이 로그인 사용자의 진행 중(`ACTIVE`) 목표를 대상으로 동작합니다.
+> 목표 금액이나 마감일을 다시 정하면 이전 목표는 `ARCHIVED`로 보관되고 새 `goalId`의 목표가 생깁니다 (#202). 보관된 목표는 목표 API로 조회되지 않습니다.
 > 이 섹션의 모든 응답은 공통 형식 `{ "status", "message", "data" }`로 감싸서 내려옵니다.
 
 ### 목표 조회
@@ -225,7 +226,7 @@ Authorization: Bearer {accessToken}
 
 | 필드 | 설명 |
 |---|---|
-| `status` | `ACTIVE` \| `COMPLETED` \| `ABANDONED` |
+| `status` | `ACTIVE` \| `COMPLETED` \| `ABANDONED` \| `ARCHIVED`. 목표 API는 진행 중인 목표만 반환하므로 응답에서는 항상 `ACTIVE` |
 | `progressRate` | 달성률(%) = `currentAmount / targetAmount * 100`. 초과 달성 시 100보다 클 수 있음 |
 | `dday` | 마감일까지 남은 일수. 양수=남음, 0=오늘, 음수=기한 초과 |
 | `deadlineDefaulted` | 온보딩 자동 생성 시 채운 기본 마감일(생성일 + 1년)이면 `true`. 목표 수정(`PUT /api/goals`)으로 저장하면 **마감일을 바꾸지 않았더라도** 사용자가 확인한 것으로 보고 `false` (#186). 온보딩 7단계 재제출(금액만 갱신)로는 바뀌지 않음. `true`일 때는 시뮬레이션 성공 확률을 노출하지 않는 것을 권장 |
@@ -248,10 +249,15 @@ Authorization: Bearer {accessToken}
 - **PUT** `/api/goals`
 - Request Body: 목표 생성과 동일 (네 필드를 모두 보내야 하며, 부분 수정은 지원하지 않음)
 - Response (200): `data`는 수정된 목표 (목표 조회와 같은 형식)
+- **`targetAmount` 또는 `deadline`이 바뀌면 새 목표로 바뀝니다 (#202).**
+  - 이전 목표는 `ARCHIVED`로 보관되고, 이전 목표의 시뮬레이션 기록은 이전 `goalId`에 그대로 남습니다.
+  - 응답의 `goalId`가 **새 값**입니다. 프론트는 수정 후 응답의 `goalId`로 바꿔서 시뮬레이션 실행·목표별 조회에 써야 합니다.
+  - 새 목표의 `createdAt`은 수정한 시각이고, 시뮬레이션 기록은 없는 상태로 시작합니다.
+- `title`이나 `currentAmount`만 바뀌면 같은 목표를 수정합니다. `goalId`와 시뮬레이션 기록이 그대로 유지됩니다.
 
 ### 목표 삭제
 - **DELETE** `/api/goals`
-- 목표에 연결된 **시뮬레이션 기록도 함께 삭제**됩니다.
+- 진행 중인 목표와 그 목표의 **시뮬레이션 기록을 함께 삭제**합니다. 다시 정해 보관된 이전 목표와 그 기록은 남습니다.
 - Response (200): `data: null`
 
 ### 요청 필드 규칙 (생성·수정 공통)
@@ -615,7 +621,8 @@ Authorization: Bearer {accessToken}
 > 목표의 `deadlineDefaulted`가 `true`면 마감일이 사용자가 정한 날짜가 아니므로, `successProbability`는 화면에 노출하지 않는 것을 권장합니다.
 > 낙관·비관 달성일과 성공 확률이 추가되기 전에 저장된 시뮬레이션 기록은 세 값이 `null`일 수 있습니다.
 > `policySuccessProbability`가 추가되기 전(#163)에 저장된 기록도 이 값이 `null`입니다.
-> 목표를 수정해도 `goalId`와 시뮬레이션 기록은 그대로 유지됩니다. 기록이 지워지는 것은 목표를 삭제할 때뿐입니다. 목표를 수정한 뒤에는 시뮬레이션을 다시 실행하도록 안내하는 것을 권장합니다.
+> 목표 금액이나 마감일을 다시 정하면 새 `goalId`가 발급되고, 이전 목표의 기록은 이전 `goalId`에 남습니다 (#202). 그래서 `GET /api/simulations/goal/{현재 goalId}`는 현재 목표의 기록만, `GET /api/simulations`는 이전 목표를 포함한 전체 기록을 돌려줍니다.
+> 제목이나 모은 금액만 수정하면 `goalId`가 유지되어 기록이 같은 목표에 이어집니다. 이때 각 기록의 `goalCurrentAmount`로 실행 당시 모은 금액을 구분할 수 있습니다.
 
 #### 계산 방식 (#163)
 
@@ -646,7 +653,7 @@ Authorization: Bearer {accessToken}
 
 | 필드 | 필수 | 규칙 | 실패 시 메시지 |
 |---|---|---|---|
-| `goalId` | O | 본인 소유 목표의 ID | 누락: `목표를 선택해주세요.` / 없거나 타인 목표: `존재하지 않는 목표입니다.` |
+| `goalId` | O | 본인의 **진행 중인** 목표 ID | 누락: `목표를 선택해주세요.` / 없거나 타인 목표: `존재하지 않는 목표입니다.` / 다시 정해 보관된 이전 목표: `현재 진행 중인 목표가 아닙니다. 최신 목표로 다시 시도해주세요.` |
 | `monthlySaving` | O | 0보다 큰 정수(원) | 누락: `월 저축액을 입력해주세요.` / 0·음수: `월 저축액은 0보다 커야 합니다.` |
 | `userPolicyId` | X | 본인이 스크랩한 정책 ID. 생략하거나 정책에 혜택 금액이 없으면 `policyCompletionDate`·`policySuccessProbability`가 `null` | `존재하지 않는 유저 정책입니다.` |
 | `annualInterestRate` | X | 0.0 이상 1.0 이하(예: 3% = `0.03`). 생략하면 `0.03` 적용 | 음수: `연이율은 0 이상이어야 합니다.` / 1.0 초과: `연이율은 100%(1.0) 이하여야 합니다.` |
@@ -671,13 +678,13 @@ Authorization: Bearer {accessToken}
 
 ### 시뮬레이션 목록 조회
 - **GET** `/api/simulations`
-- 로그인 사용자의 모든 시뮬레이션 기록. 없으면 빈 배열. 정렬 순서는 보장하지 않으므로 필요하면 `createdAt`으로 정렬해 주세요.
+- 로그인 사용자의 모든 시뮬레이션 기록(다시 정해 보관된 이전 목표의 기록 포함). 없으면 빈 배열. 정렬 순서는 보장하지 않으므로 필요하면 `createdAt`으로 정렬해 주세요.
 - Response (200): `data`는 시뮬레이션 실행 응답의 `data`와 같은 형식의 배열
 
 ### 목표별 시뮬레이션 조회
 - **GET** `/api/simulations/goal/{goalId}`
 - Path Parameter: `goalId` (uuid)
-- 해당 목표의 본인 시뮬레이션 기록. 없거나 타인 목표면 빈 배열 (에러 아님)
+- 해당 목표의 본인 시뮬레이션 기록. 없거나 타인 목표면 빈 배열 (에러 아님). 보관된 이전 목표의 `goalId`로도 조회됩니다
 - Response (200): 시뮬레이션 목록 조회와 같은 형식
 
 ---

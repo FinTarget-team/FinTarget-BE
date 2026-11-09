@@ -44,6 +44,10 @@ public class SimulationService {
     public SimulationResponse runSimulation(UUID userId, SimulationRequest request) {
         Goal goal = goalRepository.findByGoalIdAndUserId(request.goalId(), userId)
                 .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 목표입니다."));
+        // 다시 정해 보관된 이전 목표로는 새 기록을 만들지 않는다. 이전 기록 조회는 그대로 된다 (#202)
+        if (goal.getStatus() != Goal.GoalStatus.ACTIVE) {
+            throw new IllegalArgumentException("현재 진행 중인 목표가 아닙니다. 최신 목표로 다시 시도해주세요.");
+        }
 
         if (request.annualInterestRate() != null
                 && (!Double.isFinite(request.annualInterestRate()) || request.annualInterestRate() > MAX_ANNUAL_INTEREST_RATE)) {
