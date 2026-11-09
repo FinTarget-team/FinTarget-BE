@@ -2,6 +2,7 @@ package kr.fintarget.api.domain.policy.search.eval;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
+import kr.fintarget.api.domain.policy.search.LoanIntent;
 import kr.fintarget.api.domain.policy.search.eval.PolicySearchEvalRunner.ConfigResult;
 import kr.fintarget.api.domain.policy.search.eval.PolicySearchEvalRunner.Report;
 import kr.fintarget.api.domain.policy.search.eval.PolicySearchEvalSet.CaseType;

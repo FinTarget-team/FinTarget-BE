@@ -1,11 +1,11 @@
-package kr.fintarget.api.domain.policy.search.eval;
+package kr.fintarget.api.domain.policy.search;
 
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * 대출 의도 판정 (#184 KINFA 조건부 제외 비교용).
+ * 대출 의도 판정 (#201).
  */
 class LoanIntentTest {
 
@@ -26,10 +26,19 @@ class LoanIntentTest {
         assertThat(LoanIntent.of("2026 청년 월세 지원 알려줘")).isFalse();
     }
 
-    // "보증"은 판정에서 뺐다. 지원 정책 이름에 흔해서(전세보증금반환보증 보증료 지원) 오탐이 많다
+    // 평가셋 region-01·02. 보증료 환급 정책은 benefit_type이 LOAN이라 대출 의도로 판정해야 검색에서 빠지지 않는다
+    @Test
+    void 보증료_반환보증_질문은_대출_의도다() {
+        assertThat(LoanIntent.matched("전세보증금반환보증 보증료 지원받을 수 있어?"))
+                .containsExactlyInAnyOrder("보증료", "반환보증");
+        assertThat(LoanIntent.matched("전세보증금 반환보증 보증료 돌려받는 거 있잖아"))
+                .containsExactlyInAnyOrder("보증료", "반환보증");
+    }
+
+    // "보증" 단독은 판정에서 뺐다. 보증금·보증보험처럼 대출과 무관한 표현에 흔해서 오탐이 많다
     @Test
     void 보증이_들어간_지원_정책_질문은_대출_의도가_아니다() {
-        assertThat(LoanIntent.of("전세보증금반환보증 보증료 지원받을 수 있어?")).isFalse();
+        assertThat(LoanIntent.KEYWORDS).doesNotContain("보증");
         assertThat(LoanIntent.of("보증금 올려달래서 돈이 모자라")).isFalse();
         assertThat(LoanIntent.of("보증보험 가입해야 해?")).isFalse();
     }

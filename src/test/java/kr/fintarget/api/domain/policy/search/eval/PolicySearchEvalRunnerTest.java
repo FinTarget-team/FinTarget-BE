@@ -3,6 +3,7 @@ package kr.fintarget.api.domain.policy.search.eval;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import kr.fintarget.api.domain.policy.repository.PolicyRepository;
+import kr.fintarget.api.domain.policy.search.LoanIntent;
 import kr.fintarget.api.domain.policy.search.eval.PolicySearchEvalRunner.ConfigResult;
 import kr.fintarget.api.domain.policy.search.eval.PolicySearchEvalRunner.Report;
 import kr.fintarget.api.domain.policy.search.eval.PolicySearchEvalSet.CaseType;

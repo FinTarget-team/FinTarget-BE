@@ -1,6 +1,7 @@
 package kr.fintarget.api.domain.policy.entity;
 
 import jakarta.persistence.*;
+import kr.fintarget.api.domain.policy.benefit.BenefitType;
 import kr.fintarget.api.domain.user.code.Region;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -143,6 +144,11 @@ public class Policy {
      */
     public boolean hasBenefitForSimulation() {
         return benefit != null && benefit.hasAny();
+    }
+
+    /** 대출 상품인지 (#201). 혜택 추출(#162)이 LOAN으로 분류한 정책이며, 아직 추출되지 않은 정책(benefit=null)은 false다 */
+    public boolean isLoanProduct() {
+        return benefit != null && benefit.getType() == BenefitType.LOAN;
     }
 
     // 원문에서 추출·정리한 혜택 금액을 채운다 (#163 입력 형식, #162 추출 작업에서 호출)

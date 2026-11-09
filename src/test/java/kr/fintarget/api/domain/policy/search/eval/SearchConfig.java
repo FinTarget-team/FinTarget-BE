@@ -1,5 +1,7 @@
 package kr.fintarget.api.domain.policy.search.eval;
 
+import kr.fintarget.api.domain.policy.search.LoanIntent;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -10,7 +12,7 @@ import java.util.Locale;
  * policy.search.* 와 같다.
  *
  * @param excludeKinfaWithoutLoanIntent 질문에 대출 의도가 없으면 KINFA 정책을 후보에서 빼고 검색한다.
- *                                      운영에는 없는 동작이며 비교용으로만 쓴다 ({@link LoanIntent})
+ *                                      운영은 benefit_type 기준으로 제외하고(#201), 이 값은 출처 기준 비교용이다 ({@link LoanIntent})
  */
 public record SearchConfig(int k, double maxDistance, int chunkMultiplier, boolean excludeKinfaWithoutLoanIntent) {
 
@@ -19,7 +21,7 @@ public record SearchConfig(int k, double maxDistance, int chunkMultiplier, boole
         this(k, maxDistance, chunkMultiplier, false);
     }
 
-    /** 현재 운영 기본값 (PolicySearchService DEFAULT_K, DEFAULT_MAX_DISTANCE, DEFAULT_CHUNK_MULTIPLIER) */
+    /** #201 적용 전 운영 기본값(하한 0.50). 변경 전후 비교의 기준선으로 남겨 둔다 */
     public static final SearchConfig PRODUCTION = new SearchConfig(5, 0.5, 3);
     /**
      * 하한을 사실상 끈 넓은 검색. Recall@10·거리 분포·풀 생성의 기준이다.
