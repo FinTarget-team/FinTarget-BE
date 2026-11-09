@@ -18,7 +18,8 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import java.util.UUID;
 
-@Tag(name = "목표", description = "사용자의 저축 목표 생성/조회/수정/삭제 API. 사용자당 목표는 항상 최대 1개입니다.")
+@Tag(name = "목표", description = "사용자의 저축 목표 생성/조회/수정/삭제 API. 사용자당 진행 중(ACTIVE)인 목표는 항상 최대 1개이며, "
+        + "목표 API는 진행 중인 목표만 다룹니다.")
 @SecurityRequirement(name = "bearerAuth")
 @RestController
 @RequestMapping("/api/goals")
@@ -29,7 +30,7 @@ public class GoalController {
 
     @Operation(
             summary = "목표 생성",
-            description = "사용자의 저축 목표를 생성합니다. 사용자당 목표는 1개만 가질 수 있어, 이미 목표가 있는 상태에서 다시 호출하면 거부됩니다."
+            description = "사용자의 저축 목표를 생성합니다. 진행 중인 목표는 1개만 가질 수 있어, 이미 진행 중인 목표가 있는 상태에서 다시 호출하면 거부됩니다."
     )
     @io.swagger.v3.oas.annotations.responses.ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(
@@ -127,7 +128,9 @@ public class GoalController {
             summary = "목표 수정",
             description = "사용자의 저축 목표를 수정합니다. 요청 본문의 모든 필드로 기존 값을 덮어씁니다(부분 수정 아님). "
                     + "저장하면 마감일을 바꾸지 않았더라도 사용자가 확인한 마감일로 보고 deadlineDefaulted가 false가 됩니다. "
-                    + "goalId와 기존 시뮬레이션 기록은 유지되며, 각 기록에는 실행 당시 목표 값이 남아 있습니다."
+                    + "targetAmount 또는 deadline이 바뀌면 이전 목표는 ARCHIVED로 보관되고 새 goalId의 목표가 만들어집니다. "
+                    + "이전 목표의 시뮬레이션 기록은 이전 goalId에 남으므로, 수정 후에는 응답의 goalId로 바꿔 써야 합니다. "
+                    + "title이나 currentAmount만 바뀌면 같은 목표를 수정하며 goalId와 시뮬레이션 기록이 유지됩니다."
     )
     @io.swagger.v3.oas.annotations.responses.ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(
@@ -171,7 +174,8 @@ public class GoalController {
 
     @Operation(
             summary = "목표 삭제",
-            description = "사용자의 저축 목표를 삭제합니다. 해당 목표에 연결된 시뮬레이션 기록도 함께 삭제됩니다."
+            description = "진행 중인 저축 목표를 삭제합니다. 해당 목표에 연결된 시뮬레이션 기록도 함께 삭제되며, "
+                    + "다시 정해 보관된 이전 목표와 그 기록은 남습니다."
     )
     @io.swagger.v3.oas.annotations.responses.ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(

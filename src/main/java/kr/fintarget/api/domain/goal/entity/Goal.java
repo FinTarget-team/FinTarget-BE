@@ -8,6 +8,7 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Objects;
 import java.util.UUID;
 
 @Entity
@@ -28,7 +29,9 @@ public class Goal {
     @Column(name = "goal_id", columnDefinition = "uuid")
     private UUID goalId;
 
-    @Column(name = "user_id", nullable = false, unique = true, columnDefinition = "uuid")
+    // 목표를 다시 정하면 이전 목표가 ARCHIVED로 남으므로 사용자당 여러 줄이 될 수 있다 (#202).
+    // 진행 중(ACTIVE)인 목표가 사용자당 1개라는 규칙은 운영 DB의 부분 유니크 인덱스로 지킨다 (docs/sql/202_goal_history.sql)
+    @Column(name = "user_id", nullable = false, columnDefinition = "uuid")
     private UUID userId;
 
     @Column(name = "title", nullable = false)
@@ -60,7 +63,8 @@ public class Goal {
     private LocalDateTime updatedAt;
 
     public enum GoalStatus {
-        ACTIVE, COMPLETED, ABANDONED
+        // ARCHIVED: 목표 금액·마감일을 다시 정해 새 목표로 바뀐 이전 목표 (#202)
+        ACTIVE, COMPLETED, ABANDONED, ARCHIVED
     }
 
     public Goal(UUID userId, String title, Long targetAmount,
@@ -89,6 +93,16 @@ public class Goal {
         if (targetAmount > MAX_TARGET_AMOUNT) {
             throw new IllegalArgumentException("목표 금액은 50억 원 이하로 입력해주세요");
         }
+    }
+
+    // 목표 금액이나 마감일이 바뀌면 같은 목표의 수정이 아니라 새 목표로 본다 (#202).
+    // 모은 금액은 진행 상황이고 제목은 이름일 뿐이라 기준에 넣지 않는다
+    public boolean isRedefinedBy(Long targetAmount, LocalDate deadline) {
+        return !Objects.equals(this.targetAmount, targetAmount) || !Objects.equals(this.deadline, deadline);
+    }
+
+    public void archive() {
+        this.status = GoalStatus.ARCHIVED;
     }
 
     // 목표 수정 화면에서 저장했다면 마감일을 바꾸지 않았더라도 사용자가 확인한 마감일로 본다 (#186)
