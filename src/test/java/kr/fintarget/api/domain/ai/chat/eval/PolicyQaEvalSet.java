@@ -22,13 +22,15 @@ import java.util.Map;
  *
  * <p>정책 원문은 DB가 아니라 파일에 복사해 둔 스냅샷을 쓴다. 정책 ID(UUID)는 DB마다 다르고 원문은 매일 재동기화로 바뀔 수 있어,
  * 프롬프트·모델을 바꿔도 같은 입력으로 비교하기 위함이다.
+ *
+ * <p>통합 정책 AI 답변 평가(#184, PolicyRagEvalSet)도 이 정책 스냅샷과 사용자 정보를 재사용하므로 public이다.
  */
-record PolicyQaEvalSet(String description, Map<String, PolicySnapshot> policies,
+public record PolicyQaEvalSet(String description, Map<String, PolicySnapshot> policies,
                        Map<String, UserProfileSummary> profiles, List<EvalCase> cases) {
 
-    static final String RESOURCE = "ai-eval/policy-qa-cases.json";
+    public static final String RESOURCE = "ai-eval/policy-qa-cases.json";
 
-    static PolicyQaEvalSet load() {
+    public static PolicyQaEvalSet load() {
         ObjectMapper objectMapper = new ObjectMapper()
                 .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, true);
         try (InputStream in = new ClassPathResource(RESOURCE).getInputStream()) {
@@ -97,14 +99,14 @@ record PolicyQaEvalSet(String description, Map<String, PolicySnapshot> policies,
     }
 
     /** 2026-10-30 로컬 DB 동기화 결과에서 복사한 정책 1건 */
-    record PolicySnapshot(String source, String policyType, String name, String externalId, String region,
+    public record PolicySnapshot(String source, String policyType, String name, String externalId, String region,
                           Integer minAge, Integer maxAge, Long incomeLimit, Long benefitAmount, String description,
                           String supportContent, String eligibilityDetail, String exclusionCriteria,
                           String incomeCondition, String ageCondition, String applyMethod, String screeningMethod,
                           String requiredDocuments, String applyPeriod, String businessPeriod, String referenceUrl,
                           String applyUrl, String contactInfo, String etcNote) {
 
-        Policy toPolicy() {
+        public Policy toPolicy() {
             PolicyText text = PolicyText.builder()
                     .supportContent(supportContent)
                     .eligibilityDetail(eligibilityDetail)

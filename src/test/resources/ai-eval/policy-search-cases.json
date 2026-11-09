@@ -1,0 +1,284 @@
+{
+  "description": "통합 정책 RAG 검색 평가셋 (#184 1단계). 질문은 사람이 작성하고 정답(relevant)은 풀링으로 라벨링한다. 정책은 정책 키(\"출처:외부ID\")로 가리키며 스냅샷(AI_EVAL_SNAPSHOT_DIR)에 있어야 한다.",
+  "guide": {
+    "id": "문항 ID. 파일 안에서 중복 불가. 유형 접두사 권장 (name-01, benefit-01, region-01, loan-01, unrelated-01, ambiguous-01)",
+    "type": "POLICY_NAME(정책명 직접) / BENEFIT_SITUATION(혜택·상황) / REGION(지역 조건) / LOAN(대출·금융) / UNRELATED(무관) / AMBIGUOUS(짧거나 모호). UNRELATED·AMBIGUOUS는 Recall·MRR 계산에서 제외",
+    "profile": "아래 profiles의 키. 후보 정책 필터(나이·소득·지역)가 이 프로필로 결정된다",
+    "question": "사용자가 앱에 입력할 문장 그대로",
+    "relevant": "정답 정책 키 목록. 그 프로필 지역에서 신청할 수 있는 정책만 넣는다 (같은 이름의 다른 지역 정책은 넣지 않음). 정답이 없는 것이 맞으면 비워 두고 labeled를 true로 둔다",
+    "labeled": "라벨링을 마쳤으면 true. false면 아직 라벨링 전이라 Recall·MRR에서 빠진다. labeled가 true이고 relevant가 비면 '정답 없음'이 맞는 문항으로 보고 '결과 0건이면 통과'로 채점한다",
+    "loanIntent": "선택. 대출을 찾는 질문이면 true. KINFA 쏠림 판정에서 제외한다. 생략하면 type이 LOAN일 때만 true",
+    "note": "라벨 근거 한 줄 (검수자가 바뀌어도 판단이 같도록)"
+  },
+  "profiles": {
+    "seoul-25": {
+      "region": "SEOUL",
+      "age": 25,
+      "income": 2500000,
+      "note": "기준 프로필"
+    },
+    "busan-29": {
+      "region": "BUSAN",
+      "age": 29,
+      "income": 3000000,
+      "note": "지역 정책이 많은 지역"
+    },
+    "gyeonggi-34": {
+      "region": "GYEONGGI",
+      "age": 34,
+      "income": 4000000,
+      "note": "30대"
+    },
+    "chungnam-22": {
+      "region": "CHUNGNAM",
+      "age": 22,
+      "income": 1000000,
+      "note": "저소득 학생"
+    },
+    "jeonnam-39": {
+      "region": "JEONNAM",
+      "age": 39,
+      "income": 3000000,
+      "note": "청년 연령 상한 경계 (나이 구간 38~39)"
+    },
+    "ulsan-high": {
+      "region": "ULSAN",
+      "age": 30,
+      "income": 7000000,
+      "note": "소득 조건 탈락 확인"
+    },
+    "incomplete": {
+      "region": "SEOUL",
+      "age": null,
+      "income": null,
+      "note": "나이·소득 없음. 후보가 비어 검색하지 않는다 (답변 평가의 PROFILE_INCOMPLETE)"
+    }
+  },
+  "cases": [
+    {
+      "id": "name-01",
+      "type": "POLICY_NAME",
+      "profile": "seoul-25",
+      "question": "2026 청년 월세 지원 알려줘",
+      "relevant": [],
+      "labeled": false,
+      "note": "정책명 거의 그대로. 서울 거주라 SEOUL 정책이 정답"
+    },
+    {
+      "id": "name-02",
+      "type": "POLICY_NAME",
+      "profile": "seoul-25",
+      "question": "청년안심주택 공급 어떻게 신청해?",
+      "relevant": [],
+      "labeled": false,
+      "note": "정책명 + 신청 방법. 서울 '2026 청년안심주택 공급(매입)'"
+    },
+    {
+      "id": "name-03",
+      "type": "POLICY_NAME",
+      "profile": "gyeonggi-34",
+      "question": "청년 전월세 대출보증이 뭐야?",
+      "relevant": [],
+      "labeled": false,
+      "note": "전국 정책이라 모든 프로필에서 정답"
+    },
+    {
+      "id": "name-04",
+      "type": "POLICY_NAME",
+      "profile": "seoul-25",
+      "question": "장병내일준비적금 지원받을 수 있어?",
+      "relevant": [],
+      "labeled": false,
+      "note": "전국 온통청년 정책. 이름이 길고 고유해 검색이 쉬워야 한다"
+    },
+    {
+      "id": "benefit-01",
+      "type": "BENEFIT_SITUATION",
+      "profile": "seoul-25",
+      "question": "자취하는데 월세가 너무 부담돼",
+      "relevant": [],
+      "labeled": false,
+      "note": "월세 지원·주거비 정책이 정답. 주거 관련 대출만 올라오면 쏠림으로 기록"
+    },
+    {
+      "id": "benefit-02",
+      "type": "BENEFIT_SITUATION",
+      "profile": "busan-29",
+      "question": "보증금 올려달래서 돈이 모자라",
+      "relevant": [],
+      "labeled": false,
+      "note": "전세보증금·임차보증금 관련. 부산 지역 정책과 전국 정책"
+    },
+    {
+      "id": "benefit-03",
+      "type": "BENEFIT_SITUATION",
+      "profile": "chungnam-22",
+      "question": "돈 관리를 어떻게 해야 할지 모르겠어",
+      "relevant": [],
+      "labeled": false,
+      "note": "재무상담·금융교육 정책. 금액 지원이 아닌 서비스형이 정답"
+    },
+    {
+      "id": "benefit-04",
+      "type": "BENEFIT_SITUATION",
+      "profile": "jeonnam-39",
+      "question": "시골 내려가서 농사 지어볼까 하는데 지원받을 수 있는 거 있어?",
+      "relevant": [],
+      "labeled": false,
+      "note": "청년농어업인·귀농귀어 관련. 전남 지역 정책 포함"
+    },
+    {
+      "id": "benefit-05",
+      "type": "BENEFIT_SITUATION",
+      "profile": "seoul-25",
+      "question": "교통비가 많이 나가는데 할인받을 방법 있어?",
+      "relevant": [],
+      "labeled": false,
+      "note": "K-패스 등 교통비 정책"
+    },
+    {
+      "id": "benefit-06",
+      "type": "BENEFIT_SITUATION",
+      "profile": "gyeonggi-34",
+      "question": "돈 좀 모으고 싶은데 나라에서 도와주는 거 있어?",
+      "relevant": [],
+      "labeled": false,
+      "note": "적금·자산형성 정책. 대출 상품이 상위를 차지하면 쏠림으로 기록"
+    },
+    {
+      "id": "benefit-07",
+      "type": "BENEFIT_SITUATION",
+      "profile": "chungnam-22",
+      "question": "마음이 힘든데 상담받을 수 있는 데 있어?",
+      "relevant": [],
+      "labeled": false,
+      "note": "청년마음건강 관련. 충남에서 신청 가능한 것만 정답"
+    },
+    {
+      "id": "region-01",
+      "type": "REGION",
+      "profile": "chungnam-22",
+      "question": "전세보증금반환보증 보증료 지원받을 수 있어?",
+      "relevant": [],
+      "labeled": false,
+      "note": "같은 이름 6건(GYEONGGI/CHUNGNAM/전국/SEJONG/JEJU/GWANGJU,JEONNAM). 충남 프로필이므로 CHUNGNAM과 전국만 정답"
+    },
+    {
+      "id": "region-02",
+      "type": "REGION",
+      "profile": "gyeonggi-34",
+      "question": "전세보증금 반환보증 보증료 돌려받는 거 있잖아",
+      "relevant": [],
+      "labeled": false,
+      "note": "region-01과 같은 정책을 구어체로 물음. 경기 프로필이므로 GYEONGGI와 전국만 정답"
+    },
+    {
+      "id": "region-03",
+      "type": "REGION",
+      "profile": "busan-29",
+      "question": "부산에서 청년이 받을 수 있는 주거 지원 뭐 있어?",
+      "relevant": [],
+      "labeled": false,
+      "note": "지역명을 직접 말한 경우. BUSAN 정책과 전국 정책"
+    },
+    {
+      "id": "region-04",
+      "type": "REGION",
+      "profile": "jeonnam-39",
+      "question": "자립준비청년 자립수당 받을 수 있어?",
+      "relevant": [],
+      "labeled": false,
+      "note": "같은 이름 3건(CHUNGBUK/DAEGU/INCHEON) 모두 전남에서 신청 불가. 조건 필터가 전부 걸러내야 한다"
+    },
+    {
+      "id": "loan-01",
+      "type": "LOAN",
+      "profile": "gyeonggi-34",
+      "question": "창업 자금 빌릴 수 있는 곳 있어?",
+      "relevant": [],
+      "labeled": false,
+      "note": "KINFA 창업 대출이 정답. loanIntent라 쏠림 판정 제외"
+    },
+    {
+      "id": "loan-02",
+      "type": "LOAN",
+      "profile": "busan-29",
+      "question": "신용이 안 좋은데 생활비 대출 가능해?",
+      "relevant": [],
+      "labeled": false,
+      "note": "햇살론·미소금융 등 서민금융 상품"
+    },
+    {
+      "id": "loan-03",
+      "type": "LOAN",
+      "profile": "seoul-25",
+      "question": "전세자금대출 알아보고 있어",
+      "relevant": [],
+      "labeled": false,
+      "note": "주거 관련 대출·보증"
+    },
+    {
+      "id": "unrelated-01",
+      "type": "UNRELATED",
+      "profile": "seoul-25",
+      "question": "자동차 보험료 할인받는 방법",
+      "relevant": [],
+      "labeled": false,
+      "note": "정책 도메인 밖. NO_EVIDENCE 또는 빈 결과 기대"
+    },
+    {
+      "id": "unrelated-02",
+      "type": "UNRELATED",
+      "profile": "seoul-25",
+      "question": "오늘 서울 날씨 어때?",
+      "relevant": [],
+      "labeled": false,
+      "note": "완전 무관. 2026-11-06 운영 실호출에서 NO_EVIDENCE 확인됨"
+    },
+    {
+      "id": "unrelated-03",
+      "type": "UNRELATED",
+      "profile": "busan-29",
+      "question": "맛집 추천해줘",
+      "relevant": [],
+      "labeled": false,
+      "note": "완전 무관"
+    },
+    {
+      "id": "ambiguous-01",
+      "type": "AMBIGUOUS",
+      "profile": "seoul-25",
+      "question": "지원금",
+      "relevant": [],
+      "labeled": false,
+      "note": "한 단어. 상위 결과 분포만 기록"
+    },
+    {
+      "id": "ambiguous-02",
+      "type": "AMBIGUOUS",
+      "profile": "gyeonggi-34",
+      "question": "청년 정책",
+      "relevant": [],
+      "labeled": false,
+      "note": "너무 포괄적. 상위 결과 분포만 기록"
+    },
+    {
+      "id": "ambiguous-03",
+      "type": "AMBIGUOUS",
+      "profile": "ulsan-high",
+      "question": "뭐 받을 수 있어?",
+      "relevant": [],
+      "labeled": false,
+      "note": "소득이 높아 후보가 적은 프로필. 조건 필터 동작 함께 확인"
+    },
+    {
+      "id": "incomplete-01",
+      "type": "AMBIGUOUS",
+      "profile": "incomplete",
+      "question": "월세 지원 정책 알려줘",
+      "relevant": [],
+      "labeled": false,
+      "note": "나이·소득 없음. 후보 0건으로 검색하지 않아야 한다 (답변 평가의 PROFILE_INCOMPLETE)"
+    }
+  ]
+}

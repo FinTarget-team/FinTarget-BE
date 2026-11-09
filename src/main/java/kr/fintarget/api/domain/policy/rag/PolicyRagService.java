@@ -101,14 +101,32 @@ public class PolicyRagService {
         }
     }
 
-    private PolicyRagResult answerFrom(User user, List<Policy> candidates, String question) {
+    /**
+     * 후보 → 검색 → 생성 → 근거 변환. 일일 한도를 차감하지 않는다:
+     * {@link #answer}가 한도를 차감한 뒤 호출하고, 검색부터 답변까지 평가(#184 2단계 b)는 사용자 요청이 아니라서 직접 호출한다.
+     *
+     * @param candidates 사용자 조건에 맞는 후보 정책 ({@link PolicyService#findCandidatePolicies(User, String)})
+     */
+    public PolicyRagResult answerFrom(User user, List<Policy> candidates, String question) {
         List<PolicySearchHit> hits = searchService.searchCandidates(candidates, question);
         if (hits.isEmpty()) {
             log.info("통합 정책 AI 답변 status={} candidates={} hits=0", PolicyRagStatus.NO_EVIDENCE, candidates.size());
             return PolicyRagResult.noEvidence();
         }
+        return answerWithHits(hits, UserProfileSummary.of(user, Year.now(BirthYearValidator.ZONE)), question);
+    }
 
-        UserProfileSummary profile = UserProfileSummary.of(user, Year.now(BirthYearValidator.ZONE));
+    /**
+     * 검색 결과 → 생성 → 근거 변환. 검색 결과를 고정한 답변 평가(#184 2단계 a)도 이 메서드를 호출한다.
+     * 한도를 차감하지 않는다.
+     *
+     * @param hits 검색 결과. 목록 순서가 프롬프트의 근거 번호다 (첫 번째 = [1]). 비어 있으면 AI 호출 없이 NO_EVIDENCE
+     */
+    public PolicyRagResult answerWithHits(List<PolicySearchHit> hits, UserProfileSummary profile, String question) {
+        if (hits.isEmpty()) {
+            log.info("통합 정책 AI 답변 status={} hits=0", PolicyRagStatus.NO_EVIDENCE);
+            return PolicyRagResult.noEvidence();
+        }
         String systemPrompt = prompt.render(hits.stream().map(PolicySearchHit::content).toList(), profile);
         AiTextResult result = aiTextClient.generate(new AiTextRequest(
                 systemPrompt, List.of(AiMessage.user(question)), AiModelTier.DEFAULT, maxOutputTokens));
@@ -128,8 +146,8 @@ public class PolicyRagService {
         }
 
         List<Policy> sources = parsed.cited().stream().map(number -> hits.get(number - 1).policy()).toList();
-        log.info("통합 정책 AI 답변 status={} promptVersion={} model={} candidates={} hits={} cited={} inputTokens={} outputTokens={}",
-                PolicyRagStatus.ANSWERED, prompt.version(), result.model(), candidates.size(), hits.size(), sources.size(),
+        log.info("통합 정책 AI 답변 status={} promptVersion={} model={} hits={} cited={} inputTokens={} outputTokens={}",
+                PolicyRagStatus.ANSWERED, prompt.version(), result.model(), hits.size(), sources.size(),
                 result.inputTokens(), result.outputTokens());
         return PolicyRagResult.answered(answer, sources);
     }
