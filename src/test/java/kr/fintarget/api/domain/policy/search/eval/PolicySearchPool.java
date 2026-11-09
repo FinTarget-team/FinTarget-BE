@@ -21,7 +21,7 @@ import java.util.regex.Pattern;
 /**
  * 정답 라벨링용 풀 (#184). 문항마다 후보 정책 중 두 방식의 상위 결과를 합쳐, 사람이 이 목록 안에서 정답을 고르게 한다.
  * <ul>
- *   <li>벡터: 하한 없는 운영 검색 상위 {@value #VECTOR_TOP}건 ({@link SearchConfig#WIDE})</li>
+ *   <li>벡터: 하한 없는 운영 검색 상위 N건 (기본 {@value #VECTOR_TOP}, {@value #ENV_VECTOR_TOP}로 조정)</li>
  *   <li>키워드: 질문 낱말이 정책 원문(청크 전체)에 들어 있는 정도 상위 {@value #KEYWORD_TOP}건. 벡터 검색이 놓친 정답을 찾기 위한 것</li>
  * </ul>
  * 두 방식 모두 프로필 후보 정책 안에서만 찾는다 (정답은 그 프로필이 신청할 수 있는 정책만이라서).
@@ -47,12 +47,14 @@ public final class PolicySearchPool {
     private final PolicySearchEvalRunner runner;
     private final Map<PolicyKey, String> texts = new HashMap<>();
     private final Map<PolicyKey, String> firstChunks = new HashMap<>();
+    private final int chunkCount;
 
     /**
      * @param snapshot 키워드 검색 원문 (임베딩 없는 청크도 포함)
      */
     public PolicySearchPool(PolicySearchEvalRunner runner, PolicySearchSnapshot snapshot) {
         this.runner = runner;
+        this.chunkCount = snapshot.chunks().size();
         Map<UUID, PolicyKey> keyBySnapshotId = new HashMap<>();
         for (SnapshotPolicy policy : snapshot.policies()) {
             keyBySnapshotId.put(policy.policyId(), policy.key());
@@ -107,7 +109,11 @@ public final class PolicySearchPool {
         candidates.forEach(policy -> candidateByKey.put(runner.loaded().keyOf(policy), policy));
 
         Map<PolicyKey, Item.Builder> items = new LinkedHashMap<>();
-        List<PolicySearchHit> hits = runner.search(c, SearchConfig.WIDE);
+        // SearchConfig.WIDE(k=20)를 그대로 쓰면 vectorTop을 키워도 검색이 20건에서 끊긴다.
+        // 청크 조회 상한(k×배수)에 걸리지 않도록 배수는 전체 청크 수 이상으로 둔다
+        SearchConfig config = new SearchConfig(Math.max(1, vectorTop), SearchConfig.WIDE.maxDistance(),
+                Math.max(SearchConfig.WIDE.chunkMultiplier(), chunkCount));
+        List<PolicySearchHit> hits = runner.search(c, config);
         for (int i = 0; i < Math.min(vectorTop, hits.size()); i++) {
             PolicySearchHit hit = hits.get(i);
             PolicyKey key = runner.loaded().keyOf(hit.policy());
