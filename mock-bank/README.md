@@ -5,7 +5,18 @@
 
 거래가 생기면 먼저 mock-bank에 저장한 뒤, 핀타겟 메인 서버의 웹훅(`POST /api/webhooks/bank-transactions`)으로 보냅니다.
 
-## 실행
+## 운영 서버에서 사용 (팀 공용)
+
+- 주소: http://54.180.93.46:8081 — 브라우저에서 열면 Basic Auth 로그인 창이 뜹니다. 계정은 팀 내부에서 따로 전달합니다.
+- 운영 메인 서버(http://54.180.93.46:8080)와 연결되어 있어, 결제를 만들면 운영 서버의 해당 사용자 지출로 바로 저장됩니다.
+- 운영 서버에서는 메인 서버와 같은 Docker Compose(`mock-bank` 서비스)로 실행되며, dev에 머지되면 `scripts/deploy.sh`가 함께 배포합니다.
+  - 웹훅은 Docker 내부 주소(`http://app:8080`)로 보내고, 키는 서버 `.env`의 `BANK_WEBHOOK_KEY`를 그대로 씁니다.
+  - 화면 계정은 서버 `.env`의 `MOCK_BANK_USERNAME`, `MOCK_BANK_PASSWORD`입니다. 비어 있으면 배포 스크립트가 mock-bank를 띄우지 않습니다.
+  - 거래 기록은 Docker 볼륨(`mock-bank-data`)에 저장되어 재배포해도 유지됩니다.
+    초기화하려면 서버에서 `docker compose stop mock-bank && docker compose rm -f mock-bank && docker volume rm fintarget-be_mock-bank-data` 후 배포 스크립트를 다시 실행합니다.
+- HTTPS가 아니어서 로그인 비밀번호가 암호화되지 않은 채 전송됩니다. 시연용으로만 쓰고, 다른 곳에서 쓰는 비밀번호를 넣지 마세요.
+
+## 로컬 실행
 
 ```bash
 cd mock-bank
@@ -60,8 +71,9 @@ FINTARGET_BASE_URL=<메인 서버 주소> FINTARGET_WEBHOOK_KEY=<웹훅 키> \
 ## 시연 순서 (이상 지출 넛지)
 
 1. **지출 데이터가 없는 시연 전용 계정을 사용할 것** (메인 서버는 이번 달 이전 전체 기간으로 평균을 내므로, 다른 지출이 섞이면 넛지가 뜨지 않을 수 있음)
-2. 핀타겟 앱에서 그 계정의 사용자 UUID를 확인해 화면에 입력합니다.
-3. `FINTARGET_BASE_URL`을 그 계정이 있는 메인 서버로, `FINTARGET_WEBHOOK_KEY`를 그 서버의 키로 설정해 실행합니다.
+2. 그 계정의 사용자 UUID(`GET /users/me`의 `userId`)를 확인해 화면에 입력합니다.
+3. 운영 서버 계정이면 운영 mock-bank(http://54.180.93.46:8081)를 쓰면 됩니다.
+   로컬로 실행한다면 `FINTARGET_BASE_URL`을 그 계정이 있는 메인 서버로, `FINTARGET_WEBHOOK_KEY`를 그 서버의 키로 설정해 실행합니다.
 4. ① 기준선 생성 → ② 랜덤 거래 10건 → ③ 식비 급증 순서로 누르고, 결과 메시지에 실패 없이 "저장 n건"이 나오는지 확인합니다.
    실패가 있으면 위쪽 빨간 메시지의 사유를 해결한 뒤 "미전송·실패 거래 재전송"을 누릅니다.
 5. 화면의 **이번 달 넛지 예상** 표에서 넛지 대상이 식비 하나뿐인지 확인합니다.
