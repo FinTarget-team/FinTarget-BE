@@ -1,26 +1,211 @@
 package kr.fintarget.api.domain.user;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import kr.fintarget.api.common.ApiResponse;
 import kr.fintarget.api.domain.user.dto.UpdateProfileRequest;
 import kr.fintarget.api.domain.user.dto.UserProfileResponse;
 import kr.fintarget.api.domain.user.service.UserService;
+import kr.fintarget.api.security.BlacklistedToken;
+import kr.fintarget.api.security.BlacklistedTokenRepository;
+import kr.fintarget.api.security.JwtUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.Map;
+
+@Tag(name = "사용자", description = "회원 프로필 조회/수정 및 회원 탈퇴 API")
+@SecurityRequirement(name = "bearerAuth")
 @RestController
 @RequestMapping("/users")
 @RequiredArgsConstructor
 public class UserController {
     private final UserService userService;
+    private final JwtUtil jwtUtil;
+    private final BlacklistedTokenRepository blacklistedTokenRepository;
+
+    @Operation(
+            summary = "내 프로필 조회",
+            description = "액세스 토큰으로 식별되는 사용자의 프로필 정보를 조회합니다."
+    )
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "200",
+                    description = "프로필 조회 성공",
+                    useReturnTypeSchema = true
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "400",
+                    description = "잘못된 요청",
+                    content = @Content(examples = @ExampleObject(
+                            name = "사용자를 찾을 수 없음",
+                            value = """
+                                    {"status": 400, "message": "사용자를 찾을 수 없습니다.", "data": null}
+                                    """
+                    ))
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "401",
+                    description = "인증 실패",
+                    content = @Content(examples = @ExampleObject(
+                            name = "인증 필요",
+                            value = """
+                                    {"status": 401, "message": "인증이 필요합니다. 토큰을 확인해주세요.", "data": null}
+                                    """
+                    ))
+            )
+    })
     @GetMapping("/me")
     public ResponseEntity<ApiResponse<UserProfileResponse>> getProfile(
             @AuthenticationPrincipal String userId) {
         return ResponseEntity.ok(ApiResponse.ok(userService.getProfile(userId)));
     }
+
+    @Operation(
+            summary = "내 프로필 수정",
+            description = "이름/지역/출생연도/고용형태/소득구간/주택 보유 여부를 수정합니다. 요청 필드 중 null인 값은 기존 값을 유지하고 변경하지 않습니다. " +
+                    "이메일은 소셜 로그인(카카오·네이버)에서 받은 값으로만 저장되어 수정할 수 없으며, 요청에 email을 보내도 무시됩니다. " +
+                    "지역/연령대/고용형태/소득구간에 허용되지 않은 코드(빈 문자열 포함)를 보내면 400으로 거부됩니다. " +
+                    "이름은 앞뒤 공백을 제거한 뒤 저장되며, 공백만 있거나 빈 문자열이거나 20자를 초과하면 400으로 거부됩니다."
+    )
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "200",
+                    description = "프로필 수정 성공",
+                    useReturnTypeSchema = true
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "400",
+                    description = "잘못된 요청",
+                    content = @Content(examples = {
+                            @ExampleObject(
+                                    name = "사용자를 찾을 수 없음",
+                                    value = """
+                                            {"status": 400, "message": "사용자를 찾을 수 없습니다.", "data": null}
+                                            """
+                            ),
+                            @ExampleObject(
+                                    name = "이름이 비어 있음",
+                                    value = """
+                                            {"status": 400, "message": "이름은 비어 있을 수 없습니다", "data": null}
+                                            """
+                            ),
+                            @ExampleObject(
+                                    name = "이름이 20자 초과",
+                                    value = """
+                                            {"status": 400, "message": "이름은 20자 이하여야 합니다", "data": null}
+                                            """
+                            ),
+                            @ExampleObject(
+                                    name = "유효하지 않은 지역 코드",
+                                    value = """
+                                            {"status": 400, "message": "유효하지 않은 지역 코드입니다", "data": null}
+                                            """
+                            ),
+                            @ExampleObject(
+                                    name = "유효하지 않은 나이 코드",
+                                    value = """
+                                            {"status": 400, "message": "유효하지 않은 나이 코드입니다", "data": null}
+                                            """
+                            ),
+                            @ExampleObject(
+                                    name = "유효하지 않은 고용 형태 코드",
+                                    value = """
+                                            {"status": 400, "message": "유효하지 않은 고용 형태 코드입니다", "data": null}
+                                            """
+                            ),
+                            @ExampleObject(
+                                    name = "유효하지 않은 소득 코드",
+                                    value = """
+                                            {"status": 400, "message": "유효하지 않은 소득 코드입니다", "data": null}
+                                            """
+                            )
+                    })
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "401",
+                    description = "인증 실패",
+                    content = @Content(examples = @ExampleObject(
+                            name = "인증 필요",
+                            value = """
+                                    {"status": 401, "message": "인증이 필요합니다. 토큰을 확인해주세요.", "data": null}
+                                    """
+                    ))
+            )
+    })
     @PutMapping("/me/profile")
     public ResponseEntity<ApiResponse<UserProfileResponse>> updateProfile(
             @AuthenticationPrincipal String userId,
             @RequestBody UpdateProfileRequest request) {
         return ResponseEntity.ok(ApiResponse.ok(userService.updateProfile(userId, request)));
+    }
+
+    @Operation(
+            summary = "회원 탈퇴",
+            description = "사용자와 연관된 목표, 지출, 저장한 정책, 시뮬레이션, 온보딩 답변, 넛지, AI 대화와 사용량 데이터를 모두 삭제합니다. " +
+                    "Authorization 헤더의 액세스 토큰과 바디의 리프레시 토큰({\"refreshToken\": \"...\"}, 선택)은 블랙리스트에 등록되어 즉시 무효화됩니다. " +
+                    "탈퇴한 사용자의 리프레시 토큰은 바디에 보내지 않았더라도 재발급(/auth/token/refresh)에서 401로 거부됩니다. " +
+                    "이 작업은 되돌릴 수 없습니다."
+    )
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "200",
+                    description = "탈퇴 처리 성공, data는 항상 null",
+                    useReturnTypeSchema = true
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "400",
+                    description = "잘못된 요청",
+                    content = @Content(examples = @ExampleObject(
+                            name = "사용자를 찾을 수 없음",
+                            value = """
+                                    {"status": 400, "message": "사용자를 찾을 수 없습니다.", "data": null}
+                                    """
+                    ))
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "401",
+                    description = "인증 실패",
+                    content = @Content(examples = @ExampleObject(
+                            name = "인증 필요",
+                            value = """
+                                    {"status": 401, "message": "인증이 필요합니다. 토큰을 확인해주세요.", "data": null}
+                                    """
+                    ))
+            )
+    })
+    @DeleteMapping("/me")
+    public ResponseEntity<ApiResponse<?>> withdraw(
+            @AuthenticationPrincipal String userId,
+            @RequestHeader(value = "Authorization", required = false) String authHeader,
+            @RequestBody(required = false) Map<String, String> body) {
+
+        userService.withdraw(userId);
+
+        if (authHeader != null && authHeader.startsWith("Bearer ")) {
+            blacklistOwnToken(authHeader.substring(7), userId);
+        }
+        if (body != null && body.get("refreshToken") != null) {
+            blacklistOwnToken(body.get("refreshToken"), userId);
+        }
+
+        return ResponseEntity.ok(ApiResponse.ok(null));
+    }
+
+    // 탈퇴한 본인의 토큰만 무효화한다. 파싱에 실패한 토큰은 로그아웃과 같이 조용히 무시한다
+    private void blacklistOwnToken(String token, String userId) {
+        try {
+            String jti = jwtUtil.getJti(token);
+            if (jti == null || !userId.equals(jwtUtil.getUserId(token))) return;
+            if (!blacklistedTokenRepository.existsById(jti)) {
+                blacklistedTokenRepository.save(new BlacklistedToken(jti, jwtUtil.getExpirationTime(token)));
+            }
+        } catch (Exception ignored) {
+        }
     }
 }

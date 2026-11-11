@@ -1,0 +1,86 @@
+services:
+  db:
+    # pgvector 확장이 포함된 postgres 16 이미지 (#181). 데이터 형식이 postgres:16과 같아 기존 볼륨을 그대로 쓴다.
+    # 기존 볼륨에는 init 스크립트가 돌지 않으므로 확장·테이블은 docs/sql/181_policy_chunk_embedding.sql을 직접 실행한다
+    image: pgvector/pgvector:pg16
+    container_name: fintarget-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-fintarget}
+      POSTGRES_USER: ${DB_USERNAME:-moon}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-}
+    # 호스트(서버) 안에서만 접속 가능하도록 127.0.0.1에 바인딩. 앱은 Docker 네트워크의 서비스 이름(db)으로 접속한다
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-moon} -d ${DB_NAME:-fintarget}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7
+    container_name: fintarget-redis
+    restart: unless-stopped
+    # 비밀번호가 없으므로 외부에 열지 않는다. 앱은 Docker 네트워크의 서비스 이름(redis)으로 접속한다
+    ports:
+      - "127.0.0.1:6379:6379"
+
+  app:
+    build: .
+    container_name: fintarget-app
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    ports:
+      - "8080:8080"
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-fintarget}
+      DB_USERNAME: ${DB_USERNAME:-moon}
+      DB_PASSWORD: ${DB_PASSWORD:-}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      KAKAO_CLIENT_ID: ${KAKAO_CLIENT_ID:-}
+      KAKAO_CLIENT_SECRET: ${KAKAO_CLIENT_SECRET:-}
+      JWT_SECRET: ${JWT_SECRET:-}
+      YOUTH_CENTER_API_KEY: ${YOUTH_CENTER_API_KEY:-}
+      YOUTH_CENTER_BASE_URL: ${YOUTH_CENTER_BASE_URL:-}
+      KINFA_API_KEY: ${KINFA_API_KEY:-}
+      KINFA_BASE_URL: ${KINFA_BASE_URL:-}
+      ADMIN_API_KEY: ${ADMIN_API_KEY:-}
+      BANK_WEBHOOK_KEY: ${BANK_WEBHOOK_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL_DEFAULT: ${OPENAI_MODEL_DEFAULT:-}
+      OPENAI_EMBEDDING_MODEL: ${OPENAI_EMBEDDING_MODEL:-}
+
+  # 시연용 가상 금융 서버 (#204). 브라우저에서 http://<서버 IP>:8081 로 접속하고 Basic Auth로 로그인한다.
+  # 웹훅은 Docker 네트워크의 서비스 이름(app)으로 메인 서버에 바로 보내고, 키는 메인 서버와 같은 BANK_WEBHOOK_KEY를 쓴다.
+  # 계정이 비어 있으면 앱이 시작되지 않으므로, scripts/deploy.sh는 .env에 계정이 없으면 이 서비스를 띄우지 않는다
+  mock-bank:
+    build: ./mock-bank
+    container_name: fintarget-mock-bank
+    restart: unless-stopped
+    depends_on:
+      app:
+        condition: service_started
+    ports:
+      - "8081:8081"
+    environment:
+      MOCK_BANK_USERNAME: ${MOCK_BANK_USERNAME:-}
+      MOCK_BANK_PASSWORD: ${MOCK_BANK_PASSWORD:-}
+      FINTARGET_BASE_URL: http://app:8080
+      FINTARGET_WEBHOOK_KEY: ${BANK_WEBHOOK_KEY:-}
+    # 거래 기록(H2 파일 DB)을 재배포해도 유지한다
+    volumes:
+      - mock-bank-data:/app/data
+
+volumes:
+  db-data:
+  mock-bank-data:

@@ -1,0 +1,27 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: mock-bank
+  datasource:
+    url: jdbc:h2:file:./data/mock-bank
+    username: sa
+    password:
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+
+# Basic Auth 계정. 기본값이 없으므로 환경변수가 없으면 앱이 시작되지 않는다
+mock-bank:
+  auth:
+    username: ${MOCK_BANK_USERNAME}
+    password: ${MOCK_BANK_PASSWORD}
+
+# 핀타겟 메인 서버 웹훅. 키는 기본값이 없으므로 환경변수가 없으면 앱이 시작되지 않는다
+fintarget:
+  base-url: ${FINTARGET_BASE_URL:http://localhost:8080}
+  webhook-key: ${FINTARGET_WEBHOOK_KEY}
+  connect-timeout: 3s
+  read-timeout: 10s

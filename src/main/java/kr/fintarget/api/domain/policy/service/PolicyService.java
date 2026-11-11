@@ -1,0 +1,130 @@
+package kr.fintarget.api.domain.policy.service;
+
+import kr.fintarget.api.domain.policy.dto.PolicyResponse;
+import kr.fintarget.api.domain.policy.dto.UserPolicyCreateRequest;
+import kr.fintarget.api.domain.policy.dto.UserPolicyResponse;
+import kr.fintarget.api.domain.policy.entity.Policy;
+import kr.fintarget.api.domain.policy.entity.PolicyType;
+import kr.fintarget.api.domain.policy.entity.UserPolicy;
+import kr.fintarget.api.domain.policy.repository.PolicyRepository;
+import kr.fintarget.api.domain.policy.repository.UserPolicyRepository;
+import kr.fintarget.api.domain.user.entity.User;
+import kr.fintarget.api.domain.user.repository.UserRepository;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import java.util.List;
+import java.util.UUID;
+import java.util.stream.Collectors;
+
+@Service
+@RequiredArgsConstructor
+public class PolicyService {
+
+    private final PolicyRepository policyRepository;
+    private final UserPolicyRepository userPolicyRepository;
+    private final UserRepository userRepository;
+
+    @Transactional(readOnly = true)
+    public List<PolicyResponse> getMatchingPolicies(String userId, String policyType) {
+        return findCandidatePolicies(userId, policyType)
+                .stream()
+                .map(PolicyResponse::from)
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * 사용자 조건(나이·소득·유형·지역)에 맞는 정책 목록. 맞춤 정책 목록과 정책 검색(#182)이 같은 조건을 쓰도록 분리했다.
+     * 나이나 소득을 모르는 사용자는 맞춤 여부를 판단할 수 없어 빈 목록이다.
+     */
+    @Transactional(readOnly = true)
+    public List<Policy> findCandidatePolicies(String userId, String policyType) {
+        return findCandidatePolicies(findUser(userId), policyType);
+    }
+
+    /**
+     * 이미 조회한 사용자로 후보 정책을 찾는다. 통합 AI 답변(#183)이 조건 정보 부족 여부를 먼저 판단하느라 사용자를 읽어 둔 경우에 쓴다.
+     */
+    @Transactional(readOnly = true)
+    public List<Policy> findCandidatePolicies(User user, String policyType) {
+        if (!hasMatchingProfile(user)) {
+            return List.of();
+        }
+        User.AgeRange ageRange = user.ageRange();
+
+        // 지역은 조회 후 거른다. 목록 API가 페이지네이션 없이 전체를 반환하므로 결과는 DB에서 거르는 것과 같다.
+        // 페이지네이션을 도입하면 페이지 크기·전체 건수가 어긋나므로 그때는 지역을 쿼리 조건으로 옮겨야 한다 (예: policy_region 정규화)
+        return policyRepository.findMatchingPolicies(ageRange.lower(), ageRange.upper(), user.getIncome(), parsePolicyType(policyType))
+                .stream()
+                .filter(policy -> policy.appliesToRegion(user.getRegion()))
+                .toList();
+    }
+
+    /**
+     * 맞춤 조건을 판단할 수 있는 사용자인지 (나이 구간과 소득이 모두 있음). 맞춤 정책 목록, 정책 검색(#182), 통합 AI 답변(#183)이 같은 기준을 쓴다.
+     */
+    public static boolean hasMatchingProfile(User user) {
+        return user.ageRange() != null && user.getIncome() != null;
+    }
+
+    @Transactional(readOnly = true)
+    public User findUser(String userId) {
+        return userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
+    }
+
+    private PolicyType parsePolicyType(String policyType) {
+        if (policyType == null || policyType.isBlank()) {
+            return null;
+        }
+        try {
+            return PolicyType.valueOf(policyType.trim().toUpperCase());
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("유효하지 않은 정책 유형입니다: " + policyType);
+        }
+    }
+
+    @Transactional
+    public UserPolicyResponse createUserPolicy(UUID userId, UserPolicyCreateRequest request) {
+        UserPolicy.UserPolicyStatus status = parseUserPolicyStatus(request.status());
+        Policy policy = policyRepository.findById(request.policyId())
+                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 정책입니다."));
+
+        userPolicyRepository.findByUserIdAndPolicyPolicyId(userId, request.policyId())
+                .ifPresent(up -> { throw new IllegalStateException("이미 등록된 정책입니다."); });
+
+        UserPolicy userPolicy = new UserPolicy(
+                userId,
+                policy,
+                status
+        );
+
+        return UserPolicyResponse.from(userPolicyRepository.save(userPolicy));
+    }
+
+    @Transactional(readOnly = true)
+    public List<UserPolicyResponse> getUserPolicies(UUID userId) {
+        return userPolicyRepository.findByUserId(userId)
+                .stream()
+                .map(UserPolicyResponse::from)
+                .collect(Collectors.toList());
+    }
+
+    @Transactional
+    public void deleteUserPolicy(UUID userId, UUID userPolicyId) {
+        // 본인 소유 조건으로 조회해, 다른 사용자의 정책이면 없는 정책과 같은 응답을 준다 (존재 여부를 드러내지 않음)
+        UserPolicy userPolicy = userPolicyRepository.findByUserPolicyIdAndUserId(userPolicyId, userId)
+                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 정책입니다."));
+
+        userPolicyRepository.delete(userPolicy);
+    }
+
+    private UserPolicy.UserPolicyStatus parseUserPolicyStatus(String status) {
+        try {
+            return UserPolicy.UserPolicyStatus.valueOf(status.trim().toUpperCase());
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("유효하지 않은 정책 상태입니다. (APPLIED, INTEREST, ABANDONED 중 하나)");
+        }
+    }
+}
+

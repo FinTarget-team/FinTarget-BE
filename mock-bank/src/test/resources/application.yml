@@ -1,0 +1,16 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:mock-bank-test;DB_CLOSE_DELAY=-1
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    open-in-view: false
+
+mock-bank:
+  auth:
+    username: test-operator
+    password: test-password
+
+fintarget:
+  base-url: http://localhost:18080
+  webhook-key: test-webhook-key

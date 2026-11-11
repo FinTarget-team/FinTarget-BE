@@ -1,0 +1,73 @@
+# PR과 dev 푸시마다 메인 서버와 mock-bank 테스트를 실행한다.
+# 테스트는 src/test/resources/application.yml(H2, 테스트용 값)을 쓰므로 비밀값이 필요 없다.
+name: CI
+
+on:
+  pull_request:
+    branches: [dev, main]
+  push:
+    branches: [dev]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  server-test:
+    name: 메인 서버 테스트
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: 테스트
+        run: ./gradlew test --no-daemon
+
+      - name: 실패 시 테스트 리포트 업로드
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: server-test-report
+          path: build/reports/tests/test
+          retention-days: 7
+
+  mock-bank-test:
+    name: mock-bank 테스트
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: mock-bank
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          build-root-directory: mock-bank
+
+      - name: 테스트
+        run: ./gradlew test --no-daemon
+
+      - name: 실패 시 테스트 리포트 업로드
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mock-bank-test-report
+          path: mock-bank/build/reports/tests/test
+          retention-days: 7

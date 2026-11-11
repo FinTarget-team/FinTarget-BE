@@ -1,0 +1,184 @@
+package kr.fintarget.api.domain.ai.chat.service;
+
+import kr.fintarget.api.domain.policy.entity.Policy;
+import kr.fintarget.api.domain.policy.entity.PolicyText;
+import kr.fintarget.api.domain.policy.entity.PolicyType;
+import org.junit.jupiter.api.Test;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+class PolicyDocumentTest {
+
+    private static final String LONG_SUPPORT = "월 최대 20만원, 최대 12개월 동안 월세를 지원합니다. ".repeat(3);
+
+    private static Policy youthCenter(String description, PolicyText text) {
+        return Policy.create("청년 월세 지원", description, 19, 34, null, null, PolicyType.HOUSING,
+                "SEOUL,GYEONGGI", "P-1", "YOUTH_CENTER", text);
+    }
+
+    @Test
+    void 온통청년_원문을_라벨_블록으로_순서대로_조립한다() {
+        PolicyText text = PolicyText.builder()
+                .supportContent(LONG_SUPPORT)
+                .eligibilityDetail("무주택 청년")
+                .requiredDocuments("임대차계약서")
+                .applyPeriod("20260101 ~ 20261231")
+                .referenceUrl("https://example.com/ref")
+                .build();
+
+        PolicyDocument document = PolicyDocument.of(youthCenter("청년 월세를 지원하는 사업", text));
+
+        assertThat(document.text())
+                .startsWith("정책명: 청년 월세 지원")
+                .contains("제공 기관 데이터: 온통청년", "신청 가능 지역: 서울, 경기", "나이 범위(정형 값): 만 19세 ~ 만 34세",
+                        "[정책 설명]\n청년 월세를 지원하는 사업", "[자격 조건]\n무주택 청년")
+                .doesNotContain("[소득 조건]", "[심사 방법]", "[참고 링크]", "https://");
+        assertThat(document.text().indexOf("[지원 내용]")).isLessThan(document.text().indexOf("[제출 서류]"));
+        assertThat(document.text().indexOf("[제출 서류]")).isLessThan(document.text().indexOf("[신청 기간]"));
+        assertThat(document.sourceLimited()).isFalse();
+    }
+
+    @Test
+    void KINFA는_description을_지원_대상_상세_조건으로_붙인다() {
+        Policy policy = Policy.create("햇살론", "연소득 3,500만원 이하", null, null, null, null, PolicyType.FINANCE_WELFARE,
+                null, "K-1", "KINFA", PolicyText.builder().supportContent(LONG_SUPPORT).build());
+
+        PolicyDocument document = PolicyDocument.of(policy);
+
+        assertThat(document.text()).contains("서민금융진흥원(KINFA)", "신청 가능 지역: 전국",
+                "[지원 대상 상세 조건]\n연소득 3,500만원 이하").doesNotContain("[정책 설명]", "나이 범위");
+    }
+
+    @Test
+    void 원문_컬럼이_모두_비면_description만으로_조립하고_원문_부족으로_표시한다() {
+        // #113 배포 전에 마지막으로 동기화되고 신청 기록 때문에 남은 정책
+        PolicyDocument document = PolicyDocument.of(youthCenter("아주 긴 설명 ".repeat(30), null));
+
+        assertThat(document.text()).contains("[정책 설명]");
+        assertThat(document.sourceLimited()).isTrue();
+    }
+
+    @Test
+    void 근거_텍스트_합계가_100자_미만이면_원문_부족으로_표시한다() {
+        PolicyText shortText = PolicyText.builder()
+                .supportContent("월세 지원")
+                .referenceUrl("https://example.com/" + "a".repeat(200)) // 링크 길이는 판정에서 뺀다
+                .build();
+
+        assertThat(PolicyDocument.of(youthCenter("짧은 설명", shortText)).sourceLimited()).isTrue();
+    }
+
+    @Test
+    void 링크_컬럼은_넣지_않고_원문_본문의_URL도_지운다() {
+        PolicyText text = PolicyText.builder()
+                .supportContent(LONG_SUPPORT)
+                .applyMethod("온라인 신청(https://apply.example.com) 후 서류 제출")
+                .contactInfo("문의처: 1588-0000\n관련 사이트: https://www.example.go.kr")
+                .etcNote("https://only-url.example.com")
+                .referenceUrl("https://example.com/ref")
+                .applyUrl("https://apply.example.com")
+                .build();
+
+        PolicyDocument document = PolicyDocument.of(youthCenter("청년 월세를 지원하는 사업", text));
+
+        assertThat(document.text())
+                .contains("[신청 방법]\n온라인 신청 후 서류 제출", "[문의처]\n문의처: 1588-0000")
+                .doesNotContain("http", "www.", "관련 사이트", "[기타 참고 사항]", "[참고 링크]", "[신청 링크]");
+    }
+
+    @Test
+    void 링크_컬럼만_있어도_원문_컬럼이_있는_것으로_본다() {
+        // 링크를 프롬프트에서 빼기 전(#147)과 원문 부족 판정이 같아야 한다
+        PolicyText linksOnly = PolicyText.builder().applyUrl("https://apply.example.com").build();
+
+        assertThat(PolicyDocument.of(youthCenter("나".repeat(100), linksOnly)).sourceLimited()).isFalse();
+    }
+
+    // 섹션 정의를 PolicySections로 옮긴 뒤에도(#180) 단건 AI 질문에 넣는 문서가 한 글자도 바뀌지 않아야 한다
+    @Test
+    void 온통청년_문서_전체_결과가_고정된_형식과_같다() {
+        PolicyText text = PolicyText.builder()
+                .supportContent("월 최대 20만원 지원")
+                .eligibilityDetail("무주택 청년")
+                .applyMethod("온라인 신청(https://apply.example.com) 후 서류 제출")
+                .requiredDocuments("임대차계약서")
+                .applyPeriod("20260101 ~ 20261231")
+                .contactInfo("문의처: 1588-0000\n관련 사이트: https://www.example.go.kr")
+                .referenceUrl("https://example.com/ref")
+                .build();
+
+        PolicyDocument document = PolicyDocument.of(youthCenter("청년 월세를 지원하는 사업", text));
+
+        assertThat(document.text()).isEqualTo("""
+                정책명: 청년 월세 지원
+                제공 기관 데이터: 온통청년
+                신청 가능 지역: 서울, 경기
+                나이 범위(정형 값): 만 19세 ~ 만 34세
+
+                [정책 설명]
+                청년 월세를 지원하는 사업
+
+                [지원 내용]
+                월 최대 20만원 지원
+
+                [자격 조건]
+                무주택 청년
+
+                [신청 방법]
+                온라인 신청 후 서류 제출
+
+                [제출 서류]
+                임대차계약서
+
+                [신청 기간]
+                20260101 ~ 20261231
+
+                [문의처]
+                문의처: 1588-0000""");
+        assertThat(document.sourceLimited()).isTrue();
+    }
+
+    @Test
+    void KINFA_문서_전체_결과가_고정된_형식과_같다() {
+        Policy policy = Policy.create("햇살론", "연소득 3,500만원 이하", null, null, null, null, PolicyType.FINANCE_WELFARE,
+                null, "K-1", "KINFA", PolicyText.builder().supportContent("대출 한도: 1000만원\n금리: 연 9%").build());
+
+        assertThat(PolicyDocument.of(policy).text()).isEqualTo("""
+                정책명: 햇살론
+                제공 기관 데이터: 서민금융진흥원(KINFA)
+                신청 가능 지역: 전국
+
+                [지원 대상 상세 조건]
+                연소득 3,500만원 이하
+
+                [지원 내용]
+                대출 한도: 1000만원
+                금리: 연 9%""");
+    }
+
+    @Test
+    void 원문_컬럼이_없는_정책_문서_전체_결과가_고정된_형식과_같다() {
+        Policy policy = Policy.create("짧은 정책", "짧은 설명", 19, null, null, null, PolicyType.ETC,
+                null, "P-2", "YOUTH_CENTER", null);
+
+        PolicyDocument document = PolicyDocument.of(policy);
+
+        assertThat(document.text()).isEqualTo("""
+                정책명: 짧은 정책
+                제공 기관 데이터: 온통청년
+                신청 가능 지역: 전국
+                나이 범위(정형 값): 만 19세 이상
+
+                [정책 설명]
+                짧은 설명""");
+        assertThat(document.sourceLimited()).isTrue();
+    }
+
+    @Test
+    void 근거_텍스트_합계가_100자_이상이면_원문_부족이_아니다() {
+        PolicyText text = PolicyText.builder().supportContent("가".repeat(90)).build();
+
+        assertThat(PolicyDocument.of(youthCenter("나".repeat(10), text)).sourceLimited()).isFalse();
+        assertThat(PolicyDocument.of(youthCenter("나".repeat(9), text)).sourceLimited()).isTrue();
+    }
+}

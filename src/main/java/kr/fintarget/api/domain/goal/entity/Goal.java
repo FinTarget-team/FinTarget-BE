@@ -1,0 +1,121 @@
+package kr.fintarget.api.domain.goal.entity;
+
+import jakarta.persistence.*;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.Objects;
+import java.util.UUID;
+
+@Entity
+@Table(name = "goal")
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
+public class Goal {
+
+    // 목표 금액 상한(50억 원). 오입력(0 추가 등) 방지 목적의 안전장치
+    public static final long MAX_TARGET_AMOUNT = 5_000_000_000L;
+    // 목표 제목 최대 길이. DB 컬럼(255자)을 넘는 값이 500으로 끝나지 않도록 요청 단계에서 막는다 (#191)
+    public static final int MAX_TITLE_LENGTH = 30;
+    static final String DEFAULT_TITLE = "내 목표";
+    static final int DEFAULT_DEADLINE_YEARS = 1;
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.UUID)
+    @Column(name = "goal_id", columnDefinition = "uuid")
+    private UUID goalId;
+
+    // 목표를 다시 정하면 이전 목표가 ARCHIVED로 남으므로 사용자당 여러 줄이 될 수 있다 (#202).
+    // 진행 중(ACTIVE)인 목표가 사용자당 1개라는 규칙은 운영 DB의 부분 유니크 인덱스로 지킨다 (docs/sql/202_goal_history.sql)
+    @Column(name = "user_id", nullable = false, columnDefinition = "uuid")
+    private UUID userId;
+
+    @Column(name = "title", nullable = false)
+    private String title;
+
+    @Column(name = "target_amount", nullable = false)
+    private Long targetAmount;
+
+    @Column(name = "current_amount", nullable = false)
+    private Long currentAmount;
+
+    @Column(name = "deadline", nullable = false)
+    private LocalDate deadline;
+
+    // 온보딩 자동 생성 시 임의로 채운 마감일인지 여부. 사용자가 마감일을 바꾸면 false
+    @Column(name = "deadline_defaulted", nullable = false, columnDefinition = "boolean default false")
+    private boolean deadlineDefaulted;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false)
+    private GoalStatus status;
+
+    @CreationTimestamp
+    @Column(name = "created_at", updatable = false)
+    private LocalDateTime createdAt;
+
+    @UpdateTimestamp
+    @Column(name = "updated_at")
+    private LocalDateTime updatedAt;
+
+    public enum GoalStatus {
+        // ARCHIVED: 목표 금액·마감일을 다시 정해 새 목표로 바뀐 이전 목표 (#202)
+        ACTIVE, COMPLETED, ABANDONED, ARCHIVED
+    }
+
+    public Goal(UUID userId, String title, Long targetAmount,
+                Long currentAmount, LocalDate deadline) {
+        this.userId = userId;
+        this.title = title;
+        this.targetAmount = targetAmount;
+        this.currentAmount = currentAmount;
+        this.deadline = deadline;
+        this.status = GoalStatus.ACTIVE;
+        this.deadlineDefaulted = false;
+    }
+
+    // 온보딩 마지막 단계(목표 금액, 현재 7단계)에서 받은 목표 금액만으로 목표를 만든다. 나머지 값은 Goal 화면에서 수정
+    public static Goal createFromOnboarding(UUID userId, long targetAmount) {
+        Goal goal = new Goal(userId, DEFAULT_TITLE, targetAmount, 0L,
+                LocalDate.now().plusYears(DEFAULT_DEADLINE_YEARS));
+        goal.deadlineDefaulted = true;
+        return goal;
+    }
+
+    public static void validateTargetAmount(Long targetAmount) {
+        if (targetAmount == null || targetAmount <= 0) {
+            throw new IllegalArgumentException("목표 금액은 0보다 커야 합니다");
+        }
+        if (targetAmount > MAX_TARGET_AMOUNT) {
+            throw new IllegalArgumentException("목표 금액은 50억 원 이하로 입력해주세요");
+        }
+    }
+
+    // 목표 금액이나 마감일이 바뀌면 같은 목표의 수정이 아니라 새 목표로 본다 (#202).
+    // 모은 금액은 진행 상황이고 제목은 이름일 뿐이라 기준에 넣지 않는다
+    public boolean isRedefinedBy(Long targetAmount, LocalDate deadline) {
+        return !Objects.equals(this.targetAmount, targetAmount) || !Objects.equals(this.deadline, deadline);
+    }
+
+    public void archive() {
+        this.status = GoalStatus.ARCHIVED;
+    }
+
+    // 목표 수정 화면에서 저장했다면 마감일을 바꾸지 않았더라도 사용자가 확인한 마감일로 본다 (#186)
+    public void update(String title, Long targetAmount,
+                       Long currentAmount, LocalDate deadline) {
+        this.deadlineDefaulted = false;
+        this.title = title;
+        this.targetAmount = targetAmount;
+        this.currentAmount = currentAmount;
+        this.deadline = deadline;
+    }
+
+    public void updateTargetAmount(long targetAmount) {
+        this.targetAmount = targetAmount;
+    }
+}

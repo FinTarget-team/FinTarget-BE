@@ -1,0 +1,12 @@
+.git
+.gradle
+.idea
+.vscode
+build
+docs
+*.md
+!src/main/resources/prompts/*.md
+.env
+.env.*
+!.env.example
+mock-bank

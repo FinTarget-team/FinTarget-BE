@@ -1,0 +1,252 @@
+package kr.fintarget.api.domain.policy.mapper;
+
+import kr.fintarget.api.domain.policy.client.dto.YouthCenterPolicyItem;
+import kr.fintarget.api.domain.policy.entity.Policy;
+import kr.fintarget.api.domain.policy.entity.PolicyText;
+import kr.fintarget.api.domain.policy.entity.PolicyType;
+import kr.fintarget.api.domain.user.code.Region;
+import lombok.extern.slf4j.Slf4j;
+
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+@Slf4j
+public class YouthCenterPolicyMapper {
+
+    public static final String SOURCE = "YOUTH_CENTER";
+
+    // 소득 조건 구분 코드 (earnCndSeCd, 온통청년 API 코드정의서 0043)
+    private static final String EARN_CODE_NONE = "0043001";
+    private static final String EARN_CODE_ANNUAL = "0043002";
+    private static final String EARN_CODE_ETC = "0043003";
+
+    // zipCd(법정동코드) 앞 2자리 시/도 prefix → Region 변환표.
+    // 근거 확인됨: 30 대전, 41 경기, 43 충북, 47 경북, 52 전북
+    // 코드표 확인 필요(추정): 그 외 전부(아래 개별 주석 참고)
+    // "12"(전남광주, 구 통합 코드)는 Region 1개로 매핑되지 않아 이 표에 넣지 않고 resolveRegion에서 별도 분기 처리
+    private static final Map<String, Region> PREFIX_TO_REGION = new LinkedHashMap<>();
+
+    static {
+        PREFIX_TO_REGION.put("11", Region.SEOUL); // 코드표 확인 필요
+        PREFIX_TO_REGION.put("26", Region.BUSAN); // 코드표 확인 필요
+        PREFIX_TO_REGION.put("27", Region.DAEGU); // 코드표 확인 필요
+        PREFIX_TO_REGION.put("28", Region.INCHEON); // 코드표 확인 필요
+        PREFIX_TO_REGION.put("29", Region.GWANGJU); // 구 코드, 코드표 확인 필요
+        PREFIX_TO_REGION.put("30", Region.DAEJEON); // 근거 확인됨
+        PREFIX_TO_REGION.put("31", Region.ULSAN); // 코드표 확인 필요
+        PREFIX_TO_REGION.put("36", Region.SEJONG); // 코드표 확인 필요
+        PREFIX_TO_REGION.put("41", Region.GYEONGGI); // 근거 확인됨
+        PREFIX_TO_REGION.put("42", Region.GANGWON); // 구 코드, 코드표 확인 필요
+        PREFIX_TO_REGION.put("43", Region.CHUNGBUK); // 근거 확인됨
+        PREFIX_TO_REGION.put("44", Region.CHUNGNAM); // 코드표 확인 필요
+        PREFIX_TO_REGION.put("45", Region.JEONBUK); // 구 코드, 코드표 확인 필요
+        PREFIX_TO_REGION.put("46", Region.JEONNAM); // 구 코드, 코드표 확인 필요
+        PREFIX_TO_REGION.put("47", Region.GYEONGBUK); // 근거 확인됨
+        PREFIX_TO_REGION.put("48", Region.GYEONGNAM); // 코드표 확인 필요
+        PREFIX_TO_REGION.put("50", Region.JEJU); // 코드표 확인 필요
+        PREFIX_TO_REGION.put("51", Region.GANGWON); // 코드표 확인 필요
+        PREFIX_TO_REGION.put("52", Region.JEONBUK); // 근거 확인됨
+    }
+
+    private YouthCenterPolicyMapper() {
+    }
+
+    public static Policy toPolicy(YouthCenterPolicyItem item) {
+        return Policy.create(
+                item.plcyNm(),
+                PolicyTextCleaner.unescapeOnly(item.plcyExplnCn()),
+                parseAge(item.sprtTrgtMinAge(), item.plcyNo(), "sprtTrgtMinAge"),
+                parseAge(item.sprtTrgtMaxAge(), item.plcyNo(), "sprtTrgtMaxAge"),
+                null, // 온통청년 응답에 정형화된 소득 상한 필드가 확인되지 않음
+                null, // 온통청년 응답에 정형화된 지원금액 필드가 확인되지 않음 (plcySprtCn은 자유 텍스트)
+                resolvePolicyType(item.lclsfNm()),
+                resolveRegion(item.zipCd()),
+                item.plcyNo(),
+                SOURCE,
+                toPolicyText(item)
+        );
+    }
+
+    // 온통청년 원문 필드 → PolicyText. 컬럼마다 원문 필드 하나를 정제해 넣는다 (사업 기간만 합침)
+    static PolicyText toPolicyText(YouthCenterPolicyItem item) {
+        return PolicyText.builder()
+                .supportContent(PolicyTextCleaner.clean(item.plcySprtCn()))
+                .eligibilityDetail(PolicyTextCleaner.clean(item.addAplyQlfcCndCn()))
+                .exclusionCriteria(PolicyTextCleaner.clean(item.ptcpPrpTrgtCn()))
+                .incomeCondition(incomeCondition(item))
+                .applyMethod(PolicyTextCleaner.clean(item.plcyAplyMthdCn()))
+                .screeningMethod(PolicyTextCleaner.clean(item.srngMthdCn()))
+                .requiredDocuments(PolicyTextCleaner.clean(item.sbmsnDcmntCn()))
+                .applyPeriod(PolicyTextCleaner.clean(item.aplyYmd()))
+                .businessPeriod(businessPeriod(item))
+                .referenceUrl(PolicyTextCleaner.clean(item.refUrlAddr1()))
+                .applyUrl(PolicyTextCleaner.clean(item.aplyUrlAddr()))
+                .etcNote(PolicyTextCleaner.clean(item.etcMttrCn()))
+                .build();
+    }
+
+    /**
+     * 소득 조건: 구분 코드(earnCndSeCd)로 표시용 문구를 만든다 (#150). earnEtcCn은 구분이 "기타"일 때만 와서
+     * 이 값만 쓰면 무관·연소득 정책이 null(앱의 "정보없음")이 된다.
+     * - 0043001(무관): "소득 무관"
+     * - 0043002(연소득): "연소득 N만원 이하" 등 금액 문구. earnEtcCn이 있으면 다음 줄에 붙인다.
+     *   금액이 모두 0이거나 숫자가 아니면 earnEtcCn으로 대체하고 WARN 로그
+     * - 0043003(기타): earnEtcCn 원문
+     * - 코드가 없으면 earnEtcCn 원문, 모르는 코드면 earnEtcCn 원문 + WARN 로그
+     * 원본에 값이 없는 정책을 "소득 무관"으로 보이게 하지 않도록, 무관 문구는 0043001일 때만 쓴다.
+     */
+    static String incomeCondition(YouthCenterPolicyItem item) {
+        String etc = PolicyTextCleaner.clean(item.earnEtcCn());
+        String code = PolicyTextCleaner.clean(item.earnCndSeCd());
+        if (code == null) {
+            return etc;
+        }
+        switch (code) {
+            case EARN_CODE_NONE:
+                return PolicyTextCleaner.INCOME_NO_LIMIT;
+            case EARN_CODE_ANNUAL:
+                String amount = annualIncomeRange(item);
+                if (amount == null) {
+                    log.warn("온통청년 소득 조건이 연소득인데 금액이 없어 기타 문구로 저장: plcyNo={}, earnMinAmt={}, earnMaxAmt={}",
+                            item.plcyNo(), item.earnMinAmt(), item.earnMaxAmt());
+                    return etc;
+                }
+                return PolicyTextCleaner.joinLines(amount, etc);
+            case EARN_CODE_ETC:
+                return etc;
+            default:
+                log.warn("온통청년 소득 조건 구분 코드가 알 수 없는 값이어서 기타 문구로 저장: plcyNo={}, earnCndSeCd={}",
+                        item.plcyNo(), code);
+                return etc;
+        }
+    }
+
+    // 연소득 최소·최대 금액(만원) → "연소득 N만원 이상 M만원 이하" / "연소득 M만원 이하" / "연소득 N만원 이상". 둘 다 0이면 null
+    private static String annualIncomeRange(YouthCenterPolicyItem item) {
+        long min = parseManwon(item.earnMinAmt());
+        long max = parseManwon(item.earnMaxAmt());
+        if (min > 0 && max > 0) {
+            return "연소득 %,d만원 이상 %,d만원 이하".formatted(min, max);
+        }
+        if (max > 0) {
+            return "연소득 %,d만원 이하".formatted(max);
+        }
+        if (min > 0) {
+            return "연소득 %,d만원 이상".formatted(min);
+        }
+        return null;
+    }
+
+    // 빈 값·숫자가 아닌 값은 0(금액 없음)으로 본다. 온통청년은 금액이 없는 정책에 "0"을 보낸다
+    private static long parseManwon(String value) {
+        if (value == null || value.isBlank()) {
+            return 0;
+        }
+        try {
+            return Long.parseLong(value.trim().replace(",", ""));
+        } catch (NumberFormatException e) {
+            return 0;
+        }
+    }
+
+    /**
+     * 사업 기간: 시작·종료일(yyyyMMdd)과 기타 문구를 합친다. 실응답에서 날짜 자리에 공백 8칸만 오는 경우가 있어
+     * 공백만 있는 값은 없는 것으로 본다. 한쪽 날짜만 있으면 "시작 ~" 또는 "~ 종료"로 둔다. 전부 비면 null.
+     */
+    private static String businessPeriod(YouthCenterPolicyItem item) {
+        String begin = PolicyTextCleaner.clean(item.bizPrdBgngYmd());
+        String end = PolicyTextCleaner.clean(item.bizPrdEndYmd());
+        String range = null;
+        if (begin != null || end != null) {
+            range = ((begin != null ? begin + " " : "") + "~" + (end != null ? " " + end : "")).strip();
+        }
+        return PolicyTextCleaner.joinLines(range, PolicyTextCleaner.clean(item.bizPrdEtcCn()));
+    }
+
+    /**
+     * 온통청년 zipCd(신청 가능 지역의 법정동코드, 쉼표로 구분) 값을 Region 코드(User.region과
+     * 동일한 17개 시/도 코드)로 변환한다. 저장되는 문자열의 토큰 순서는 zipCd에 등장한 순서를
+     * 그대로 따르므로, 이 값으로 필터링할 때는 전체 문자열을 그대로 비교하지 말고 쉼표로 분리한
+     * 코드 단위로 비교해야 한다.
+     * - null/빈 문자열: null
+     * - 쉼표로 구분된 각 토큰의 앞 2자리를 시/도 prefix로 추출, 중복 제거(입력 순서 유지)
+     * - "12"(구 전남광주 통합 코드)는 GWANGJU, JEONNAM 두 Region으로 전개
+     * - 매핑된 Region 집합이 17개 시/도 전체를 포함하면 전국으로 보고 null
+     * - 매핑되지 않는 prefix는 해당 토큰만 제외하고 WARN 로그, 전부 매핑 실패 시 null
+     */
+    private static String resolveRegion(String zipCd) {
+        if (zipCd == null || zipCd.isBlank()) {
+            return null;
+        }
+
+        Set<Region> regions = new LinkedHashSet<>();
+        for (String token : zipCd.split(",")) {
+            String trimmed = token.trim();
+            if (trimmed.length() < 2) {
+                log.warn("온통청년 zipCd 토큰 형식이 올바르지 않음: {} (전체 값: {})", trimmed, zipCd);
+                continue;
+            }
+            String prefix = trimmed.substring(0, 2);
+            if ("12".equals(prefix)) {
+                regions.add(Region.GWANGJU);
+                regions.add(Region.JEONNAM);
+                continue;
+            }
+            Region region = PREFIX_TO_REGION.get(prefix);
+            if (region == null) {
+                log.warn("온통청년 zipCd 중 매핑되지 않는 시/도 prefix: {} (전체 값: {})", prefix, zipCd);
+                continue;
+            }
+            regions.add(region);
+        }
+
+        if (regions.isEmpty()) {
+            return null;
+        }
+        // Region에 상수가 추가되면 Region.values().length가 늘어나므로 이 전국 판정도 함께
+        // 깨진다(새 상수가 포함된 전국 목록만 전국으로 인식되지 않게 됨) — Region 상수 추가 시 반드시 재검토할 것.
+        if (regions.size() == Region.values().length) {
+            return null;
+        }
+        return regions.stream().map(Region::getCode).collect(Collectors.joining(","));
+    }
+
+    private static PolicyType resolvePolicyType(String lclsfNm) {
+        if (lclsfNm == null) {
+            return PolicyType.ETC;
+        }
+        if (lclsfNm.contains("주거")) {
+            return PolicyType.HOUSING;
+        }
+        if (lclsfNm.contains("금융")) {
+            return PolicyType.FINANCE_WELFARE;
+        }
+        return PolicyType.ETC;
+    }
+
+    /**
+     * 온통청년 지원대상 최소/최대 연령을 Policy 나이 조건으로 변환한다. null은 "제한 없음"이다.
+     * - null/빈 문자열: null
+     * - 0 이하: null. 온통청년은 나이 제한이 없는 정책에 0을 보내며, 최소·최대를 각각 판정한다 (예: 18, 0 → 18 이상 상한 없음)
+     * - 숫자가 아님: null, 정책 ID와 원래 값을 WARN 로그로 남김
+     * - 99, 120처럼 큰 상한은 사용자 나이로 넘을 수 없어 그대로 둔다
+     * sprtTrgtAgeLmtYn(나이 제한 여부)은 읽지 않는다. 2026-10 실응답 기준 Y인데 19~39처럼 실제 나이가 있는 정책과
+     * N인데 0/0인 정책이 섞여 있어 판정 근거로 쓸 수 없다 (#110).
+     */
+    private static Integer parseAge(String value, String plcyNo, String field) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        int age;
+        try {
+            age = Integer.parseInt(value.trim());
+        } catch (NumberFormatException e) {
+            log.warn("온통청년 나이 값이 숫자가 아니어서 제한 없음으로 저장: plcyNo={}, {}={}", plcyNo, field, value);
+            return null;
+        }
+        return age <= 0 ? null : age;
+    }
+}
