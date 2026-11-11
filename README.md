@@ -123,13 +123,15 @@ chore: application.yml gitignore 처리 (#3)
 
 ## 배포 🚀
 
-운영 서버(`~/FinTarget-BE`, dev 브랜치)는 Docker Compose로 `app`(Spring Boot), `db`(PostgreSQL), `redis`를 실행합니다.
+운영 서버(`~/FinTarget-BE`, dev 브랜치)는 Docker Compose로 `app`(Spring Boot), `db`(PostgreSQL), `redis`, 시연용 `mock-bank`(가상 금융 서버, 8081 포트)를 실행합니다.
 서버 설정 파일(`.env`, `src/main/resources/application.yml`)은 git에 올리지 않고 서버에만 있습니다.
 
 - **수동 배포**: 서버에서 `~/FinTarget-BE/scripts/deploy.sh`
   - dev를 fast-forward로 받고, 메인 서버 코드가 바뀐 경우에만 `app` 컨테이너를 다시 빌드합니다(DB·Redis는 재시작하지 않음).
   - `/v3/api-docs`가 180초 안에 200을 응답하지 않으면 이전 커밋으로 되돌려 다시 빌드합니다.
-  - 배포에 성공하면 오래된 이미지·빌드 캐시를 정리합니다(서버 디스크 19GB).
+  - mock-bank 코드가 바뀌었거나 mock-bank 컨테이너가 떠 있지 않으면 `mock-bank`만 다시 빌드합니다.
+    시연용 보조 서버라 실패해도 메인 서버는 되돌리지 않고 종료 코드 1로 알립니다. `.env`에 `MOCK_BANK_USERNAME`·`MOCK_BANK_PASSWORD`가 없으면 건너뜁니다.
+  - 배포가 끝나면 오래된 이미지·빌드 캐시를 정리합니다(서버 디스크 19GB).
 - **자동 배포(CD)**: `.github/workflows/cd.yml`이 dev 푸시의 CI가 성공하면 SSH로 위 스크립트를 실행합니다.
   저장소 Secrets(`DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_SSH_KEY`, `DEPLOY_KNOWN_HOSTS`)를 등록하기 전까지는 배포 단계를 건너뜁니다.
   - `DEPLOY_SSH_KEY`는 배포 전용으로 새로 만든 키를 서버 `~/.ssh/authorized_keys`에 추가해 사용합니다(개인 키 재사용 금지).

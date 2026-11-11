@@ -60,5 +60,27 @@ services:
       OPENAI_MODEL_DEFAULT: ${OPENAI_MODEL_DEFAULT:-}
       OPENAI_EMBEDDING_MODEL: ${OPENAI_EMBEDDING_MODEL:-}
 
+  # 시연용 가상 금융 서버 (#204). 브라우저에서 http://<서버 IP>:8081 로 접속하고 Basic Auth로 로그인한다.
+  # 웹훅은 Docker 네트워크의 서비스 이름(app)으로 메인 서버에 바로 보내고, 키는 메인 서버와 같은 BANK_WEBHOOK_KEY를 쓴다.
+  # 계정이 비어 있으면 앱이 시작되지 않으므로, scripts/deploy.sh는 .env에 계정이 없으면 이 서비스를 띄우지 않는다
+  mock-bank:
+    build: ./mock-bank
+    container_name: fintarget-mock-bank
+    restart: unless-stopped
+    depends_on:
+      app:
+        condition: service_started
+    ports:
+      - "8081:8081"
+    environment:
+      MOCK_BANK_USERNAME: ${MOCK_BANK_USERNAME:-}
+      MOCK_BANK_PASSWORD: ${MOCK_BANK_PASSWORD:-}
+      FINTARGET_BASE_URL: http://app:8080
+      FINTARGET_WEBHOOK_KEY: ${BANK_WEBHOOK_KEY:-}
+    # 거래 기록(H2 파일 DB)을 재배포해도 유지한다
+    volumes:
+      - mock-bank-data:/app/data
+
 volumes:
   db-data:
+  mock-bank-data:
