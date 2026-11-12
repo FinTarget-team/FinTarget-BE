@@ -2,7 +2,9 @@ package kr.fintarget.api.domain.policy.search.eval;
 
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import kr.fintarget.api.domain.policy.benefit.BenefitType;
 import kr.fintarget.api.domain.policy.entity.Policy;
+import kr.fintarget.api.domain.policy.entity.PolicyBenefit;
 import kr.fintarget.api.domain.policy.entity.PolicyText;
 import kr.fintarget.api.domain.policy.entity.PolicyType;
 
@@ -170,14 +172,18 @@ public record PolicySearchSnapshot(Manifest manifest, List<SnapshotPolicy> polic
                            List<String> embeddingModels) {
     }
 
-    /** policy 테이블 1행 (원문 컬럼 포함). 혜택(benefit) 컬럼은 검색·답변에 쓰이지 않아 내보내지 않는다 */
+    /**
+     * policy 테이블 1행 (원문 컬럼 포함). 혜택 컬럼은 검색이 대출 판정에 쓰는 benefit_type만 내보낸다 (#201).
+     *
+     * @param benefitType 이 컬럼을 내보내기 전에 만든 스냅샷(20261106 등)에서는 null이다
+     */
     public record SnapshotPolicy(UUID policyId, String source, String externalId, String name, String description,
                                  String policyType, String region, Integer minAge, Integer maxAge, Long incomeLimit,
                                  Long benefitAmount, String supportContent, String eligibilityDetail,
                                  String exclusionCriteria, String incomeCondition, String ageCondition,
                                  String applyMethod, String screeningMethod, String requiredDocuments,
                                  String applyPeriod, String businessPeriod, String referenceUrl, String applyUrl,
-                                 String contactInfo, String etcNote) {
+                                 String contactInfo, String etcNote, String benefitType) {
 
         public PolicyKey key() {
             return new PolicyKey(source, externalId);
@@ -201,8 +207,12 @@ public record PolicySearchSnapshot(Manifest manifest, List<SnapshotPolicy> polic
                     .contactInfo(contactInfo)
                     .etcNote(etcNote)
                     .build();
-            return Policy.create(name, description, minAge, maxAge, incomeLimit, benefitAmount,
+            Policy policy = Policy.create(name, description, minAge, maxAge, incomeLimit, benefitAmount,
                     PolicyType.valueOf(policyType), region, externalId, source, text);
+            if (benefitType != null) {
+                policy.updateBenefit(PolicyBenefit.builder().type(BenefitType.valueOf(benefitType)).build());
+            }
+            return policy;
         }
     }
 

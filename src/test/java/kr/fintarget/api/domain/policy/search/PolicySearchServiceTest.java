@@ -6,7 +6,9 @@ import kr.fintarget.api.domain.ai.client.AiUnavailableException;
 import kr.fintarget.api.domain.ai.usage.AiUsageFeature;
 import kr.fintarget.api.domain.ai.usage.AiUsageLimitExceededException;
 import kr.fintarget.api.domain.ai.usage.AiUsageLimiter;
+import kr.fintarget.api.domain.policy.benefit.BenefitType;
 import kr.fintarget.api.domain.policy.entity.Policy;
+import kr.fintarget.api.domain.policy.entity.PolicyBenefit;
 import kr.fintarget.api.domain.policy.entity.PolicyType;
 import kr.fintarget.api.domain.policy.search.PolicyChunkSearchRepository.ChunkMatch;
 import kr.fintarget.api.domain.policy.service.PolicyService;
@@ -14,6 +16,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.LocalDate;
@@ -223,6 +226,83 @@ class PolicySearchServiceTest {
         assertThat(service(5, 0.5, 3).searchCandidates(List.of(a), "질문")).hasSize(1);
 
         verifyNoInteractions(usageLimiter, policyService);
+    }
+
+    private Policy loan(String name) {
+        Policy policy = policy(name);
+        policy.updateBenefit(PolicyBenefit.builder().type(BenefitType.LOAN).build());
+        return policy;
+    }
+
+    // 운영 쿼리처럼 넘겨받은 정책 안에서 거리순 상위 limit개만 돌려준다
+    private void stubRankedSearch(String question, List<ChunkMatch> ranked) {
+        when(embeddingClient.embed(List.of(question))).thenReturn(List.of(VECTOR));
+        when(searchRepository.search(anyList(), eq(VECTOR), anyInt())).thenAnswer(invocation -> {
+            List<UUID> policyIds = invocation.getArgument(0);
+            int limit = invocation.getArgument(2);
+            return ranked.stream().filter(m -> policyIds.contains(m.policyId())).limit(limit).toList();
+        });
+    }
+
+    // 조회 상한이 3청크이고 대출이 가장 가깝다. 조회한 뒤에 대출을 버리면 결과가 0건이 된다 (#201)
+    @Test
+    void 대출_의도가_없으면_대출_상품을_빼고_다른_정책으로_k개를_채운다() {
+        List<Policy> loans = List.of(loan("대출 1"), loan("대출 2"), loan("대출 3"));
+        List<Policy> supports = List.of(policy("지원 1"), policy("지원 2"), policy("지원 3"));
+        stubRankedSearch("월세가 너무 부담돼", List.of(
+                match(loans.get(0), "전체", "본문", 0.10), match(loans.get(1), "전체", "본문", 0.11),
+                match(loans.get(2), "전체", "본문", 0.12), match(supports.get(0), "전체", "본문", 0.30),
+                match(supports.get(1), "전체", "본문", 0.31), match(supports.get(2), "전체", "본문", 0.32)));
+
+        List<PolicySearchHit> hits = service(3, 0.65, 1).searchCandidates(
+                List.of(loans.get(0), loans.get(1), loans.get(2), supports.get(0), supports.get(1), supports.get(2)),
+                "월세가 너무 부담돼");
+
+        assertThat(hits).extracting(hit -> hit.policy().getName()).containsExactly("지원 1", "지원 2", "지원 3");
+    }
+
+    @Test
+    void 대출_의도가_있으면_대출_상품을_유지한다() {
+        Policy loan = loan("전세 대출");
+        Policy support = policy("월세 지원");
+        stubRankedSearch("전세 대출 알아보고 있어", List.of(
+                match(loan, "전체", "본문", 0.10), match(support, "전체", "본문", 0.30)));
+
+        List<PolicySearchHit> hits = service(5, 0.65, 3).searchCandidates(List.of(loan, support), "전세 대출 알아보고 있어");
+
+        assertThat(hits).extracting(hit -> hit.policy().getName()).containsExactly("전세 대출", "월세 지원");
+    }
+
+    @Test
+    void 대출_상품만_남으면_임베딩을_호출하지_않고_빈_결과다() {
+        assertThat(service(5, 0.65, 3).searchCandidates(List.of(loan("대출 1")), "월세가 너무 부담돼")).isEmpty();
+
+        verify(embeddingClient, never()).embed(anyList());
+    }
+
+    @Test
+    void 혜택을_아직_추출하지_않은_정책은_대출_상품으로_보지_않는다() {
+        assertThat(policy("미추출 정책").isLoanProduct()).isFalse();
+        assertThat(loan("대출").isLoanProduct()).isTrue();
+    }
+
+    @Test
+    void 유사도_하한값은_설정에서_읽고_없으면_기본값을_쓴다() {
+        Policy a = policy("정책 A");
+        stubEmbedding();
+        when(searchRepository.search(anyList(), eq(VECTOR), anyInt())).thenReturn(List.of(match(a, "전체", "본문", 0.60)));
+        ApplicationContextRunner runner = new ApplicationContextRunner()
+                .withBean(PolicyService.class, () -> policyService)
+                .withBean(PolicyChunkSearchRepository.class, () -> searchRepository)
+                .withBean(AiEmbeddingClient.class, () -> embeddingClient)
+                .withBean(AiUsageLimiter.class, () -> usageLimiter)
+                .withBean(PolicySearchService.class);
+
+        runner.withPropertyValues("policy.search.max-distance=0.55").run(context ->
+                assertThat(context.getBean(PolicySearchService.class).searchCandidates(List.of(a), "질문")).isEmpty());
+        runner.run(context ->
+                assertThat(context.getBean(PolicySearchService.class).searchCandidates(List.of(a), "질문")).hasSize(1));
+        assertThat(PolicySearchService.DEFAULT_MAX_DISTANCE).isEqualTo(0.65);
     }
 
     @Test

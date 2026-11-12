@@ -60,8 +60,8 @@ top_chunks AS (
 )
 SELECT count(*) AS chunks, count(DISTINCT policy_id) AS distinct_policies FROM top_chunks;
 
--- 5. 유사도 하한값(policy.search.max-distance 기본 0.5) 분포 확인
---    거리 구간별 청크 수. 0.5 하한이 과도하게 느슨하거나 조이지 않는지 #184 평가 전에 가늠한다
+-- 5. 유사도 하한값(policy.search.max-distance 기본 0.65) 분포 확인
+--    거리 구간별 청크 수. 하한이 과도하게 느슨하거나 조이지 않는지 #184 평가 전에 가늠한다
 WITH q AS (
     SELECT embedding FROM policy_chunk_embedding ORDER BY chunk_id LIMIT 1
 )

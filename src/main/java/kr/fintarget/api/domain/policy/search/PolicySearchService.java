@@ -22,7 +22,8 @@ import java.util.UUID;
  * 자연어 질문으로 사용자 조건에 맞는 정책을 찾는다 (#182). 2단계로 좁힌다.
  * <ol>
  *   <li>맞춤 정책과 같은 조건(나이·소득·유형·지역)으로 후보 정책 ID를 만든다 ({@link PolicyService#findCandidatePolicies})</li>
- *   <li>그 후보 안에서만 질문 벡터에 가까운 청크를 조회하고, 정책별 최고 점수로 묶는다</li>
+ *   <li>그 후보 안에서만 질문 벡터에 가까운 청크를 조회하고, 정책별 최고 점수로 묶는다.
+ *       질문에 대출 의도가 없으면 대출 상품은 대상에서 뺀다 (#201)</li>
  * </ol>
  *
  * <p>정책별 묶기·유사도 하한·k 적용을 Java에서 하는 이유는 {@link JdbcPolicyChunkSearchRepository} 참고.
@@ -33,9 +34,8 @@ import java.util.UUID;
 public class PolicySearchService {
 
     static final int DEFAULT_K = 5;
-    // 관련 있는 결과는 거리 0.15 안쪽에 모여 있었다(2026-11-04 운영 표본: 같은 주제 다른 정책 0.1398).
-    // 처음부터 조이면 #184가 재현율을 측정할 수 없어, 무관한 결과만 자르는 느슨한 값으로 둔다
-    static final double DEFAULT_MAX_DISTANCE = 0.5;
+    // 상황을 설명하는 구어체 질문은 가장 가까운 정책도 거리가 0.57~0.65라 0.5에서는 전부 잘렸다 (#184, 라벨링 전 잠정값)
+    static final double DEFAULT_MAX_DISTANCE = 0.65;
     // 한 정책이 청크 여러 개를 차지하므로 k개 정책을 채우려면 청크를 더 많이 조회해야 한다
     // (2026-11-04 운영: 청크 976개 / 정책 883건 ≈ 1.1)
     static final int DEFAULT_CHUNK_MULTIPLIER = 3;
@@ -112,7 +112,8 @@ public class PolicySearchService {
      */
     @Transactional(readOnly = true)
     public List<PolicySearchHit> searchCandidates(List<Policy> candidates, String question) {
-        if (candidates.isEmpty()) {
+        List<Policy> searchable = excludeLoansUnlessAsked(candidates, question);
+        if (searchable.isEmpty()) {
             return List.of();
         }
 
@@ -120,8 +121,8 @@ public class PolicySearchService {
         float[] questionVector = embeddingClient.embed(List.of(question)).getFirst();
 
         Map<UUID, Policy> byId = new LinkedHashMap<>();
-        List<UUID> policyIds = new ArrayList<>(candidates.size());
-        for (Policy policy : candidates) {
+        List<UUID> policyIds = new ArrayList<>(searchable.size());
+        for (Policy policy : searchable) {
             byId.put(policy.getPolicyId(), policy);
             policyIds.add(policy.getPolicyId());
         }
@@ -137,6 +138,17 @@ public class PolicySearchService {
                     k, hits.size(), matches.size(), chunkMultiplier);
         }
         return hits;
+    }
+
+    /**
+     * 질문에 대출 의도가 없으면 대출 상품을 뺀다 (#201). 대출 상품 청크가 상위를 차지해 지원 정책이 밀리는 것을 막는다.
+     * 청크 조회에 상한(k × chunk-multiplier)이 있어 조회 대상에서 미리 뺀다. 조회한 뒤에 버리면 대출 청크가 상한을 다 써서 k개를 채우지 못한다.
+     */
+    private static List<Policy> excludeLoansUnlessAsked(List<Policy> candidates, String question) {
+        if (LoanIntent.of(question)) {
+            return candidates;
+        }
+        return candidates.stream().filter(policy -> !policy.isLoanProduct()).toList();
     }
 
     /**
