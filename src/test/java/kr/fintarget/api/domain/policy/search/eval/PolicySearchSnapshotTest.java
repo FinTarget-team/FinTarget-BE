@@ -47,6 +47,25 @@ class PolicySearchSnapshotTest {
     }
 
     @Test
+    void benefitType을_내보낸_스냅샷은_대출_상품으로_복원한다(@TempDir Path dir) throws IOException {
+        for (String file : List.of("manifest.jsonl", "chunk.jsonl", "embedding.jsonl")) {
+            Files.copy(SAMPLE.resolve(file), dir.resolve(file));
+        }
+        String policies = Files.readString(SAMPLE.resolve("policy.jsonl"), StandardCharsets.UTF_8)
+                .replace("\"etcNote\":null}", "\"etcNote\":null,\"benefitType\":\"LOAN\"}");
+        Files.writeString(dir.resolve("policy.jsonl"), policies, StandardCharsets.UTF_8);
+
+        assertThat(PolicySearchSnapshot.load(dir).policies())
+                .allSatisfy(policy -> assertThat(policy.toPolicy().isLoanProduct()).isTrue());
+    }
+
+    @Test
+    void benefitType이_없는_이전_스냅샷도_읽히고_대출_상품은_없다() {
+        assertThat(PolicySearchSnapshot.load(SAMPLE).policies())
+                .allSatisfy(policy -> assertThat(policy.toPolicy().isLoanProduct()).isFalse());
+    }
+
+    @Test
     void 스냅샷_정책을_저장_전_Policy로_바꾼다() {
         Policy policy = PolicySearchSnapshot.load(SAMPLE).policies().getFirst().toPolicy();
 

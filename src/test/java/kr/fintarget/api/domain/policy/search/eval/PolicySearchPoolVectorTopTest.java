@@ -107,7 +107,7 @@ class PolicySearchPoolVectorTopTest {
             UUID policyId = uuid("policy-" + externalId);
             policies.add(new SnapshotPolicy(policyId, "YOUTH_CENTER", externalId, "정책 " + externalId, "설명", "HOUSING",
                     region, 19, 34, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-                    null, null));
+                    null, null, null));
             for (int seq = 0; seq < CHUNKS_PER_POLICY; seq++) {
                 // 번호가 뒤일수록 질문([1,0])에서 멀어진다
                 double angle = (i * CHUNKS_PER_POLICY + seq) * 0.002;
