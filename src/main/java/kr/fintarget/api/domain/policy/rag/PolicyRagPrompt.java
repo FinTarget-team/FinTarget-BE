@@ -20,7 +20,7 @@ import java.util.regex.Pattern;
 @Component
 public class PolicyRagPrompt {
 
-    public static final String VERSION = "policy-rag-v1";
+    public static final String VERSION = "policy-rag-v2";
 
     private static final String CHUNKS_PLACEHOLDER = "{{chunks}}";
     private static final String PROFILE_PLACEHOLDER = "{{profile}}";

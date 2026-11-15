@@ -23,7 +23,7 @@ import java.util.regex.Pattern;
 
 /**
  * 온통청년(youthcenter.go.kr) 정책 목록 API 클라이언트.
- * 전체 페이지를 순회해, 정책대분류명이 "주거", "금융"(금융･복지･문화)이면서 신청이 끝나지 않은 정책만 반환한다.
+ * 전체 페이지를 순회해, 정책대분류명이 "주거", "금융"(금융･복지･문화), "일자리"이면서 신청이 끝나지 않은 정책만 반환한다 (#212).
  */
 @Slf4j
 @Component
@@ -131,9 +131,11 @@ public class YouthCenterApiClient {
         return lastDate == null || !lastDate.isBefore(today);
     }
 
+    // "일자리"는 리포에 실제 응답 샘플이 없어 추가한 값이다 (#212). 동기화 후 실제 lclsfNm 값으로 재확인 필요
     private static boolean isHousingOrFinance(YouthCenterPolicyItem item) {
         String category = item.lclsfNm();
-        return category != null && (category.contains("주거") || category.contains("금융"));
+        return category != null
+                && (category.contains("주거") || category.contains("금융") || category.contains("일자리"));
     }
 
     private YouthCenterApiResponse call(int pageNum, int pageSize) {
