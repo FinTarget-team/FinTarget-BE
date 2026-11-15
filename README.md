@@ -273,4 +273,14 @@ chore: application.yml gitignore 처리 (#3)
   - `DEPLOY_SSH_KEY`는 배포 전용 키입니다. 서버 `authorized_keys`에 `restrict,command="bash ~/FinTarget-BE/scripts/deploy.sh"` 옵션으로 등록되어, 이 키로는 배포 스크립트 외의 명령을 실행할 수 없습니다.
   - `DEPLOY_KNOWN_HOSTS`는 `ssh-keyscan <서버 주소>` 결과입니다. 서버를 새로 만들면 다시 등록해야 합니다.
   - GitHub Actions 실행 서버의 IP가 고정되어 있지 않아 EC2 보안 그룹의 22번 포트는 전체(`0.0.0.0/0`)에 열려 있고, 서버는 비밀번호 로그인을 막고 키 로그인만 허용합니다.
+  - **CD가 실패하면** Actions 실행 화면의 Summary와 단계 로그에서 원인을 확인합니다. 이 워크플로는 기본 브랜치(main)에 있는 파일로 실행되므로, `cd.yml` 수정은 main까지 머지해야 적용됩니다.
+
+    | 로그 메시지 | 원인 · 조치 |
+    |---|---|
+    | `DEPLOY_SSH_KEY를 SSH 개인 키로 읽을 수 없습니다` | 키 값이 잘림·형식 오류. `-----BEGIN ...-----`부터 `-----END ...-----`까지 다시 등록 |
+    | `DEPLOY_KNOWN_HOSTS에 DEPLOY_HOST 항목이 없습니다` | `ssh-keyscan <서버 주소>` 결과를 다시 등록 |
+    | `Host key verification failed` | 서버를 새로 만들었거나 known_hosts 값이 다름. 위와 같이 다시 등록 |
+    | `Permission denied (publickey)` | 서버 `authorized_keys`의 배포 키와 Secret의 키가 다름 |
+    | `Connection timed out` | 서버 꺼짐 또는 보안 그룹 22번 포트 차단 |
+    | 배포 결과: 실패 (종료 코드 1) | SSH는 성공, 배포 스크립트 실패(앱 헬스 체크 실패 후 롤백, mock-bank 기동 실패 등). Summary의 로그 확인 |
 - 컨테이너는 root가 아닌 전용 계정으로, 한국 시간대(`-Duser.timezone=Asia/Seoul`)로 실행됩니다.
