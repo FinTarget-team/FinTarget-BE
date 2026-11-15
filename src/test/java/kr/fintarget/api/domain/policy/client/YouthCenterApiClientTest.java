@@ -51,8 +51,8 @@ class YouthCenterApiClientTest {
     }
 
     @Test
-    void 전체_페이지를_순회해_주거_금융이면서_열려있는_정책만_반환한다() {
-        // 총 250건 = 3페이지 (100, 100, 50). 각 페이지 첫 항목만 주거, 나머지는 일자리
+    void 전체_페이지를_순회해_주거_금융_일자리이면서_열려있는_정책만_반환한다() {
+        // 총 250건 = 3페이지 (100, 100, 50). 각 페이지 첫 항목은 주거, 둘째 항목은 일자리, 나머지는 교육(제외 대상)
         List<URI> requested = new ArrayList<>();
         WebClient webClient = WebClient.builder()
                 .baseUrl("https://example.com/getPlcy")
@@ -61,7 +61,8 @@ class YouthCenterApiClientTest {
                     int pageNum = Integer.parseInt(queryParam(request.url(), "pageNum"));
                     int size = pageNum < 3 ? 100 : 50;
                     String items = IntStream.range(0, size)
-                            .mapToObj(i -> policyJson("P" + pageNum + "-" + i, i == 0 ? "주거" : "일자리"))
+                            .mapToObj(i -> policyJson("P" + pageNum + "-" + i,
+                                    i == 0 ? "주거" : i == 1 ? "일자리" : "교육"))
                             .collect(Collectors.joining(","));
                     String body = "{\"resultCode\":200,\"result\":{\"pagging\":{\"totCount\":250,\"pageNum\":" + pageNum
                             + ",\"pageSize\":100},\"youthPolicyList\":[" + items + "]}}";
@@ -77,7 +78,8 @@ class YouthCenterApiClientTest {
         assertThat(requested).hasSize(3);
         assertThat(queryParam(requested.get(0), "apiKeyNm")).isEqualTo("test-key");
         assertThat(queryParam(requested.get(0), "rtnType")).isEqualTo("json");
-        assertThat(result).extracting(YouthCenterPolicyItem::plcyNo).containsExactly("P1-0", "P2-0", "P3-0");
+        assertThat(result).extracting(YouthCenterPolicyItem::plcyNo)
+                .containsExactly("P1-0", "P1-1", "P2-0", "P2-1", "P3-0", "P3-1");
     }
 
     @Test
