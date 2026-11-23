@@ -108,4 +108,39 @@ class PolicyRegionTest {
         assertThat(policyIn("SEOUL").appliesToRegion(null)).isFalse();
         assertThat(policyIn("SEOUL").appliesToRegion("  ")).isFalse();
     }
+
+    private Policy policyWithExtracted(String region, String extractedRegion) {
+        Policy policy = policyIn(region);
+        policy.updateCondition(PolicyCondition.builder().extractedRegion(extractedRegion).build());
+        return policy;
+    }
+
+    @Test
+    void 지역이_빈_정책은_원문에서_추출한_지역으로_매칭한다() {
+        Policy jeonnam = policyWithExtracted(null, "JEONNAM");
+
+        assertThat(jeonnam.matchesRegion("JEONNAM")).isTrue();
+        assertThat(jeonnam.matchesRegion("SEOUL")).isFalse();
+        assertThat(jeonnam.matchesRegion(null)).isFalse();
+        assertThat(jeonnam.matchingRegionCodes()).containsExactly("JEONNAM");
+        // 목록 응답(regions)과 채팅의 신청 가능 지역은 기존 값을 그대로 쓴다
+        assertThat(jeonnam.regionCodes()).isEmpty();
+        assertThat(jeonnam.appliesToRegion("SEOUL")).isTrue();
+    }
+
+    @Test
+    void 기존_지역이_있으면_추출한_지역을_무시한다() {
+        Policy seoul = policyWithExtracted("SEOUL", "JEONNAM");
+
+        assertThat(seoul.matchesRegion("SEOUL")).isTrue();
+        assertThat(seoul.matchesRegion("JEONNAM")).isFalse();
+        assertThat(seoul.matchingRegionCodes()).containsExactly("SEOUL");
+    }
+
+    @Test
+    void 추출한_지역이_없거나_Region_코드가_아니면_전국으로_매칭한다() {
+        assertThat(policyIn(null).matchesRegion("JEJU")).isTrue();
+        assertThat(policyWithExtracted(null, null).matchesRegion("JEJU")).isTrue();
+        assertThat(policyWithExtracted(null, "JEONNAM,HWASUN").matchesRegion("JEJU")).isTrue();
+    }
 }

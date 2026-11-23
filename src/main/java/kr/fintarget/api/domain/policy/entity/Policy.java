@@ -65,6 +65,10 @@ public class Policy {
     @Embedded
     private PolicyBenefit benefit;
 
+    // 원문에서 추출한 신청 조건 (#220). 추천 필터·정렬에만 쓰며 목록 응답에는 넣지 않는다. 아직 추출하지 않은 정책은 null이다
+    @Embedded
+    private PolicyCondition condition;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
@@ -139,6 +143,33 @@ public class Policy {
     }
 
     /**
+     * 추천 매칭에 쓰는 지역 코드 (#220). 기존 region이 있으면 그 값을 그대로 쓰고({@link #regionCodes()}),
+     * region이 비어 있을 때만 원문에서 추출한 지역(condition.extractedRegion)으로 보완한다.
+     * 목록 응답의 regions와 단건 채팅의 "신청 가능 지역"은 계속 {@link #regionCodes()}를 쓴다 (응답 형식·채팅 동작 유지).
+     */
+    public List<String> matchingRegionCodes() {
+        List<String> codes = regionCodes();
+        if (!codes.isEmpty() || condition == null) {
+            return codes;
+        }
+        return condition.extractedRegionCodes();
+    }
+
+    /**
+     * 추천 매칭용 지역 판정 (#220). {@link #appliesToRegion(String)}과 같은 규칙을 {@link #matchingRegionCodes()}에 적용한다.
+     */
+    public boolean matchesRegion(String userRegion) {
+        List<String> codes = matchingRegionCodes();
+        if (codes.isEmpty()) {
+            return true;
+        }
+        if (userRegion == null || userRegion.isBlank()) {
+            return false;
+        }
+        return codes.contains(userRegion.trim());
+    }
+
+    /**
      * 시뮬레이션에 반영할 현금 지원 혜택이 있는지 (#163).
      * 혜택이 아직 채워지지 않은 정책(benefit=null)과 금액으로 환산되지 않는 정책을 함께 걸러낸다.
      */
@@ -156,6 +187,16 @@ public class Policy {
         this.benefit = benefit;
     }
 
+    // 원문에서 추출한 신청 조건을 채운다 (#220 조건 추출 작업에서 호출)
+    public void updateCondition(PolicyCondition condition) {
+        this.condition = condition;
+    }
+
+    /** 이 원문·프롬프트 버전으로 아직 조건을 추출하지 않았는지 (#220). 처음이거나 원문·버전이 바뀌면 true */
+    public boolean needsConditionExtraction(String sourceHash, String promptVersion) {
+        return condition == null || !condition.isExtractedFrom(sourceHash, promptVersion);
+    }
+
     /** 이 원문·프롬프트 버전으로 아직 혜택을 추출하지 않았는지 (#162). 처음이거나 원문·버전이 바뀌면 true */
     public boolean needsBenefitExtraction(String sourceHash, String promptVersion) {
         return benefit == null || !benefit.isExtractedFrom(sourceHash, promptVersion);
@@ -164,7 +205,8 @@ public class Policy {
     /**
      * 외부 API에서 다시 받아온 값으로 내용을 갱신한다 (externalId/source는 식별자라 유지).
      * benefit은 소스 응답이 아니라 원문 추출로 채우는 값이라 동기화가 덮지 않는다 — 덮으면 매일 03:00
-     * 재동기화마다 추출 결과가 사라진다. 혜택 갱신은 updateBenefit으로만 한다 (#163)
+     * 재동기화마다 추출 결과가 사라진다. 혜택 갱신은 updateBenefit으로만 한다 (#163).
+     * 신청 조건(condition)도 같은 이유로 덮지 않는다. 조건 갱신은 updateCondition으로만 한다 (#220)
      */
     public void updateFrom(Policy fetched) {
         this.name = fetched.name;
