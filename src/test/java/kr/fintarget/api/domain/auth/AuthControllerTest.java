@@ -138,6 +138,24 @@ class AuthControllerTest {
     }
 
     @Test
+    void 로그인_응답의_expiresIn은_jwt_expiration_설정값을_초로_환산한다() {
+        User existingUser = User.builder()
+                .id("user-1")
+                .provider(SocialProvider.KAKAO)
+                .providerId("kakao-123")
+                .build();
+        when(kakaoOAuthClient.getKakaoUserByAccessToken("token")).thenReturn(new SocialUserInfo("kakao-123", null));
+        when(userRepository.findByProviderAndProviderId(SocialProvider.KAKAO, "kakao-123"))
+                .thenReturn(Optional.of(existingUser));
+        when(jwtUtil.getExpirationMillis()).thenReturn(7_200_000L);
+
+        KakaoTokenLoginRequest request = new KakaoTokenLoginRequest();
+        ReflectionTestUtils.setField(request, "accessToken", "token");
+
+        assertThat(authController.kakaoTokenLogin(request).getBody().getData().getExpiresIn()).isEqualTo(7200);
+    }
+
+    @Test
     void 유효한_카카오_액세스_토큰이고_신규_사용자면_회원가입_후_201로_응답한다() {
         User savedUser = User.builder()
                 .id("user-2")

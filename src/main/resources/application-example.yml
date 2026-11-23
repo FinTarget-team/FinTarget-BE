@@ -8,8 +8,8 @@ spring:
     driver-class-name: org.postgresql.Driver
   jpa:
     hibernate:
-      ddl-auto: update
-    show-sql: true
+      ddl-auto: update   # 로컬 개발용. 운영은 docker-compose.yml이 validate로 덮어쓴다 (#219)
+    show-sql: false
   mvc:
     pathmatch:
       use-suffix-pattern: false

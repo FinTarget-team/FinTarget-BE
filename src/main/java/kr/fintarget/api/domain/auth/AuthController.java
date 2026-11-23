@@ -61,7 +61,8 @@ public class AuthController {
                 .userId(user.getId())
                 .accessToken(accessToken)
                 .refreshToken(refreshToken)
-                .expiresIn(3600)
+                // 재발급 API와 같이 설정한 만료 시간에서 계산한다 (#219)
+                .expiresIn((int) (jwtUtil.getExpirationMillis() / 1000))
                 .provider(provider.name())
                 .build();
         return ResponseEntity.status(isNewUser ? 201 : 200).body(

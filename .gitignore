@@ -43,3 +43,6 @@ src/main/resources/application.yml
 
 ### AI 평가 스냅샷 (#184, 운영 정책 데이터 내보내기. 커밋하지 않음) ###
 /ai-eval-snapshot/
+
+### 배포 로그 (CD 로컬 테스트 산출물) ###
+deploy.log

@@ -704,7 +704,7 @@ Authorization: Bearer {accessToken}
 
 ### 지출 동기화
 - **POST** `/api/expenses/sync`
-- Request Body: 배열 (빈 배열이면 아무것도 하지 않음)
+- Request Body: 배열 (최대 1000건, 빈 배열이면 아무것도 하지 않음)
 ```json
 [
   {
@@ -718,9 +718,9 @@ Authorization: Bearer {accessToken}
 
 | 필드 | 필수 | 설명 |
 |---|---|---|
-| `amount` | O | 지출 금액(원). 0보다 커야 함 |
-| `category` | O | 카테고리 문자열(공백만으로 된 문자열 불가). [카테고리 값](#카테고리-값) 6개 중 하나 사용 |
-| `description` | X | 메모 |
+| `amount` | O | 지출 금액(원). 1원 이상 10억 원 이하 |
+| `category` | O | 카테고리 문자열(공백만으로 된 문자열 불가, 20자 이하). [카테고리 값](#카테고리-값) 6개 중 하나 사용 |
+| `description` | X | 메모. 255자 이하 |
 | `spentAt` | O | 지출일 `yyyy-MM-dd` |
 
 - **중복 방지**: `category`, `amount`, `spentAt`, `description` 네 값이 모두 같은 지출은 이미 저장돼 있으면 건너뜁니다. 같은 목록을 여러 번 보내도 중복 저장되지 않으므로 재시도해도 안전합니다.
@@ -732,9 +732,13 @@ Authorization: Bearer {accessToken}
 |---|---|---|
 | `amount` 누락 | 400 | `지출 금액을 입력해주세요.` |
 | `amount` 0 이하 | 400 | `지출 금액은 0보다 커야 합니다.` |
+| `amount` 10억 원 초과 | 400 | `지출 금액은 10억 원 이하여야 합니다.` |
 | `category` 누락, 공백 | 400 | `지출 카테고리를 입력해주세요.` |
+| `category` 20자 초과 | 400 | `지출 카테고리는 20자 이하로 입력해주세요.` |
+| `description` 255자 초과 | 400 | `지출 메모는 255자 이하로 입력해주세요.` |
 | `spentAt` 누락 | 400 | `지출 날짜를 입력해주세요.` |
 | 목록에 `null` 항목 | 400 | `지출 내역에 빈 항목(null)이 있습니다.` |
+| 1000건 초과 | 400 | `지출 내역은 한 번에 최대 1000건까지 보낼 수 있습니다.` |
 
 ### 지출 전체 조회
 - **GET** `/api/expenses`
@@ -817,9 +821,9 @@ Authorization: Bearer {accessToken}
 |---|---|---|
 | `transactionId` | O | 가상 금융 서버의 거래 ID(UUID). 결과를 짝지어 돌려주는 데만 쓰며 저장하지 않음 |
 | `userId` | O | 핀타겟 사용자 ID(UUID). 존재하는 사용자여야 함 |
-| `amount` | O | 지출 금액(원). 0보다 커야 함 |
-| `category` | O | 카테고리 문자열(공백만으로 된 문자열 불가). [카테고리 값](#카테고리-값) 6개 중 하나 사용 |
-| `description` | X | 가맹점명 등 메모 |
+| `amount` | O | 지출 금액(원). 1원 이상 10억 원 이하 |
+| `category` | O | 카테고리 문자열(공백만으로 된 문자열 불가, 20자 이하). [카테고리 값](#카테고리-값) 6개 중 하나 사용 |
+| `description` | X | 가맹점명 등 메모. 255자 이하 |
 | `spentAt` | O | 지출일 `yyyy-MM-dd` |
 
 - **중복 방지**: 지출 동기화와 같은 기준입니다. 같은 사용자의 `category`, `amount`, `spentAt`, `description`이 모두 같은 지출이 이미 있거나, 같은 요청 안에서 앞서 나왔으면 저장하지 않고 `DUPLICATE`로 돌려줍니다. 같은 거래를 다시 보내도 안전합니다.
@@ -846,7 +850,8 @@ Authorization: Bearer {accessToken}
 |---|---|---|
 | `transactionId` 누락 | 400 | `거래 ID를 입력해주세요.` |
 | `userId` 누락 | 400 | `사용자 ID를 입력해주세요.` |
-| `amount` 누락 / 0 이하 | 400 | `지출 금액을 입력해주세요.` / `지출 금액은 0보다 커야 합니다.` |
+| `amount` 누락 / 0 이하 / 10억 원 초과 | 400 | `지출 금액을 입력해주세요.` / `지출 금액은 0보다 커야 합니다.` / `지출 금액은 10억 원 이하여야 합니다.` |
+| `category` 20자 초과 / `description` 255자 초과 | 400 | `지출 카테고리는 20자 이하로 입력해주세요.` / `지출 메모는 255자 이하로 입력해주세요.` |
 | `category` 누락, 공백 | 400 | `지출 카테고리를 입력해주세요.` |
 | `spentAt` 누락 | 400 | `지출 날짜를 입력해주세요.` |
 | 목록에 `null` 항목 | 400 | `거래 목록에 빈 항목(null)이 있습니다.` |
@@ -876,6 +881,7 @@ Authorization: Bearer {accessToken}
 ### 넛지 읽음 처리
 - **PATCH** `/nudges/{nudgeId}/read`
 - Path Parameter: `nudgeId` (string)
+- 넛지가 없거나 다른 사용자의 넛지면 400 `넛지를 찾을 수 없습니다.` (넛지 삭제 `DELETE /nudges/{nudgeId}`도 동일)
 
 ---
 

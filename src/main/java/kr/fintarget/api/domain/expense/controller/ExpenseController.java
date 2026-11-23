@@ -30,6 +30,9 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class ExpenseController {
 
+    // 한 번에 받는 지출 수 상한 (#219). 웹훅(BankWebhookController)과 같은 기준
+    static final int MAX_EXPENSES_PER_REQUEST = 1000;
+
     private final ExpenseService expenseService;
     private final Validator validator;
 
@@ -222,6 +225,9 @@ public class ExpenseController {
     // 목록 원소에 @Valid를 붙이면 Spring이 HandlerMethodValidationException을 던지는데, 공통 예외 처리에 매핑이 없어 500이 된다.
     // 그래서 항목별로 직접 검증해 다른 API와 같은 400 응답(IllegalArgumentException)으로 맞춘다
     private void validateSyncRequests(List<ExpenseSyncRequest> requests) {
+        if (requests.size() > MAX_EXPENSES_PER_REQUEST) {
+            throw new IllegalArgumentException("지출 내역은 한 번에 최대 " + MAX_EXPENSES_PER_REQUEST + "건까지 보낼 수 있습니다.");
+        }
         for (ExpenseSyncRequest request : requests) {
             if (request == null) {
                 throw new IllegalArgumentException("지출 내역에 빈 항목(null)이 있습니다.");
