@@ -10,17 +10,26 @@ import java.util.List;
  *
  * @param incomeMaxMonthly 본인 소득 상한(세전 월, 원). incomeBasis가 INDIVIDUAL일 때만 값이 있다
  * @param regions          원문에서 읽은 지역 코드 (정의된 Region 코드만)
+ * @param benefitKind      경제적 혜택 유형 (#225)
  */
 public record ConditionExtraction(IncomeBasis incomeBasis, Long incomeMaxMonthly, HousingRequirement housingRequirement,
-                                  TargetType targetType, List<String> regions) {
+                                  TargetType targetType, List<String> regions, BenefitKind benefitKind) {
 
     public ConditionExtraction {
         regions = regions == null ? List.of() : List.copyOf(regions);
+        benefitKind = benefitKind == null ? BenefitKind.UNKNOWN : benefitKind;
+    }
+
+    /** 경제적 혜택 유형 없이 만든다 (테스트용, UNKNOWN) */
+    public ConditionExtraction(IncomeBasis incomeBasis, Long incomeMaxMonthly, HousingRequirement housingRequirement,
+                               TargetType targetType, List<String> regions) {
+        this(incomeBasis, incomeMaxMonthly, housingRequirement, targetType, regions, BenefitKind.UNKNOWN);
     }
 
     /** 모든 조건을 모름. 응답 해석 실패나 판단할 원문이 없을 때 저장한다 */
     public static ConditionExtraction unknown() {
-        return new ConditionExtraction(IncomeBasis.UNKNOWN, null, HousingRequirement.UNKNOWN, TargetType.UNKNOWN, List.of());
+        return new ConditionExtraction(IncomeBasis.UNKNOWN, null, HousingRequirement.UNKNOWN, TargetType.UNKNOWN, List.of(),
+                BenefitKind.UNKNOWN);
     }
 
     public PolicyCondition toPolicyCondition(String promptVersion, String sourceHash, LocalDateTime extractedAt) {
@@ -30,6 +39,7 @@ public record ConditionExtraction(IncomeBasis incomeBasis, Long incomeMaxMonthly
                 .housingRequirement(housingRequirement)
                 .targetType(targetType)
                 .extractedRegion(regions.isEmpty() ? null : String.join(",", regions))
+                .benefitKind(benefitKind)
                 .promptVersion(promptVersion)
                 .sourceHash(sourceHash)
                 .extractedAt(extractedAt)

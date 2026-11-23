@@ -1,5 +1,6 @@
 package kr.fintarget.api.domain.policy.entity;
 
+import kr.fintarget.api.domain.policy.condition.BenefitKind;
 import kr.fintarget.api.domain.policy.condition.ConditionExtraction;
 import kr.fintarget.api.domain.policy.condition.ConditionSource;
 import kr.fintarget.api.domain.policy.condition.HousingRequirement;
@@ -97,5 +98,18 @@ class PolicyConditionPersistenceTest {
         Policy found = reload(stored);
 
         assertThat(found.needsConditionExtraction(ConditionSource.of(found).contentHash(), VERSION)).isFalse();
+    }
+
+    @Test
+    void 경제적_혜택_유형을_저장하고_없으면_UNKNOWN으로_읽는다() {
+        Policy saved = policyRepository.save(youthPolicy("EXT-C5", "무주택 청년"));
+        saved.updateCondition(new ConditionExtraction(IncomeBasis.NONE, null, HousingRequirement.NONE, TargetType.INDIVIDUAL,
+                List.of(), BenefitKind.COST_SAVING).toPolicyCondition(VERSION, ConditionSource.of(saved).contentHash(),
+                LocalDateTime.now()));
+        Policy v1 = policyRepository.save(youthPolicy("EXT-C6", "무주택 세대주"));
+        v1.updateCondition(PolicyCondition.builder().incomeBasis(IncomeBasis.NONE).promptVersion("policy-condition-v1").build());
+
+        assertThat(reload(saved).getCondition().getBenefitKind()).isEqualTo(BenefitKind.COST_SAVING);
+        assertThat(reload(v1).getCondition().benefitKindOrUnknown()).isEqualTo(BenefitKind.UNKNOWN);
     }
 }

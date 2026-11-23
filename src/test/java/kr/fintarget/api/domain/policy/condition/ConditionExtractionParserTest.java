@@ -104,4 +104,14 @@ class ConditionExtractionParserTest {
         assertThatThrownBy(() -> ConditionExtractionParser.parse("{\"incomeBasis\": }"))
                 .isInstanceOf(ConditionExtractionException.class);
     }
+
+    @Test
+    void 경제적_혜택_유형을_읽고_정의되지_않았거나_없으면_UNKNOWN이다() {
+        assertThat(ConditionExtractionParser.parse("{\"benefitKind\": \"COST_SAVING\"}").benefitKind())
+                .isEqualTo(BenefitKind.COST_SAVING);
+        assertThat(ConditionExtractionParser.parse("{\"benefitKind\": \"loan\"}").benefitKind()).isEqualTo(BenefitKind.LOAN);
+        assertThat(ConditionExtractionParser.parse("{\"benefitKind\": \"CASH\"}").benefitKind()).isEqualTo(BenefitKind.UNKNOWN);
+        assertThat(ConditionExtractionParser.parse("{\"incomeBasis\": \"NONE\"}").benefitKind()).isEqualTo(BenefitKind.UNKNOWN);
+        assertThat(ConditionExtraction.unknown().benefitKind()).isEqualTo(BenefitKind.UNKNOWN);
+    }
 }

@@ -15,7 +15,7 @@ import java.util.Set;
  *
  * <p>잘못 저장되면 신청할 수 있는 사용자에게 정책이 보이지 않으므로, 해석할 수 없는 값은 버리지 않고 모름 쪽으로 낮춘다.
  * <ul>
- *   <li>필드가 없거나 정의되지 않은 enum 값이면 그 필드만 UNKNOWN</li>
+ *   <li>필드가 없거나 정의되지 않은 enum 값이면 그 필드만 UNKNOWN (경제적 혜택 유형 benefitKind 포함, #225)</li>
  *   <li>INDIVIDUAL인데 상한 금액·기간을 해석할 수 없거나 범위를 벗어나면 소득 기준을 UNKNOWN으로 낮춤 (금액 없이 INDIVIDUAL을 남기지 않음)</li>
  *   <li>지역 코드 중 정의되지 않은 값이 하나라도 있으면 지역 전체를 빈 목록으로 (일부만 남기면 다른 지역 사용자가 잘못 제외될 수 있음)</li>
  * </ul>
@@ -47,7 +47,8 @@ public final class ConditionExtractionParser {
                 incomeMaxMonthly,
                 enumValue(node, "housingRequirement", HousingRequirement.class, HousingRequirement.UNKNOWN),
                 enumValue(node, "targetType", TargetType.class, TargetType.UNKNOWN),
-                regions(node));
+                regions(node),
+                enumValue(node, "benefitKind", BenefitKind.class, BenefitKind.UNKNOWN));
     }
 
     // 원문 금액과 기간(ANNUAL/MONTHLY)으로 월 상한을 계산한다. 연소득은 12로 나누고 원 미만은 버린다

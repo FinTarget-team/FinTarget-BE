@@ -4,6 +4,7 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Embeddable;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
+import kr.fintarget.api.domain.policy.condition.BenefitKind;
 import kr.fintarget.api.domain.policy.condition.HousingRequirement;
 import kr.fintarget.api.domain.policy.condition.IncomeBasis;
 import kr.fintarget.api.domain.policy.condition.TargetType;
@@ -47,6 +48,11 @@ public class PolicyCondition {
     @Enumerated(EnumType.STRING)
     @Column(name = "target_type", length = 20)
     private TargetType targetType;
+
+    // 개인이 받는 경제적 혜택 유형 (#225, policy-condition-v2부터). 추천 상위 N 선택에만 쓴다. null은 UNKNOWN 취급
+    @Enumerated(EnumType.STRING)
+    @Column(name = "benefit_kind", length = 30)
+    private BenefitKind benefitKind;
 
     // 원문에서 읽은 신청 가능 지역 (Region 코드 쉼표 구분). 기존 region이 빈 정책의 지역 보완에만 쓴다
     @Column(name = "extracted_region")
@@ -101,6 +107,11 @@ public class PolicyCondition {
             count++;
         }
         return count;
+    }
+
+    /** 경제적 혜택 유형. 추출 전(v1로 추출했거나 아직 추출하지 않음)이면 UNKNOWN */
+    public BenefitKind benefitKindOrUnknown() {
+        return benefitKind == null ? BenefitKind.UNKNOWN : benefitKind;
     }
 
     /** 조건 3개(소득·주택·대상)를 모두 모를 때의 unknownCount */
