@@ -336,4 +336,13 @@ class YouthCenterPolicyMapperTest {
                 .result()
                 .youthPolicyList();
     }
+
+    @Test
+    void 신청기간_구분_코드를_원문과_함께_저장한다() throws Exception {
+        // 실응답 샘플 첫 항목은 상시(0057002)이고 신청 기간(aplyYmd)이 비어 있다 (#220)
+        Policy policy = YouthCenterPolicyMapper.toPolicy(parseItems().get(0));
+
+        assertThat(policy.getText().getApplyPeriodCode()).isEqualTo("0057002");
+        assertThat(policy.getText().getApplyPeriod()).isNull();
+    }
 }
