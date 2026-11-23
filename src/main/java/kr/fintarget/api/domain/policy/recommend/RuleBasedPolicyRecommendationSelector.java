@@ -21,8 +21,11 @@ import java.util.Set;
  *
  * <ol>
  *   <li>정책명에 제외 키워드(상담·교육·행사 등)가 있으면 뺀다 (policy.recommend.exclude-keywords)</li>
- *   <li>경제적 혜택 유형(benefitKind)으로 후보 순위를 나눈다: 1순위 MONEY·COST_SAVING, 2순위 LOAN(1순위로 N을 못 채울 때만).
- *       NON_FINANCIAL·NOT_FOR_INDIVIDUAL·UNKNOWN(추출 전 포함)은 넣지 않는다. 그래도 모자라면 있는 만큼만 돌려준다</li>
+ *   <li>경제적 혜택 유형(benefitKind)으로 후보 순위를 나눈다: 1순위 MONEY·COST_SAVING, 2순위 미추출 정책, 3순위 LOAN.
+ *       뒤 순위는 앞 순위로 N을 못 채울 때만 쓴다. NON_FINANCIAL·NOT_FOR_INDIVIDUAL·UNKNOWN은 넣지 않는다. 그래도 모자라면 있는 만큼만 돌려준다.
+ *       미추출 정책(아직 v2로 추출하지 않아 benefitKind가 없음: 배포 직후, AI 호출 실패)은 혜택 유형 조건만 건너뛴다 —
+ *       배포 직후 일괄 추출이 끝나기 전에도 추천 목록이 비지 않게 하려는 것. 키워드 제외·비슷한 이름 제한·정렬은 똑같이 적용한다.
+ *       응답을 해석하지 못해 UNKNOWN으로 저장된 정책은 추출이 끝난 정책으로 보고 넣지 않는다</li>
  *   <li>같은 후보 순위 안에서는 신청 가능 여부 → 시·군·구 한정이 아닌 정책(localScope false·null) → 사용자 지역 정책 → 조건 확인 정도
  *       → 현금 혜택(시뮬레이션 반영 혜택)이 있는 정책 → 신청 마감이 가까운 정책 → 정책 ID 순으로 정렬한다 (같은 입력이면 항상 같은 결과).
  *       온보딩 지역이 시·도 단위라 다른 구·군 한정 정책도 "사용자 지역 정책"으로 잡히므로, 시·군·구 한정 여부를 지역 비교보다 앞에 둔다.
@@ -57,9 +60,14 @@ public class RuleBasedPolicyRecommendationSelector implements PolicyRecommendati
     public List<Policy> select(User user, List<Policy> sortedCandidates, LocalDate today) {
         String userRegion = user.getRegion();
         List<Candidate> primary = new ArrayList<>();
+        List<Candidate> unextracted = new ArrayList<>();
         List<Candidate> loans = new ArrayList<>();
         for (Policy policy : sortedCandidates) {
             if (hasExcludedKeyword(policy.getName())) {
+                continue;
+            }
+            if (!hasBenefitKind(policy)) {
+                unextracted.add(candidate(policy, userRegion, today));
                 continue;
             }
             BenefitKind kind = benefitKind(policy);
@@ -73,6 +81,7 @@ public class RuleBasedPolicyRecommendationSelector implements PolicyRecommendati
         Set<Policy> selected = new LinkedHashSet<>();
         Map<String, Integer> nameCounts = new HashMap<>();
         fill(sorted(primary), selected, nameCounts);
+        fill(sorted(unextracted), selected, nameCounts);
         fill(sorted(loans), selected, nameCounts);
         return List.copyOf(selected);
     }
@@ -129,6 +138,12 @@ public class RuleBasedPolicyRecommendationSelector implements PolicyRecommendati
         return new Candidate(policy, PolicyRecommendationOrder.rank(policy, userRegion, today), localScope,
                 policy.hasBenefitForSimulation(), ApplyPeriodClassifier.deadline(policy.getText(), today),
                 SimilarPolicyName.key(policy.getName()));
+    }
+
+    // v2로 추출해 경제적 혜택 유형이 저장됐는지 (v1로만 추출했거나 아직 추출하지 않으면 false)
+    private static boolean hasBenefitKind(Policy policy) {
+        PolicyCondition condition = policy.getCondition();
+        return condition != null && condition.getBenefitKind() != null;
     }
 
     private static BenefitKind benefitKind(Policy policy) {

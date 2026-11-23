@@ -362,7 +362,8 @@ class PolicyServiceTest {
                 .thenReturn(List.of(consulting, unknown, rent));
 
         assertThat(policyService.findCandidatePolicies("user-1", null)).containsExactly(consulting, unknown, rent);
+        // 추천 목록에서 비금전 정책은 빠지고, 아직 경제적 혜택 유형을 추출하지 않은 정책은 뒤에 채운다
         assertThat(policyService.getMatchingPolicies("user-1", null)).extracting(PolicyResponse::name)
-                .containsExactly("청년 월세 지원");
+                .containsExactly("청년 월세 지원", "추출 전 정책");
     }
 }

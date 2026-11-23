@@ -73,17 +73,50 @@ class RuleBasedPolicyRecommendationSelectorTest {
     }
 
     @Test
-    void 비금전_개인_혜택_아님_UNKNOWN_추출_전_정책은_모자라도_넣지_않는다() {
+    void 비금전_개인_혜택_아님_UNKNOWN은_모자라도_넣지_않는다() {
         List<Policy> candidates = List.of(
                 policy("청년 공간 운영", BenefitKind.NON_FINANCIAL),
                 policy("시설 조성", BenefitKind.NOT_FOR_INDIVIDUAL),
                 policy("알 수 없는 정책", BenefitKind.UNKNOWN),
-                policy("추출 전 정책", null),
                 policy("월세 지원", BenefitKind.MONEY),
                 policy("문화 바우처", BenefitKind.COST_SAVING));
 
         assertThat(names(selector(10).select(USER, candidates, TODAY))).containsExactlyInAnyOrder("월세 지원", "문화 바우처");
     }
+
+    // v1으로만 추출해 경제적 혜택 유형이 없는 정책 (배포 직후 상태)
+    private static Policy v1Extracted(String name) {
+        Policy policy = policy(name, null);
+        policy.updateCondition(PolicyCondition.builder().promptVersion("policy-condition-v1").build());
+        return policy;
+    }
+
+    @Test
+    void 미추출_정책만_있으면_혜택_유형_조건만_건너뛰고_채운다() {
+        // 배포 직후: 모든 정책이 v1이거나 조건이 없다. 키워드 제외는 그대로 적용한다
+        List<Policy> candidates = List.of(
+                v1Extracted("청년 월세 지원"),
+                policy("조건 없는 정책", null),
+                v1Extracted("청년 재무상담"),
+                v1Extracted("청년 수당"));
+
+        assertThat(names(selector(10).select(USER, candidates, TODAY)))
+                .containsExactlyInAnyOrder("청년 월세 지원", "조건 없는 정책", "청년 수당");
+    }
+
+    @Test
+    void 추출이_끝난_경제적_혜택_정책_미추출_정책_대출_순서로_채운다() {
+        List<Policy> candidates = List.of(
+                policy("전세 대출", BenefitKind.LOAN),
+                v1Extracted("미추출 정책"),
+                policy("알 수 없는 정책", BenefitKind.UNKNOWN),
+                policy("월세 지원", BenefitKind.MONEY));
+
+        assertThat(names(selector(10).select(USER, candidates, TODAY)))
+                .containsExactly("월세 지원", "미추출 정책", "전세 대출");
+        assertThat(names(selector(2).select(USER, candidates, TODAY))).containsExactly("월세 지원", "미추출 정책");
+    }
+
 
     @Test
     void 경제적_혜택_정책으로_못_채울_때만_대출로_채운다() {
