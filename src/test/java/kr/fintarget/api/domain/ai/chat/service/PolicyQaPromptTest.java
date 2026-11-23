@@ -16,19 +16,27 @@ class PolicyQaPromptTest {
     void 클래스패스의_현재_버전_프롬프트를_읽어_원문과_사용자_정보를_채운다() {
         String rendered = new PolicyQaPrompt().render(new PolicyDocument("정책명: 청년 월세", false), PROFILE);
 
-        assertThat(PolicyQaPrompt.VERSION).isEqualTo("policy-qa-v2");
+        assertThat(PolicyQaPrompt.VERSION).isEqualTo("policy-qa-v3");
         assertThat(rendered)
                 .contains("[정책 원문]\n정책명: 청년 월세", "- 거주 지역: 서울", "정책 원문에서 확인할 수 없습니다")
                 .doesNotContain("{{policy}}", "{{profile}}");
     }
 
     @Test
-    void v2는_답변_형식_규칙을_담고_v1은_비교_평가용으로_계속_읽힌다() {
-        String v2 = new PolicyQaPrompt().render(new PolicyDocument("정책명: 청년 월세", false), PROFILE);
+    void v3는_소득_환산_비교와_묻지_않은_자격_금지_원문_값_합치기_규칙을_담는다() {
+        String v3 = new PolicyQaPrompt().render(new PolicyDocument("정책명: 청년 월세", false), PROFILE);
+
+        assertThat(v3).contains("\"연소득 환산\" 구간과 비교합니다", "자격 해당 여부(지역, 나이, 소득 등)를 덧붙이지 않습니다",
+                "함께 성립할 수 있는 내용은 합쳐서", "항목 뒤에 다른 문단을 붙이지 않습니다", "결론과 항목 사이에 빈 줄을 넣지 않습니다",
+                "링크와 URL은 답변에 쓰지 않습니다", "항목은 최대 3개", "마크다운 문법을 쓰지 않습니다");
+    }
+
+    @Test
+    void 이전_버전은_비교_평가용으로_계속_읽힌다() {
+        String v2 = PolicyQaPrompt.ofVersion("policy-qa-v2").render(new PolicyDocument("정책명: 청년 월세", false), PROFILE);
         String v1 = PolicyQaPrompt.ofVersion("policy-qa-v1").render(new PolicyDocument("정책명: 청년 월세", false), PROFILE);
 
-        assertThat(v2).contains("링크와 URL은 답변에 쓰지 않습니다", "\"- \"로 시작하는 항목", "항목은 최대 3개",
-                "마크다운 문법을 쓰지 않습니다", "사용자가 물은 것에만 답합니다");
+        assertThat(v2).contains("사용자가 물은 것에만 답합니다", "항목은 최대 3개").doesNotContain("연소득 환산");
         assertThat(v1).contains("신청 링크가 있으면 함께 안내합니다").doesNotContain("마크다운");
     }
 

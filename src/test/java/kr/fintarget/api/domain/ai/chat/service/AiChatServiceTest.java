@@ -358,7 +358,7 @@ class AiChatServiceTest {
         service.ask(userId, policyId, "비밀-질문-본문", null);
 
         assertThat(output.getAll())
-                .contains("정책 AI 질문 응답", "promptVersion=policy-qa-v2", "inputTokens=100", "outputTokens=20")
+                .contains("정책 AI 질문 응답", "promptVersion=policy-qa-v3", "inputTokens=100", "outputTokens=20")
                 .doesNotContain("비밀-질문-본문", "답변: 비밀");
     }
 }

@@ -7,10 +7,12 @@ import kr.fintarget.api.domain.user.code.Region;
 import kr.fintarget.api.domain.user.entity.User;
 
 import java.time.Year;
+import java.util.Locale;
 
 /**
  * AI 프롬프트에 넣을 사용자 정보 5개 (나이 구간, 소득 구간, 지역, 주택 보유 여부, 취업 상태).
- * 출생연도·소득 원래 값은 넣지 않고 구간만 넣는다. 값이 없거나 구간을 정할 수 없으면 "확인 필요".
+ * 출생연도·소득 원래 값은 넣지 않고 구간만 넣는다. 소득은 월 소득 구간과 연소득 환산 구간을 함께 쓴다 (#216).
+ * 값이 없거나 구간을 정할 수 없으면 "확인 필요".
  */
 public record UserProfileSummary(String age, String income, String region, String housing, String employment) {
 
@@ -43,18 +45,23 @@ public record UserProfileSummary(String age, String income, String region, Strin
         return "만 " + (ageAfterBirthday - 1) + "세 또는 만 " + ageAfterBirthday + "세 (생일 전후에 따라 다름)";
     }
 
-    // 구간 개편 전 대표값(1,500,000 등)은 fromIncome이 null을 돌려주므로 확인 필요
+    // 구간 개편 전 대표값(1,500,000 등)은 fromIncome이 null을 돌려주므로 확인 필요.
+    // 원문 소득 조건은 연소득 기준이 많아 월 소득×12 환산 구간을 함께 넣는다 (#216). 모델이 직접 곱하다 틀리지 않도록 서버에서 계산한다
     private static String incomeOf(Long income) {
         IncomeBracket bracket = IncomeBracket.fromIncome(income);
         if (bracket == null) {
             return UNKNOWN;
         }
-        String min = manwon(bracket.getMinIncome());
-        if (bracket.getMaxIncome() == null) {
-            return min + " 이상";
+        Long annualMax = bracket.getMaxIncome() == null ? null : bracket.getMaxIncome() * 12;
+        return range(bracket.getMinIncome(), bracket.getMaxIncome())
+                + " (연소득 환산 " + range(bracket.getMinIncome() * 12, annualMax) + ")";
+    }
+
+    private static String range(long min, Long max) {
+        if (max == null) {
+            return manwon(min) + " 이상";
         }
-        String max = manwon(bracket.getMaxIncome());
-        return bracket.getMinIncome() == 0 ? max + " 미만" : min + " 이상 " + max + " 미만";
+        return min == 0 ? manwon(max) + " 미만" : manwon(min) + " 이상 " + manwon(max) + " 미만";
     }
 
     private static String regionOf(String code) {
@@ -83,6 +90,6 @@ public record UserProfileSummary(String age, String income, String region, Strin
     }
 
     private static String manwon(long won) {
-        return (won / 10_000) + "만원";
+        return String.format(Locale.ROOT, "%,d만원", won / 10_000);
     }
 }
