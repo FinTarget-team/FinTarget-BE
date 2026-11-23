@@ -23,8 +23,10 @@ import java.util.Set;
  *   <li>정책명에 제외 키워드(상담·교육·행사 등)가 있으면 뺀다 (policy.recommend.exclude-keywords)</li>
  *   <li>경제적 혜택 유형(benefitKind)으로 후보 순위를 나눈다: 1순위 MONEY·COST_SAVING, 2순위 LOAN(1순위로 N을 못 채울 때만).
  *       NON_FINANCIAL·NOT_FOR_INDIVIDUAL·UNKNOWN(추출 전 포함)은 넣지 않는다. 그래도 모자라면 있는 만큼만 돌려준다</li>
- *   <li>같은 후보 순위 안에서는 #220 정렬 키 → 현금 혜택(시뮬레이션 반영 혜택)이 있는 정책 → 신청 마감이 가까운 정책 → 정책 ID 순으로 정렬한다
- *       (같은 입력이면 항상 같은 결과)</li>
+ *   <li>같은 후보 순위 안에서는 신청 가능 여부 → 시·군·구 한정이 아닌 정책(localScope false·null) → 사용자 지역 정책 → 조건 확인 정도
+ *       → 현금 혜택(시뮬레이션 반영 혜택)이 있는 정책 → 신청 마감이 가까운 정책 → 정책 ID 순으로 정렬한다 (같은 입력이면 항상 같은 결과).
+ *       온보딩 지역이 시·도 단위라 다른 구·군 한정 정책도 "사용자 지역 정책"으로 잡히므로, 시·군·구 한정 여부를 지역 비교보다 앞에 둔다.
+ *       제외하지는 않고 뒤로만 보낸다</li>
  *   <li>비슷한 이름({@link SimilarPolicyName})은 최대 2건. 빠진 자리는 같은 후보 순위의 정렬 상위 30건 안에서 채우고,
  *       그래도 못 채우면 제한 없이 정렬 순서대로 채운다</li>
  * </ol>
@@ -106,7 +108,10 @@ public class RuleBasedPolicyRecommendationSelector implements PolicyRecommendati
 
     private static List<Candidate> sorted(List<Candidate> candidates) {
         List<Candidate> sorted = new ArrayList<>(candidates);
-        sorted.sort(Comparator.comparing(Candidate::rank, PolicyRecommendationOrder.RANK_ORDER)
+        sorted.sort(Comparator.comparing((Candidate candidate) -> candidate.rank().applyStatus())
+                .thenComparingInt(candidate -> candidate.localScope() ? 1 : 0)
+                .thenComparingInt(candidate -> candidate.rank().localRank())
+                .thenComparingInt(candidate -> candidate.rank().unknownCount())
                 .thenComparingInt(candidate -> candidate.hasCashBenefit() ? 0 : 1)
                 .thenComparing(Candidate::deadline, Comparator.nullsLast(Comparator.naturalOrder()))
                 .thenComparing(candidate -> String.valueOf(candidate.policy().getPolicyId())));
@@ -114,7 +119,9 @@ public class RuleBasedPolicyRecommendationSelector implements PolicyRecommendati
     }
 
     private static Candidate candidate(Policy policy, String userRegion, LocalDate today) {
-        return new Candidate(policy, PolicyRecommendationOrder.rank(policy, userRegion, today),
+        PolicyCondition condition = policy.getCondition();
+        boolean localScope = condition != null && Boolean.TRUE.equals(condition.getLocalScope());
+        return new Candidate(policy, PolicyRecommendationOrder.rank(policy, userRegion, today), localScope,
                 policy.hasBenefitForSimulation(), ApplyPeriodClassifier.deadline(policy.getText(), today),
                 SimilarPolicyName.key(policy.getName()));
     }
@@ -124,7 +131,7 @@ public class RuleBasedPolicyRecommendationSelector implements PolicyRecommendati
         return condition == null ? BenefitKind.UNKNOWN : condition.benefitKindOrUnknown();
     }
 
-    private record Candidate(Policy policy, PolicyRecommendationOrder.Rank rank, boolean hasCashBenefit,
+    private record Candidate(Policy policy, PolicyRecommendationOrder.Rank rank, boolean localScope, boolean hasCashBenefit,
                              LocalDate deadline, String nameKey) {
     }
 }

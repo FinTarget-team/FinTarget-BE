@@ -167,4 +167,34 @@ class RuleBasedPolicyRecommendationSelectorTest {
 
         assertThat(names(selector(2).select(USER, housingOnly, TODAY))).containsExactlyInAnyOrder("월세 지원", "공공임대");
     }
+
+    private static Policy scoped(String name, String region, Boolean localScope) {
+        Policy policy = policy(name, BenefitKind.MONEY, region, "0057002");
+        policy.updateCondition(PolicyCondition.builder().benefitKind(BenefitKind.MONEY).localScope(localScope).build());
+        return policy;
+    }
+
+    @Test
+    void 시군구_한정_정책은_사용자_지역_정책이어도_전국_정책보다_뒤에_둔다() {
+        // 서울 사용자에게 강남구 한정 정책(localScope=true)은 서울 정책으로 잡히지만, 시·도 전체·전국 정책보다 뒤로 간다
+        Policy gangnamOnly = scoped("강남구 청년 월세", "SEOUL", true);
+        Policy seoulWide = scoped("서울 청년 월세", "SEOUL", false);
+        Policy national = scoped("전국 청년 월세", null, false);
+        Policy unknownScope = scoped("범위 모름 청년 수당", null, null);
+
+        List<String> result = names(selector(10).select(USER, List.of(gangnamOnly, national, unknownScope, seoulWide), TODAY));
+
+        assertThat(result.getFirst()).isEqualTo("서울 청년 월세");
+        assertThat(result.subList(1, 3)).containsExactlyInAnyOrder("전국 청년 월세", "범위 모름 청년 수당");
+        assertThat(result.getLast()).isEqualTo("강남구 청년 월세");
+    }
+
+    @Test
+    void 시군구_한정이어도_신청_가능_여부가_먼저이고_제외하지는_않는다() {
+        Policy openLocal = scoped("강남구 상시 지원금", "SEOUL", true);
+        Policy closedNational = policy("마감 전국 지원금", BenefitKind.MONEY, null, "0057003");
+
+        assertThat(names(selector(10).select(USER, List.of(closedNational, openLocal), TODAY)))
+                .containsExactly("강남구 상시 지원금", "마감 전국 지원금");
+    }
 }

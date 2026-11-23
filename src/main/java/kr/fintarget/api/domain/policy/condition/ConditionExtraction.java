@@ -11,13 +11,20 @@ import java.util.List;
  * @param incomeMaxMonthly 본인 소득 상한(세전 월, 원). incomeBasis가 INDIVIDUAL일 때만 값이 있다
  * @param regions          원문에서 읽은 지역 코드 (정의된 Region 코드만)
  * @param benefitKind      경제적 혜택 유형 (#225)
+ * @param localScope       신청 자격이 특정 시·군·구 거주자로 한정되는지 (#225). 알 수 없으면 null
  */
 public record ConditionExtraction(IncomeBasis incomeBasis, Long incomeMaxMonthly, HousingRequirement housingRequirement,
-                                  TargetType targetType, List<String> regions, BenefitKind benefitKind) {
+                                  TargetType targetType, List<String> regions, BenefitKind benefitKind, Boolean localScope) {
 
     public ConditionExtraction {
         regions = regions == null ? List.of() : List.copyOf(regions);
         benefitKind = benefitKind == null ? BenefitKind.UNKNOWN : benefitKind;
+    }
+
+    /** 시·군·구 한정 여부 없이 만든다 (테스트용, null) */
+    public ConditionExtraction(IncomeBasis incomeBasis, Long incomeMaxMonthly, HousingRequirement housingRequirement,
+                               TargetType targetType, List<String> regions, BenefitKind benefitKind) {
+        this(incomeBasis, incomeMaxMonthly, housingRequirement, targetType, regions, benefitKind, null);
     }
 
     /** 경제적 혜택 유형 없이 만든다 (테스트용, UNKNOWN) */
@@ -29,7 +36,7 @@ public record ConditionExtraction(IncomeBasis incomeBasis, Long incomeMaxMonthly
     /** 모든 조건을 모름. 응답 해석 실패나 판단할 원문이 없을 때 저장한다 */
     public static ConditionExtraction unknown() {
         return new ConditionExtraction(IncomeBasis.UNKNOWN, null, HousingRequirement.UNKNOWN, TargetType.UNKNOWN, List.of(),
-                BenefitKind.UNKNOWN);
+                BenefitKind.UNKNOWN, null);
     }
 
     public PolicyCondition toPolicyCondition(String promptVersion, String sourceHash, LocalDateTime extractedAt) {
@@ -40,6 +47,7 @@ public record ConditionExtraction(IncomeBasis incomeBasis, Long incomeMaxMonthly
                 .targetType(targetType)
                 .extractedRegion(regions.isEmpty() ? null : String.join(",", regions))
                 .benefitKind(benefitKind)
+                .localScope(localScope)
                 .promptVersion(promptVersion)
                 .sourceHash(sourceHash)
                 .extractedAt(extractedAt)

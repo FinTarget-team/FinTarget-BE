@@ -14,7 +14,7 @@ class PolicyConditionPromptTest {
         assertThat(PolicyConditionPrompt.VERSION).isEqualTo("policy-condition-v2");
         assertThat(prompt.version()).isEqualTo(PolicyConditionPrompt.VERSION);
         assertThat(prompt.instructions()).contains("benefitKind", "COST_SAVING", "NON_FINANCIAL", "NOT_FOR_INDIVIDUAL",
-                "자기돌봄비 연 200만원", "참석 실비", "만남·연결");
+                "자기돌봄비 연 200만원", "참석 실비", "만남·연결", "localScope", "특정 시·군·구 거주자");
     }
 
     @Test

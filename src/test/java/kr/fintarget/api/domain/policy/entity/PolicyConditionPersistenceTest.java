@@ -104,12 +104,14 @@ class PolicyConditionPersistenceTest {
     void 경제적_혜택_유형을_저장하고_없으면_UNKNOWN으로_읽는다() {
         Policy saved = policyRepository.save(youthPolicy("EXT-C5", "무주택 청년"));
         saved.updateCondition(new ConditionExtraction(IncomeBasis.NONE, null, HousingRequirement.NONE, TargetType.INDIVIDUAL,
-                List.of(), BenefitKind.COST_SAVING).toPolicyCondition(VERSION, ConditionSource.of(saved).contentHash(),
+                List.of(), BenefitKind.COST_SAVING, true).toPolicyCondition(VERSION, ConditionSource.of(saved).contentHash(),
                 LocalDateTime.now()));
         Policy v1 = policyRepository.save(youthPolicy("EXT-C6", "무주택 세대주"));
         v1.updateCondition(PolicyCondition.builder().incomeBasis(IncomeBasis.NONE).promptVersion("policy-condition-v1").build());
 
         assertThat(reload(saved).getCondition().getBenefitKind()).isEqualTo(BenefitKind.COST_SAVING);
+        assertThat(reload(saved).getCondition().getLocalScope()).isTrue();
+        assertThat(reload(v1).getCondition().getLocalScope()).isNull();
         assertThat(reload(v1).getCondition().benefitKindOrUnknown()).isEqualTo(BenefitKind.UNKNOWN);
     }
 }

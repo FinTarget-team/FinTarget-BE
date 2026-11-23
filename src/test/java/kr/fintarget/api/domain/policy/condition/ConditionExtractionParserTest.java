@@ -114,4 +114,14 @@ class ConditionExtractionParserTest {
         assertThat(ConditionExtractionParser.parse("{\"incomeBasis\": \"NONE\"}").benefitKind()).isEqualTo(BenefitKind.UNKNOWN);
         assertThat(ConditionExtraction.unknown().benefitKind()).isEqualTo(BenefitKind.UNKNOWN);
     }
+
+    @Test
+    void 시군구_한정_여부는_JSON_불리언만_읽고_없거나_잘못된_값이면_null이다() {
+        assertThat(ConditionExtractionParser.parse("{\"localScope\": true}").localScope()).isTrue();
+        assertThat(ConditionExtractionParser.parse("{\"localScope\": false}").localScope()).isFalse();
+        assertThat(ConditionExtractionParser.parse("{\"localScope\": null}").localScope()).isNull();
+        assertThat(ConditionExtractionParser.parse("{\"incomeBasis\": \"NONE\"}").localScope()).isNull();
+        assertThat(ConditionExtractionParser.parse("{\"localScope\": \"true\"}").localScope()).isNull();
+        assertThat(ConditionExtractionParser.parse("{\"localScope\": 1}").localScope()).isNull();
+    }
 }

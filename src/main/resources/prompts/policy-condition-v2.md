@@ -52,13 +52,19 @@
 - "매칭"이 적립금 매칭이 아니라 만남·연결(커플 매칭, 멘토 매칭, 기업 매칭)이면 경제적 혜택이 아닙니다. 예: "미혼남녀 만남의 장 마련" → NON_FINANCIAL.
 - 기업에 지원금을 주고 기업이 근로자에게 혜택을 주는 사업은, 신청자가 기업이면 NOT_FOR_INDIVIDUAL입니다.
 
+시·군·구 한정 여부 (localScope)
+- true: 신청 자격이 특정 시·군·구 거주자(또는 그 시·군·구 소재 기관 소속)로 한정됩니다. 예: "강남구 거주 청년", "화순군에 전입하는 청년", "의성군 청년기업", "관내 거주자"(시·군·구 사업일 때).
+- false: 시·도 전체 거주자나 전국이 대상입니다. 예: "서울시 거주 청년", "경기도 내 대학", 전국 공통 사업.
+- null: 원문만으로 판단할 수 없습니다.
+- 정책명이나 문의처에 시·군·구 이름이 있어도, 신청 자격이 그 시·군·구 거주로 한정된다는 근거가 없으면 null입니다.
+
 원문에 근거가 없으면 추측하지 않습니다.
 
 출력은 아래 JSON 객체 하나만 씁니다. 설명, 마크다운, 코드 블록을 쓰지 않습니다.
-{"incomeBasis": "INDIVIDUAL", "incomeMaxAmount": 50000000, "incomePeriod": "ANNUAL", "housingRequirement": "HOMELESS_REQUIRED", "targetType": "INDIVIDUAL", "extractedRegions": [], "benefitKind": "MONEY"}
+{"incomeBasis": "INDIVIDUAL", "incomeMaxAmount": 50000000, "incomePeriod": "ANNUAL", "housingRequirement": "HOMELESS_REQUIRED", "targetType": "INDIVIDUAL", "extractedRegions": [], "benefitKind": "MONEY", "localScope": false}
 
 예시 (형식만 참고합니다)
-- "만 19~34세 무주택 세대주, 본인 연소득 5천만원 이하, 월세 최대 20만원 12개월 지원" → {"incomeBasis": "INDIVIDUAL", "incomeMaxAmount": 50000000, "incomePeriod": "ANNUAL", "housingRequirement": "HOMELESS_REQUIRED", "targetType": "INDIVIDUAL", "extractedRegions": [], "benefitKind": "MONEY"}
-- "부부합산 연소득 5천만원 이하 무주택 단독 세대주, 전월세보증금 대출" → {"incomeBasis": "COUPLE_COMBINED", "incomeMaxAmount": null, "incomePeriod": null, "housingRequirement": "HOMELESS_REQUIRED", "targetType": "INDIVIDUAL", "extractedRegions": [], "benefitKind": "LOAN"}
-- "관내 소상공인(사업자등록 후 6개월 이상), 연매출 3억원 이하, 대출이자 2% 보전" → {"incomeBasis": "NONE", "incomeMaxAmount": null, "incomePeriod": null, "housingRequirement": "NONE", "targetType": "BUSINESS", "extractedRegions": [], "benefitKind": "MONEY"}
-- 등록된 지역이 "전국"이고 "청암대·동신대·세한대 재학생 대상 금연 교육·캠페인, 전남금연지원센터 연계" → {"incomeBasis": "NONE", "incomeMaxAmount": null, "incomePeriod": null, "housingRequirement": "NONE", "targetType": "INDIVIDUAL", "extractedRegions": ["JEONNAM"], "benefitKind": "NON_FINANCIAL"}
+- "만 19~34세 무주택 세대주, 본인 연소득 5천만원 이하, 월세 최대 20만원 12개월 지원" → {"incomeBasis": "INDIVIDUAL", "incomeMaxAmount": 50000000, "incomePeriod": "ANNUAL", "housingRequirement": "HOMELESS_REQUIRED", "targetType": "INDIVIDUAL", "extractedRegions": [], "benefitKind": "MONEY", "localScope": false}
+- "부부합산 연소득 5천만원 이하 무주택 단독 세대주, 전월세보증금 대출" → {"incomeBasis": "COUPLE_COMBINED", "incomeMaxAmount": null, "incomePeriod": null, "housingRequirement": "HOMELESS_REQUIRED", "targetType": "INDIVIDUAL", "extractedRegions": [], "benefitKind": "LOAN", "localScope": false}
+- "관내 소상공인(사업자등록 후 6개월 이상), 연매출 3억원 이하, 대출이자 2% 보전" → {"incomeBasis": "NONE", "incomeMaxAmount": null, "incomePeriod": null, "housingRequirement": "NONE", "targetType": "BUSINESS", "extractedRegions": [], "benefitKind": "MONEY", "localScope": true}
+- 등록된 지역이 "전국"이고 "청암대·동신대·세한대 재학생 대상 금연 교육·캠페인, 전남금연지원센터 연계" → {"incomeBasis": "NONE", "incomeMaxAmount": null, "incomePeriod": null, "housingRequirement": "NONE", "targetType": "INDIVIDUAL", "extractedRegions": ["JEONNAM"], "benefitKind": "NON_FINANCIAL", "localScope": true}

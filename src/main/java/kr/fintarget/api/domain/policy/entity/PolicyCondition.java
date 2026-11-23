@@ -54,6 +54,11 @@ public class PolicyCondition {
     @Column(name = "benefit_kind", length = 30)
     private BenefitKind benefitKind;
 
+    // 신청 자격이 특정 시·군·구 거주자로 한정되는지 (#225, policy-condition-v2부터). 시·도 전체·전국이면 false, 알 수 없으면 null.
+    // 온보딩 지역이 시·도 단위라 다른 구·군 한정 정책을 걸러낼 수 없어, 추천 상위 N 정렬에서 뒤로만 보낸다
+    @Column(name = "local_scope")
+    private Boolean localScope;
+
     // 원문에서 읽은 신청 가능 지역 (Region 코드 쉼표 구분). 기존 region이 빈 정책의 지역 보완에만 쓴다
     @Column(name = "extracted_region")
     private String extractedRegion;
