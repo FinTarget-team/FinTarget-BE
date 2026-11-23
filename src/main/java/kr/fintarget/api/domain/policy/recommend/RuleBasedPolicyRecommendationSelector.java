@@ -4,6 +4,7 @@ import kr.fintarget.api.domain.policy.condition.BenefitKind;
 import kr.fintarget.api.domain.policy.entity.Policy;
 import kr.fintarget.api.domain.policy.entity.PolicyCondition;
 import kr.fintarget.api.domain.user.entity.User;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -20,7 +21,9 @@ import java.util.Set;
  * 규칙 기반 추천 상위 N 선택 (#225). LLM을 호출하지 않는다.
  *
  * <ol>
- *   <li>정책명에 제외 키워드(상담·교육·행사 등)가 있으면 뺀다 (policy.recommend.exclude-keywords)</li>
+ *   <li>정책명에 제외 키워드(상담·교육·행사 등)가 있으면 뺀다 (policy.recommend.exclude-keywords).
+ *       단, 정책명에 예외 키워드(기본 "바우처")가 있으면 제외 키워드를 적용하지 않는다 (policy.recommend.exclude-exempt-keywords,
+ *       예: "심리상담 바우처"는 상담이 아니라 상담비를 지원하는 바우처다)</li>
  *   <li>경제적 혜택 유형(benefitKind)으로 후보 순위를 나눈다: 1순위 MONEY·COST_SAVING, 2순위 미추출 정책, 3순위 LOAN.
  *       뒤 순위는 앞 순위로 N을 못 채울 때만 쓴다. NON_FINANCIAL·NOT_FOR_INDIVIDUAL·UNKNOWN은 넣지 않는다. 그래도 모자라면 있는 만큼만 돌려준다.
  *       미추출 정책(아직 v2로 추출하지 않아 benefitKind가 없음: 배포 직후, AI 호출 실패)은 혜택 유형 조건만 건너뛴다 —
@@ -44,16 +47,29 @@ public class RuleBasedPolicyRecommendationSelector implements PolicyRecommendati
 
     private final int limit;
     private final List<String> excludeKeywords;
+    private final List<String> exemptKeywords;
 
+    @Autowired
     public RuleBasedPolicyRecommendationSelector(
             @Value("${policy.recommend.limit:10}") int limit,
             @Value("${policy.recommend.exclude-keywords:상담,콘서트,토크,강연,특강,교육,아카데미,캠프,축제,박람회,설명회,멘토링,네트워킹,행사}")
-            List<String> excludeKeywords) {
+            List<String> excludeKeywords,
+            @Value("${policy.recommend.exclude-exempt-keywords:바우처}") List<String> exemptKeywords) {
         if (limit < 1) {
             throw new IllegalArgumentException("policy.recommend.limit는 1 이상이어야 합니다: " + limit);
         }
         this.limit = limit;
-        this.excludeKeywords = excludeKeywords.stream().map(String::trim).filter(keyword -> !keyword.isEmpty()).toList();
+        this.excludeKeywords = clean(excludeKeywords);
+        this.exemptKeywords = clean(exemptKeywords);
+    }
+
+    /** 예외 키워드 없이 만든다 (테스트용) */
+    public RuleBasedPolicyRecommendationSelector(int limit, List<String> excludeKeywords) {
+        this(limit, excludeKeywords, List.of());
+    }
+
+    private static List<String> clean(List<String> keywords) {
+        return keywords.stream().map(String::trim).filter(keyword -> !keyword.isEmpty()).toList();
     }
 
     @Override
@@ -86,9 +102,12 @@ public class RuleBasedPolicyRecommendationSelector implements PolicyRecommendati
         return List.copyOf(selected);
     }
 
-    /** 정책명에 제외 키워드가 있는지 */
+    /** 정책명에 제외 키워드가 있는지. 예외 키워드가 있으면 제외하지 않는다 */
     boolean hasExcludedKeyword(String name) {
-        return name != null && excludeKeywords.stream().anyMatch(name::contains);
+        if (name == null || exemptKeywords.stream().anyMatch(name::contains)) {
+            return false;
+        }
+        return excludeKeywords.stream().anyMatch(name::contains);
     }
 
     // 정렬 상위 30건 안에서 비슷한 이름 제한을 지키며 채우고, 모자라면 제한 없이 정렬 순서대로 채운다

@@ -243,4 +243,20 @@ class RuleBasedPolicyRecommendationSelectorTest {
         assertThat(names(selector(10).select(USER, List.of(structuredLocal, structuredWide), TODAY)))
                 .containsExactly("정형값 서울 전체 지원금", "정형값 한정 지원금");
     }
+
+    @Test
+    void 정책명에_예외_키워드가_있으면_제외_키워드를_적용하지_않는다() {
+        RuleBasedPolicyRecommendationSelector exempting =
+                new RuleBasedPolicyRecommendationSelector(10, List.of("상담", "교육"), List.of("바우처"));
+        List<Policy> candidates = List.of(
+                policy("정신건강 심리상담 바우처 사업", BenefitKind.COST_SAVING),
+                policy("청년드림은행(청년재무상담소)", BenefitKind.MONEY),
+                policy("2026년 청년정책 종합상담 참여자 모집", BenefitKind.COST_SAVING),
+                policy("청년 월세 지원", BenefitKind.MONEY));
+
+        assertThat(names(exempting.select(USER, candidates, TODAY)))
+                .containsExactlyInAnyOrder("정신건강 심리상담 바우처 사업", "청년 월세 지원");
+        assertThat(exempting.hasExcludedKeyword("금융 교육 바우처")).isFalse();
+        assertThat(exempting.hasExcludedKeyword("금융 교육")).isTrue();
+    }
 }
