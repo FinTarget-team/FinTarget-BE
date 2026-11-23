@@ -33,6 +33,26 @@ class UserProfileSummaryTest {
     }
 
     @Test
+    void 중위소득_비율은_단건_질문용_프롬프트에만_넣는다() {
+        User user = base().birthYear(2000).income(IncomeBracket.UNDER_150.getIncome()).build();
+
+        UserProfileSummary summary = UserProfileSummary.of(user, YEAR);
+
+        assertThat(summary.incomeMedianRatio()).isEqualTo("59% 미만");
+        assertThat(summary.toQaPromptText()).startsWith(summary.toPromptText())
+                .endsWith("\n- 1인 가구 기준 중위소득 대비: 59% 미만");
+        assertThat(summary.toPromptText()).doesNotContain("중위소득");
+    }
+
+    @Test
+    void 소득을_모르거나_기준값이_없는_연도면_중위소득_비율은_확인_필요() {
+        assertThat(UserProfileSummary.of(base().build(), YEAR).toQaPromptText())
+                .endsWith("- 1인 가구 기준 중위소득 대비: 확인 필요");
+        assertThat(UserProfileSummary.of(base().income(IncomeBracket.UNDER_150.getIncome()).build(), Year.of(2030))
+                .incomeMedianRatio()).isNull();
+    }
+
+    @Test
     void 소득_구간의_양_끝을_표현한다() {
         assertThat(UserProfileSummary.of(base().income(IncomeBracket.UNDER_150.getIncome()).build(), YEAR).income())
                 .isEqualTo("150만원 미만 (연소득 환산 1,800만원 미만)");

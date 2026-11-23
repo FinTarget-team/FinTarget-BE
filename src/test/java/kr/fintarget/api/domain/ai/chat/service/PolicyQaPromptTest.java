@@ -3,6 +3,7 @@ package kr.fintarget.api.domain.ai.chat.service;
 import org.junit.jupiter.api.Test;
 
 import java.io.UncheckedIOException;
+import java.time.LocalDate;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -32,11 +33,23 @@ class PolicyQaPromptTest {
     }
 
     @Test
+    void v3는_오늘_날짜와_중위소득_비율을_넣고_기간_계산_대화_정보_규칙을_담는다() {
+        String v3 = new PolicyQaPrompt().render(new PolicyDocument("정책명: 청년 월세", false), PROFILE,
+                LocalDate.of(2026, 11, 23));
+
+        assertThat(v3).contains("[오늘 날짜]\n2026년 11월 23일 (월)", "- 1인 가구 기준 중위소득 대비: 확인 필요",
+                        "\"1인 가구 기준으로 보면\"이라고 밝히고", "사업 기간을 신청 기간이라고 바꿔 말하지 않습니다",
+                        "[오늘 날짜]와 원문의 신청 기간을 비교해", "원문 숫자만으로 바로 구할 수 있는 합계는 계산해서",
+                        "사용자가 대화에서 직접 알려준 사실")
+                .doesNotContain("{{today}}");
+    }
+
+    @Test
     void 이전_버전은_비교_평가용으로_계속_읽힌다() {
         String v2 = PolicyQaPrompt.ofVersion("policy-qa-v2").render(new PolicyDocument("정책명: 청년 월세", false), PROFILE);
         String v1 = PolicyQaPrompt.ofVersion("policy-qa-v1").render(new PolicyDocument("정책명: 청년 월세", false), PROFILE);
 
-        assertThat(v2).contains("사용자가 물은 것에만 답합니다", "항목은 최대 3개").doesNotContain("연소득 환산");
+        assertThat(v2).contains("사용자가 물은 것에만 답합니다", "항목은 최대 3개").doesNotContain("연소득 환산", "[오늘 날짜]");
         assertThat(v1).contains("신청 링크가 있으면 함께 안내합니다").doesNotContain("마크다운");
     }
 

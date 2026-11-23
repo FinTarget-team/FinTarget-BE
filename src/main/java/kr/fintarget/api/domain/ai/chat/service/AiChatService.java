@@ -64,7 +64,7 @@ public class AiChatService {
 
         // 모델은 설정의 기본 등급(openai.model.default)만 쓴다. 승급 기준은 docs/ai/eval-results-2026-10.md (#126), 구현은 별도 이슈
         AiTextResult result = aiTextClient.generate(
-                new AiTextRequest(prompt.render(document, profile), messages, AiModelTier.DEFAULT));
+                new AiTextRequest(prompt.render(document, profile, now.toLocalDate()), messages, AiModelTier.DEFAULT));
 
         boolean firstTurn = context.conversation() == null;
         // 앱은 일반 텍스트로 표시하므로 마크다운·URL을 지운다 (#147). 저장도 정리된 답변으로 해서 다음 턴 기록에 마크다운이 남지 않게 한다
