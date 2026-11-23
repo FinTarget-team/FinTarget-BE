@@ -7,10 +7,10 @@ import java.util.regex.Pattern;
 
 /**
  * AI 답변 후처리 (#147). 앱은 답변을 일반 텍스트로 표시하므로 마크다운 기호와 URL을 지운다.
- * 프롬프트(policy-qa-v2)에도 같은 규칙이 있지만 모델이 항상 지키지는 않아 안전망으로 둔다.
+ * 프롬프트(policy-qa-v2 이후)에도 같은 규칙이 있지만 모델이 항상 지키지는 않아 안전망으로 둔다.
  * 신청 링크는 답변 본문이 아니라 응답의 applyUrl로 내려준다.
  *
- * <p>목록 기호는 "- "로 통일하고, 번호 목록(1. 2.)은 절차 설명에 쓰이므로 그대로 둔다.
+ * <p>목록 기호는 "- "로 통일하고, 번호 목록(1. 2.)은 절차 설명에 쓰이므로 그대로 둔다. 목록 앞과 항목 사이의 빈 줄은 지운다 (#216).
  * 한 개짜리 "*"는 각주 표시일 수 있어 지우지 않는다.
  */
 public final class AiAnswerFormatter {
@@ -20,6 +20,7 @@ public final class AiAnswerFormatter {
     private static final Pattern EMPHASIS = Pattern.compile("\\*\\*|__|`");
     private static final Pattern HEADING = Pattern.compile("^#{1,6}\\s*");
     private static final Pattern BULLET = Pattern.compile("^[*•·]\\s+");
+    private static final Pattern LIST_ITEM = Pattern.compile("^(?:- |\\d{1,2}\\. )");
     private static final Pattern EMPTY_BRACKETS = Pattern.compile("\\(\\s*\\)|\\[\\s*]");
     private static final Pattern SPACES = Pattern.compile("[ \\t]{2,}");
     // URL을 지운 뒤 "신청 링크:"처럼 라벨만 남은 줄 (URL이 있던 줄에만 적용)
@@ -35,11 +36,22 @@ public final class AiAnswerFormatter {
         List<String> lines = new ArrayList<>();
         for (String line : answer.replace("\r\n", "\n").replace('\r', '\n').split("\n", -1)) {
             String formatted = formatLine(line);
-            if (formatted != null) {
-                lines.add(formatted);
+            if (formatted == null) {
+                continue;
             }
+            if (LIST_ITEM.matcher(formatted).find()) {
+                removeTrailingBlankLines(lines);
+            }
+            lines.add(formatted);
         }
         return String.join("\n", lines).replaceAll("\n{3,}", "\n\n").strip();
+    }
+
+    // 목록 앞과 항목 사이의 빈 줄을 지운다 (#216). 모델마다, 답변마다 빈 줄 유무가 달라 앱에서 간격이 들쭉날쭉했다
+    private static void removeTrailingBlankLines(List<String> lines) {
+        while (!lines.isEmpty() && lines.get(lines.size() - 1).isEmpty()) {
+            lines.remove(lines.size() - 1);
+        }
     }
 
     /**

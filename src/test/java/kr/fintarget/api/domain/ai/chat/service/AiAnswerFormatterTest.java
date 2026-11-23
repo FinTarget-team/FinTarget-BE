@@ -56,6 +56,19 @@ class AiAnswerFormatterTest {
     }
 
     @Test
+    void 목록_앞과_항목_사이의_빈_줄을_지우고_문단_사이_빈_줄은_둔다() {
+        assertThat(AiAnswerFormatter.format("결론입니다.\n\n- 첫째\n\n- 둘째\n\n덧붙이는 문단입니다.\n\n1. 신청\n\n2. 제출"))
+                .isEqualTo("결론입니다.\n- 첫째\n- 둘째\n\n덧붙이는 문단입니다.\n1. 신청\n2. 제출");
+        assertThat(AiAnswerFormatter.format("\n\n- 항목으로 시작합니다.")).isEqualTo("- 항목으로 시작합니다.");
+    }
+
+    @Test
+    void 목록_기호를_바꾼_항목_앞의_빈_줄도_지운다() {
+        assertThat(AiAnswerFormatter.format("결론입니다.\n\n* 첫째\n\n• 둘째"))
+                .isEqualTo("결론입니다.\n- 첫째\n- 둘째");
+    }
+
+    @Test
     void 원문용_URL_제거는_목록_기호와_마크다운처럼_보이는_원문을_그대로_둔다() {
         assertThat(AiAnswerFormatter.removeUrls("· 대상: 무주택 **청년**\n관련 사이트: https://www.example.go.kr"))
                 .isEqualTo("· 대상: 무주택 **청년**");
