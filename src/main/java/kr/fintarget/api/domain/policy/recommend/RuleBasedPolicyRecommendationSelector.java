@@ -26,6 +26,7 @@ import java.util.Set;
  *   <li>같은 후보 순위 안에서는 신청 가능 여부 → 시·군·구 한정이 아닌 정책(localScope false·null) → 사용자 지역 정책 → 조건 확인 정도
  *       → 현금 혜택(시뮬레이션 반영 혜택)이 있는 정책 → 신청 마감이 가까운 정책 → 정책 ID 순으로 정렬한다 (같은 입력이면 항상 같은 결과).
  *       온보딩 지역이 시·도 단위라 다른 구·군 한정 정책도 "사용자 지역 정책"으로 잡히므로, 시·군·구 한정 여부를 지역 비교보다 앞에 둔다.
+ *       시·군·구 한정 여부는 온통청년 zipCd 정형값(Policy.regionLocalScope) → AI 추출값(condition.localScope) 순으로 쓴다.
  *       제외하지는 않고 뒤로만 보낸다</li>
  *   <li>비슷한 이름({@link SimilarPolicyName})은 최대 2건. 빠진 자리는 같은 후보 순위의 정렬 상위 30건 안에서 채우고,
  *       그래도 못 채우면 제한 없이 정렬 순서대로 채운다</li>
@@ -119,8 +120,12 @@ public class RuleBasedPolicyRecommendationSelector implements PolicyRecommendati
     }
 
     private static Candidate candidate(Policy policy, String userRegion, LocalDate today) {
+        // 온통청년 zipCd 정형값이 있으면 그 값을, 없으면 AI 추출값을 쓴다 (#225)
+        Boolean structured = policy.getRegionLocalScope();
         PolicyCondition condition = policy.getCondition();
-        boolean localScope = condition != null && Boolean.TRUE.equals(condition.getLocalScope());
+        boolean localScope = structured != null
+                ? structured
+                : condition != null && Boolean.TRUE.equals(condition.getLocalScope());
         return new Candidate(policy, PolicyRecommendationOrder.rank(policy, userRegion, today), localScope,
                 policy.hasBenefitForSimulation(), ApplyPeriodClassifier.deadline(policy.getText(), today),
                 SimilarPolicyName.key(policy.getName()));

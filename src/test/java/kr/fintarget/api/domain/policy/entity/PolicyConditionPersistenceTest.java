@@ -114,4 +114,15 @@ class PolicyConditionPersistenceTest {
         assertThat(reload(v1).getCondition().getLocalScope()).isNull();
         assertThat(reload(v1).getCondition().benefitKindOrUnknown()).isEqualTo(BenefitKind.UNKNOWN);
     }
+
+    @Test
+    void 시군구_한정_정형값을_저장하고_동기화_때_새_값으로_바꾼다() {
+        Policy saved = policyRepository.save(youthPolicy("EXT-C7", "무주택 청년").withRegionLocalScope(true));
+        Policy stored = reload(saved);
+        assertThat(stored.getRegionLocalScope()).isTrue();
+
+        stored.updateFrom(youthPolicy("EXT-C7", "무주택 청년").withRegionLocalScope(false));
+
+        assertThat(reload(stored).getRegionLocalScope()).isFalse();
+    }
 }

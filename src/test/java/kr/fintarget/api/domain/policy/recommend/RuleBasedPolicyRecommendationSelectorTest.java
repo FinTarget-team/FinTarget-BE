@@ -197,4 +197,17 @@ class RuleBasedPolicyRecommendationSelectorTest {
         assertThat(names(selector(10).select(USER, List.of(closedNational, openLocal), TODAY)))
                 .containsExactly("강남구 상시 지원금", "마감 전국 지원금");
     }
+
+    @Test
+    void 온통청년_zipCd_정형값이_AI_추출값보다_우선한다() {
+        // AI는 한정이 아니라고 했지만(false) zipCd로는 한정(true) → 뒤로. 반대로 AI가 true여도 zipCd가 false면 앞으로
+        Policy structuredLocal = scoped("정형값 한정 지원금", "SEOUL", false).withRegionLocalScope(true);
+        Policy structuredWide = scoped("정형값 서울 전체 지원금", "SEOUL", true).withRegionLocalScope(false);
+        Policy aiOnly = scoped("AI만 한정 지원금", "SEOUL", true);
+
+        assertThat(names(selector(10).select(USER, List.of(structuredLocal, aiOnly, structuredWide), TODAY)).getFirst())
+                .isEqualTo("정형값 서울 전체 지원금");
+        assertThat(names(selector(10).select(USER, List.of(structuredLocal, structuredWide), TODAY)))
+                .containsExactly("정형값 서울 전체 지원금", "정형값 한정 지원금");
+    }
 }
