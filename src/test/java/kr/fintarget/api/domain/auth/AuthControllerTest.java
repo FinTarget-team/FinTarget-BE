@@ -8,6 +8,7 @@ import kr.fintarget.api.domain.auth.dto.SocialUserInfo;
 import kr.fintarget.api.domain.auth.dto.TokenRefreshResponse;
 import kr.fintarget.api.domain.user.entity.User;
 import kr.fintarget.api.domain.user.repository.UserRepository;
+import kr.fintarget.api.security.BlacklistedToken;
 import kr.fintarget.api.security.BlacklistedTokenRepository;
 import kr.fintarget.api.security.JwtUtil;
 import kr.fintarget.api.domain.user.code.SocialProvider;
@@ -82,6 +83,50 @@ class AuthControllerTest {
         assertThat(response.getBody().getData().expiresIn()).isEqualTo(7200);
     }
 
+    // ===== 리프레시 토큰 재발급 (#218) =====
+    private void stubValidRefresh() {
+        when(jwtUtil.validateRefreshToken("old-refresh-token")).thenReturn(true);
+        when(jwtUtil.getUserId("old-refresh-token")).thenReturn("user-1");
+        when(userRepository.existsById("user-1")).thenReturn(true);
+        when(jwtUtil.generateToken("user-1", "REFRESH")).thenReturn("new-access-token");
+        when(jwtUtil.generateRefreshToken("user-1")).thenReturn("new-refresh-token");
+        when(jwtUtil.getExpirationMillis()).thenReturn(3_600_000L);
+    }
+
+    @Test
+    void 재발급하면_새_리프레시_토큰도_함께_내려준다() {
+        stubValidRefresh();
+
+        TokenRefreshResponse data = authController.refreshToken(Map.of("refreshToken", "old-refresh-token")).getBody().getData();
+
+        assertThat(data.accessToken()).isEqualTo("new-access-token");
+        assertThat(data.refreshToken()).isEqualTo("new-refresh-token");
+    }
+
+    // 앱이 새 리프레시 토큰을 저장하도록 바뀌기 전까지는 이전 토큰을 계속 쓸 수 있어야 한다
+    @Test
+    void 사용한_토큰_무효화가_꺼져_있으면_이전_리프레시_토큰을_블랙리스트에_넣지_않는다() {
+        stubValidRefresh();
+
+        authController.refreshToken(Map.of("refreshToken", "old-refresh-token"));
+
+        verify(blacklistedTokenRepository, never()).save(any());
+    }
+
+    @Test
+    void 사용한_토큰_무효화가_켜져_있으면_이전_리프레시_토큰을_블랙리스트에_넣는다() {
+        ReflectionTestUtils.setField(authController, "revokeUsedRefreshToken", true);
+        stubValidRefresh();
+        when(jwtUtil.getJti("old-refresh-token")).thenReturn("old-jti");
+        when(jwtUtil.getExpirationTime("old-refresh-token")).thenReturn(java.time.LocalDateTime.now().plusHours(7));
+
+        authController.refreshToken(Map.of("refreshToken", "old-refresh-token"));
+
+        ArgumentCaptor<BlacklistedToken> captor = ArgumentCaptor.forClass(BlacklistedToken.class);
+        verify(blacklistedTokenRepository).save(captor.capture());
+        assertThat(captor.getValue().getJti()).isEqualTo("old-jti");
+    }
+
     @Test
     void 탈퇴한_사용자의_리프레시_토큰이면_401이고_새_토큰을_발급하지_않는다() {
         when(jwtUtil.validateRefreshToken("withdrawn-refresh-token")).thenReturn(true);
@@ -135,6 +180,24 @@ class AuthControllerTest {
         assertThat(data.getAccessToken()).isEqualTo("access-token");
         assertThat(data.getRefreshToken()).isEqualTo("refresh-token");
         assertThat(data.getProvider()).isEqualTo("KAKAO");
+    }
+
+    @Test
+    void 로그인_응답의_expiresIn은_jwt_expiration_설정값을_초로_환산한다() {
+        User existingUser = User.builder()
+                .id("user-1")
+                .provider(SocialProvider.KAKAO)
+                .providerId("kakao-123")
+                .build();
+        when(kakaoOAuthClient.getKakaoUserByAccessToken("token")).thenReturn(new SocialUserInfo("kakao-123", null));
+        when(userRepository.findByProviderAndProviderId(SocialProvider.KAKAO, "kakao-123"))
+                .thenReturn(Optional.of(existingUser));
+        when(jwtUtil.getExpirationMillis()).thenReturn(7_200_000L);
+
+        KakaoTokenLoginRequest request = new KakaoTokenLoginRequest();
+        ReflectionTestUtils.setField(request, "accessToken", "token");
+
+        assertThat(authController.kakaoTokenLogin(request).getBody().getData().getExpiresIn()).isEqualTo(7200);
     }
 
     @Test

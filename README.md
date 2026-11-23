@@ -112,7 +112,7 @@ mock-bank (:8081) ── 은행 거래 웹훅 ─────▶      ├─ Ope
 
 ## API 문서
 
-- Swagger UI: `http://<서버 주소>:8080/swagger-ui/index.html`
+- Swagger UI: `https://<도메인>/swagger-ui/index.html` (HTTPS 적용 전에는 `http://<서버 주소>:8080/...`). 서버에 `SWAGGER_USERNAME`·`SWAGGER_PASSWORD`가 설정되어 있으면 Basic Auth 로그인이 필요합니다.
 - 상세 명세: [`docs/API_Spec.md`](docs/API_Spec.md)
 - 모든 응답은 `ApiResponse<T>` 형식으로 통일되어 있습니다.
 
@@ -264,7 +264,8 @@ chore: application.yml gitignore 처리 (#3)
 
 - **수동 배포**: 서버에서 `~/FinTarget-BE/scripts/deploy.sh`
   - dev를 fast-forward로 받고, 메인 서버 코드가 바뀐 경우에만 `app` 컨테이너를 다시 빌드합니다(DB·Redis는 재시작하지 않음).
-  - `/v3/api-docs`가 180초 안에 200을 응답하지 않으면 이전 커밋으로 되돌려 다시 빌드합니다.
+  - `/actuator/health`가 180초 안에 200을 응답하지 않으면 이전 커밋으로 되돌려 다시 빌드합니다.
+  - `.env`에 `DOMAIN`이 있으면 HTTPS 프록시(Caddy)를 띄웁니다. `deploy/Caddyfile`이 바뀌었거나 떠 있지 않을 때만 다시 띄우며, 실패해도 앱은 되돌리지 않고 종료 코드 1로 알립니다.
   - mock-bank 코드가 바뀌었거나 mock-bank 컨테이너가 떠 있지 않으면 `mock-bank`만 다시 빌드합니다.
     시연용 보조 서버라 실패해도 메인 서버는 되돌리지 않고 종료 코드 1로 알립니다. `.env`에 `MOCK_BANK_USERNAME`·`MOCK_BANK_PASSWORD`가 없으면 건너뜁니다.
   - 배포가 끝나면 오래된 이미지·빌드 캐시를 정리합니다(서버 디스크 19GB).
@@ -273,4 +274,27 @@ chore: application.yml gitignore 처리 (#3)
   - `DEPLOY_SSH_KEY`는 배포 전용 키입니다. 서버 `authorized_keys`에 `restrict,command="bash ~/FinTarget-BE/scripts/deploy.sh"` 옵션으로 등록되어, 이 키로는 배포 스크립트 외의 명령을 실행할 수 없습니다.
   - `DEPLOY_KNOWN_HOSTS`는 `ssh-keyscan <서버 주소>` 결과입니다. 서버를 새로 만들면 다시 등록해야 합니다.
   - GitHub Actions 실행 서버의 IP가 고정되어 있지 않아 EC2 보안 그룹의 22번 포트는 전체(`0.0.0.0/0`)에 열려 있고, 서버는 비밀번호 로그인을 막고 키 로그인만 허용합니다.
+  - **CD가 실패하면** Actions 실행 화면의 Summary와 단계 로그에서 원인을 확인합니다. 이 워크플로는 기본 브랜치(main)에 있는 파일로 실행되므로, `cd.yml` 수정은 main까지 머지해야 적용됩니다.
+
+    | 로그 메시지 | 원인 · 조치 |
+    |---|---|
+    | `DEPLOY_SSH_KEY를 SSH 개인 키로 읽을 수 없습니다` | 키 값이 잘림·형식 오류. `-----BEGIN ...-----`부터 `-----END ...-----`까지 다시 등록 |
+    | `DEPLOY_KNOWN_HOSTS에 DEPLOY_HOST 항목이 없습니다` | `ssh-keyscan <서버 주소>` 결과를 다시 등록 |
+    | `Host key verification failed` | 서버를 새로 만들었거나 known_hosts 값이 다름. 위와 같이 다시 등록 |
+    | `Permission denied (publickey)` | 서버 `authorized_keys`의 배포 키와 Secret의 키가 다름 |
+    | `Connection timed out` | 서버 꺼짐 또는 보안 그룹 22번 포트 차단 |
+    | 배포 결과: 실패 (종료 코드 1) | SSH는 성공, 배포 스크립트 실패(앱 헬스 체크 실패 후 롤백, mock-bank 기동 실패 등). Summary의 로그 확인 |
+- **HTTPS** (#218): Caddy가 `DOMAIN`으로 Let's Encrypt 인증서를 자동 발급·갱신하고 `app:8080`으로 전달합니다 (`deploy/Caddyfile`).
+  1. 도메인의 A 레코드를 서버 공인 IP로 지정합니다. 도메인이 없으면 `<IP를 -로 이은 값>.sslip.io`(예: `1-2-3-4.sslip.io`)를 쓸 수 있습니다.
+  2. EC2 보안 그룹에서 80·443(TCP)과 443(UDP)을 엽니다. 80은 인증서 발급·갱신에 필요합니다.
+  3. 서버 `.env`에 `DOMAIN=<도메인>`을 넣고 `scripts/deploy.sh`를 실행합니다. `https://<도메인>/actuator/health`가 200이면 완료입니다.
+  4. iOS 앱이 `https://<도메인>`으로 바뀌어 배포되면 `.env`에 `APP_BIND_ADDRESS=127.0.0.1`을 넣고 `FORCE_BUILD=1 scripts/deploy.sh`로 다시 띄워 8080을 외부에서 막고, 보안 그룹에서 8080을 닫습니다.
+  - 앱은 `server.forward-headers-strategy=native`로 Caddy가 붙인 `X-Forwarded-For`의 실제 클라이언트 IP를 씁니다(Docker 내부망 프록시만 신뢰). `/auth/**` 요청 횟수 제한(IP별 1분 30회)이 이 IP 기준입니다.
+- **DB 스키마**: 운영 앱은 `ddl-auto: validate`로 실행되어 엔티티가 바뀌어도 스키마를 자동으로 바꾸지 않습니다(`docker-compose.yml`이 서버 `application.yml`보다 우선).
+  - 테이블·컬럼을 추가·변경하는 PR은 `docs/sql/<이슈번호>_*.sql`을 함께 올리고, **배포 전에** 서버에서 직접 실행합니다.
+    `docker exec -i fintarget-db psql -U "$DB_USERNAME" -d "$DB_NAME" < docs/sql/<파일>.sql`
+  - SQL을 적용하지 않고 배포하면 엔티티와 DB가 달라 앱이 뜨지 않고, `deploy.sh`가 이전 버전으로 되돌립니다.
+  - 급하게 띄워야 하면 서버 `.env`에 `JPA_DDL_AUTO=update`를 넣어 예전 방식으로 실행할 수 있습니다. SQL 적용 후 다시 지웁니다.
+- **DB 백업**: `scripts/backup-db.sh`가 `pg_dump`로 `~/backups/`에 백업하고 14일보다 오래된 파일을 지웁니다. 서버 cron에 등록해 매일 실행합니다.
+  `0 4 * * * ~/FinTarget-BE/scripts/backup-db.sh >> ~/backups/backup.log 2>&1` (복원 방법은 스크립트 주석 참고)
 - 컨테이너는 root가 아닌 전용 계정으로, 한국 시간대(`-Duser.timezone=Asia/Seoul`)로 실행됩니다.

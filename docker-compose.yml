@@ -37,8 +37,10 @@ services:
         condition: service_healthy
       redis:
         condition: service_started
+    # HTTPS(Caddy)로 옮긴 뒤에는 .env에 APP_BIND_ADDRESS=127.0.0.1을 넣어 8080을 외부에서 막는다 (#218).
+    # 앱(iOS)이 아직 http://<IP>:8080을 쓰는 동안은 기본값(전체 공개)을 유지한다
     ports:
-      - "8080:8080"
+      - "${APP_BIND_ADDRESS:-0.0.0.0}:8080:8080"
     environment:
       DB_HOST: db
       DB_PORT: 5432
@@ -47,8 +49,8 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:-}
       REDIS_HOST: redis
       REDIS_PORT: 6379
-      KAKAO_CLIENT_ID: ${KAKAO_CLIENT_ID:-}
-      KAKAO_CLIENT_SECRET: ${KAKAO_CLIENT_SECRET:-}
+      # 카카오 토큰의 발급 앱 확인용 앱 ID (#218). 카카오 개발자 콘솔 > 앱 설정 > 앱 키 화면의 "앱 ID"(숫자)
+      KAKAO_APP_ID: ${KAKAO_APP_ID:-}
       JWT_SECRET: ${JWT_SECRET:-}
       YOUTH_CENTER_API_KEY: ${YOUTH_CENTER_API_KEY:-}
       YOUTH_CENTER_BASE_URL: ${YOUTH_CENTER_BASE_URL:-}
@@ -56,9 +58,18 @@ services:
       KINFA_BASE_URL: ${KINFA_BASE_URL:-}
       ADMIN_API_KEY: ${ADMIN_API_KEY:-}
       BANK_WEBHOOK_KEY: ${BANK_WEBHOOK_KEY:-}
+      SWAGGER_USERNAME: ${SWAGGER_USERNAME:-}
+      SWAGGER_PASSWORD: ${SWAGGER_PASSWORD:-}
+      JWT_REVOKE_USED_REFRESH_TOKEN: ${JWT_REVOKE_USED_REFRESH_TOKEN:-false}
+      # Caddy가 붙인 X-Forwarded-* 헤더로 실제 클라이언트 IP·https 여부를 판단한다 (Docker 내부망 프록시만 신뢰)
+      SERVER_FORWARD_HEADERS_STRATEGY: native
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_MODEL_DEFAULT: ${OPENAI_MODEL_DEFAULT:-}
       OPENAI_EMBEDDING_MODEL: ${OPENAI_EMBEDDING_MODEL:-}
+      # 운영에서는 엔티티 변경으로 스키마가 자동으로 바뀌지 않도록 검증만 한다 (#219). 서버의 application.yml보다 우선한다.
+      # 스키마 변경은 docs/sql/의 SQL을 배포 전에 직접 실행하고, 엔티티와 DB가 다르면 앱이 뜨지 않아 deploy.sh가 이전 버전으로 되돌린다
+      SPRING_JPA_HIBERNATE_DDL_AUTO: ${JPA_DDL_AUTO:-validate}
+      SPRING_JPA_SHOW_SQL: "false"
 
   # 시연용 가상 금융 서버 (#204). 브라우저에서 http://<서버 IP>:8081 로 접속하고 Basic Auth로 로그인한다.
   # 웹훅은 Docker 네트워크의 서비스 이름(app)으로 메인 서버에 바로 보내고, 키는 메인 서버와 같은 BANK_WEBHOOK_KEY를 쓴다.
@@ -81,6 +92,29 @@ services:
     volumes:
       - mock-bank-data:/app/data
 
+  # HTTPS 리버스 프록시 (#218). .env에 DOMAIN이 있을 때만 scripts/deploy.sh가 https 프로필로 띄운다
+  caddy:
+    image: caddy:2.11.9
+    container_name: fintarget-caddy
+    restart: unless-stopped
+    profiles: ["https"]
+    depends_on:
+      app:
+        condition: service_started
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      DOMAIN: ${DOMAIN:-}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      # 발급받은 인증서를 재시작·재배포해도 유지한다 (Let's Encrypt 발급 횟수 제한 회피)
+      - caddy-data:/data
+      - caddy-config:/config
+
 volumes:
   db-data:
   mock-bank-data:
+  caddy-data:
+  caddy-config:

@@ -2,9 +2,11 @@
 # 운영 서버에서 실행하는 배포 스크립트. 지금까지 수동으로 하던 절차를 그대로 자동화한다.
 #   1. origin/dev를 fast-forward로 받는다
 #   2. 메인 서버 코드가 바뀌었을 때만 앱 컨테이너를 다시 빌드한다 (DB·Redis는 건드리지 않음)
-#   3. 앱이 뜰 때까지 기다리고(/v3/api-docs 200), 실패하면 이전 커밋으로 되돌려 다시 빌드한다
+#   3. 앱이 뜰 때까지 기다리고(/actuator/health 200), 실패하면 이전 커밋으로 되돌려 다시 빌드한다
 #   4. mock-bank 코드가 바뀌었거나 mock-bank 컨테이너가 떠 있지 않으면 mock-bank만 다시 빌드한다 (#204)
 #      시연용 보조 서버라 실패해도 메인 서버는 되돌리지 않고, 실패 사실만 알리고 종료 코드 1로 끝낸다
+#   5. .env에 DOMAIN이 있으면 HTTPS 프록시(Caddy)를 띄운다. Caddyfile이 바뀌었거나 떠 있지 않을 때만 다시 띄운다 (#218)
+#      실패해도 앱은 되돌리지 않고 종료 코드 1로 알린다
 # .env, src/main/resources/application.yml 같은 서버 설정 파일은 git 추적 대상이 아니라 건드리지 않는다.
 #
 # 사용법 (서버에서): ~/FinTarget-BE/scripts/deploy.sh
@@ -17,13 +19,15 @@ main() {
 
   APP_DIR="${APP_DIR:-$HOME/FinTarget-BE}"
   BRANCH="${BRANCH:-dev}"
-  HEALTH_URL="${HEALTH_URL:-http://localhost:8080/v3/api-docs}"
+  HEALTH_URL="${HEALTH_URL:-http://localhost:8080/actuator/health}"
+  LEGACY_HEALTH_URL="http://localhost:8080/v3/api-docs"
   HEALTH_TIMEOUT_SECONDS="${HEALTH_TIMEOUT_SECONDS:-180}"
   MOCK_BANK_HEALTH_URL="${MOCK_BANK_HEALTH_URL:-http://localhost:8081/}"
   # 이 경로가 바뀌었을 때만 이미지를 다시 빌드한다 (문서만 바뀐 경우는 건너뜀)
   BUILD_PATHS=(src build.gradle settings.gradle gradle gradlew Dockerfile .dockerignore docker-compose.yml)
   MOCK_BANK_BUILD_PATHS=(mock-bank/src mock-bank/build.gradle mock-bank/settings.gradle mock-bank/gradle
     mock-bank/gradlew mock-bank/Dockerfile mock-bank/.dockerignore docker-compose.yml)
+  CADDY_PATHS=(deploy/Caddyfile docker-compose.yml)
 
   cd "$APP_DIR"
 
@@ -57,7 +61,17 @@ main() {
     mock_bank_build=1
   fi
 
-  if [ "$app_build" = "0" ] && [ "$mock_bank_build" = "0" ]; then
+  # HTTPS 프록시는 .env에 DOMAIN이 있을 때만 띄운다 (#218)
+  caddy_deploy=0
+  if [ -n "$(env_value DOMAIN)" ]; then
+    if [ "$force" = "1" ] \
+      || ! git diff --quiet "$previous" "$current" -- "${CADDY_PATHS[@]}" \
+      || [ -z "$(docker compose --profile https ps --status running -q caddy 2>/dev/null)" ]; then
+      caddy_deploy=1
+    fi
+  fi
+
+  if [ "$app_build" = "0" ] && [ "$mock_bank_build" = "0" ] && [ "$caddy_deploy" = "0" ]; then
     if [ "$previous" = "$current" ]; then
       echo "새 커밋이 없어 배포를 건너뜁니다."
     else
@@ -75,6 +89,9 @@ main() {
   status=0
   if [ "$mock_bank_build" = "1" ]; then
     deploy_mock_bank || status=1
+  fi
+  if [ "$caddy_deploy" = "1" ]; then
+    deploy_caddy || status=1
   fi
 
   # 서버 디스크가 작아(19GB) 빌드할 때마다 쌓이는 이미지·빌드 캐시를 정리한다. 최근 하루치 캐시는 다음 빌드 속도를 위해 남긴다
@@ -125,7 +142,8 @@ deploy_app() {
   git reset --quiet --hard "$previous"
   docker compose up -d --build --no-deps app
   sleep 10
-  if wait_http "$HEALTH_URL" "$HEALTH_TIMEOUT_SECONDS" 200; then
+  # #218 이전 커밋으로 되돌린 경우 /actuator/health가 없으므로 예전 헬스 체크 주소도 확인한다
+  if wait_http "$HEALTH_URL" "$HEALTH_TIMEOUT_SECONDS" 200 || wait_http "$LEGACY_HEALTH_URL" 30 200; then
     echo "롤백 완료. 실패한 커밋: $(git log --oneline -1 "$current")" >&2
   else
     echo "롤백 후에도 앱이 응답하지 않습니다. 서버를 직접 확인해 주세요." >&2
@@ -145,6 +163,26 @@ deploy_mock_bank() {
   fi
   echo "mock-bank가 120초 안에 응답하지 않습니다. 메인 서버 배포는 유지합니다. 최근 로그:" >&2
   docker logs --tail 50 fintarget-mock-bank >&2 || true
+  return 1
+}
+
+deploy_caddy() {
+  local domain
+  domain=$(env_value DOMAIN)
+  echo "HTTPS 프록시(Caddy)를 띄웁니다: $domain"
+  docker compose --profile https up -d --no-deps caddy
+  # 처음 띄울 때는 인증서 발급에 수십 초가 걸린다. 서버 자신의 공인 IP로 돌아오지 않도록 127.0.0.1로 접속해 확인한다
+  local deadline=$((SECONDS + 180)) code
+  while [ "$SECONDS" -lt "$deadline" ]; do
+    code=$(curl -s -o /dev/null -w '%{http_code}' --resolve "$domain:443:127.0.0.1" "https://$domain/actuator/health" || true)
+    if [ "$code" = "200" ]; then
+      echo "HTTPS 프록시 정상: https://$domain"
+      return 0
+    fi
+    sleep 5
+  done
+  echo "https://$domain 이 180초 안에 응답하지 않습니다. DNS가 이 서버를 가리키는지, 보안 그룹에서 80·443이 열려 있는지 확인하세요. 최근 로그:" >&2
+  docker logs --tail 50 fintarget-caddy >&2 || true
   return 1
 }
 

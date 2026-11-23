@@ -12,9 +12,8 @@ spring:
     open-in-view: false
 
 kakao:
-  client-id: test-kakao-client-id
-  client-secret: test-kakao-client-secret
-  redirect-uri: http://localhost:8080/login/oauth2/code/kakao
+  # 비우면 카카오 토큰의 발급 앱을 확인하지 않는다 (확인 동작은 KakaoOAuthClientTest에서 검증)
+  app-id: ""
 
 jwt:
   # HS256 키 길이(256비트 이상)를 만족하는 테스트 전용 값
@@ -36,3 +35,9 @@ policy:
   sync:
     scheduler:
       enabled: false
+
+# /auth/** 요청 횟수 제한 (#218). 여러 테스트가 같은 IP(127.0.0.1)로 인증 API를 부르므로 기본은 끄고,
+# 제한 동작은 SecurityEndpointsIntegrationTest에서 값을 지정해 확인한다
+auth:
+  rate-limit:
+    requests-per-minute: 0

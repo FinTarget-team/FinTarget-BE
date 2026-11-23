@@ -52,7 +52,7 @@ public class NudgeController {
 
     @Operation(
             summary = "넛지 읽음 처리",
-            description = "지정한 넛지를 읽음 상태로 변경합니다. 본인 소유가 아닌 넛지에 접근하면 401로 거부됩니다."
+            description = "지정한 넛지를 읽음 상태로 변경합니다. 다른 사용자의 넛지는 존재하지 않는 넛지와 같은 400으로 응답합니다."
     )
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(
@@ -62,7 +62,7 @@ public class NudgeController {
             ),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(
                     responseCode = "400",
-                    description = "잘못된 요청",
+                    description = "넛지가 없거나 다른 사용자의 넛지",
                     content = @Content(examples = @ExampleObject(
                             name = "넛지를 찾을 수 없음",
                             value = """
@@ -72,21 +72,13 @@ public class NudgeController {
             ),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(
                     responseCode = "401",
-                    description = "인증 실패 또는 접근 권한 없음",
-                    content = @Content(examples = {
-                            @ExampleObject(
-                                    name = "인증 필요",
-                                    value = """
-                                            {"status": 401, "message": "인증이 필요합니다. 토큰을 확인해주세요.", "data": null}
-                                            """
-                            ),
-                            @ExampleObject(
-                                    name = "다른 사용자의 넛지에 접근",
-                                    value = """
-                                            {"status": 401, "message": "접근 권한이 없습니다.", "data": null}
-                                            """
-                            )
-                    })
+                    description = "인증 실패",
+                    content = @Content(examples = @ExampleObject(
+                            name = "인증 필요",
+                            value = """
+                                    {"status": 401, "message": "인증이 필요합니다. 토큰을 확인해주세요.", "data": null}
+                                    """
+                    ))
             )
     })
     @PatchMapping("/{nudgeId}/read")
@@ -99,7 +91,7 @@ public class NudgeController {
 
     @Operation(
             summary = "넛지 삭제",
-            description = "지정한 넛지를 삭제합니다. 본인 소유가 아닌 넛지에 접근하면 401로 거부됩니다."
+            description = "지정한 넛지를 삭제합니다. 다른 사용자의 넛지는 존재하지 않는 넛지와 같은 400으로 응답합니다."
     )
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(
@@ -109,7 +101,7 @@ public class NudgeController {
             ),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(
                     responseCode = "400",
-                    description = "잘못된 요청",
+                    description = "넛지가 없거나 다른 사용자의 넛지",
                     content = @Content(examples = @ExampleObject(
                             name = "넛지를 찾을 수 없음",
                             value = """
@@ -119,21 +111,13 @@ public class NudgeController {
             ),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(
                     responseCode = "401",
-                    description = "인증 실패 또는 접근 권한 없음",
-                    content = @Content(examples = {
-                            @ExampleObject(
-                                    name = "인증 필요",
-                                    value = """
-                                            {"status": 401, "message": "인증이 필요합니다. 토큰을 확인해주세요.", "data": null}
-                                            """
-                            ),
-                            @ExampleObject(
-                                    name = "다른 사용자의 넛지에 접근",
-                                    value = """
-                                            {"status": 401, "message": "접근 권한이 없습니다.", "data": null}
-                                            """
-                            )
-                    })
+                    description = "인증 실패",
+                    content = @Content(examples = @ExampleObject(
+                            name = "인증 필요",
+                            value = """
+                                    {"status": 401, "message": "인증이 필요합니다. 토큰을 확인해주세요.", "data": null}
+                                    """
+                    ))
             )
     })
     @DeleteMapping("/{nudgeId}")

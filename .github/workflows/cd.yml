@@ -1,5 +1,6 @@
 # dev 푸시에 대한 CI가 성공하면 운영 서버에 SSH로 접속해 scripts/deploy.sh를 실행한다.
 # 아래 저장소 Secrets가 모두 등록되기 전까지는 배포 단계를 건너뛴다(실패로 표시하지 않음).
+# Secrets가 있는데 값이 잘못됐거나 배포 스크립트가 실패하면 실패로 표시한다(#214).
 #   DEPLOY_HOST         서버 주소
 #   DEPLOY_USER         SSH 계정 (예: ubuntu)
 #   DEPLOY_SSH_KEY      배포 전용 SSH 개인 키 (개인 키 재사용 금지)
@@ -45,31 +46,63 @@ jobs:
             echo "ready=true" >> "$GITHUB_OUTPUT"
           fi
 
+      # 키·known_hosts 값이 잘못되면 ssh가 인증 전에 끊겨 원인을 알기 어렵다(#214).
+      # 여기서 먼저 검증해 어떤 Secret이 문제인지 로그에 남긴다. 비밀값 자체는 출력하지 않는다
       - name: SSH 설정
         if: steps.secrets.outputs.ready == 'true'
+        shell: bash
         env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
           DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
         run: |
+          set -euo pipefail
+          # 웹에서 붙여넣을 때 섞일 수 있는 앞뒤 공백·줄바꿈을 지운다 (호스트 이름이 known_hosts와 달라지는 것을 막음)
+          DEPLOY_HOST=$(printf '%s' "$DEPLOY_HOST" | tr -d '[:space:]')
           install -m 700 -d ~/.ssh
-          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          # 줄 끝에 섞일 수 있는 CR(\r)을 지운다
+          printf '%s\n' "$DEPLOY_SSH_KEY" | tr -d '\r' > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" | tr -d '\r' > ~/.ssh/known_hosts
 
+          if ! ssh-keygen -y -f ~/.ssh/deploy_key > /dev/null 2>&1; then
+            echo "::error::DEPLOY_SSH_KEY를 SSH 개인 키로 읽을 수 없습니다. -----BEGIN OPENSSH PRIVATE KEY-----부터 -----END OPENSSH PRIVATE KEY-----까지 전체를 다시 등록해 주세요."
+            exit 1
+          fi
+          echo "배포 키 지문: $(ssh-keygen -lf ~/.ssh/deploy_key | awk '{print $2}')"
+
+          if ! ssh-keygen -F "$DEPLOY_HOST" -f ~/.ssh/known_hosts > /dev/null; then
+            echo "::error::DEPLOY_KNOWN_HOSTS에 DEPLOY_HOST($DEPLOY_HOST) 항목이 없습니다. ssh-keyscan $DEPLOY_HOST 결과를 다시 등록해 주세요."
+            exit 1
+          fi
+
+      # 배포 스크립트가 실패하면 이 단계도 실패해야 한다. 기본 셸은 pipefail이 꺼져 있어
+      # ssh가 실패해도 tee가 성공하면 단계가 성공으로 처리됐다(#214)
       - name: 배포 스크립트 실행
         if: steps.secrets.outputs.ready == 'true'
+        shell: bash
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
         run: |
-          ssh -i ~/.ssh/deploy_key -o BatchMode=yes -o StrictHostKeyChecking=yes \
+          set -uo pipefail
+          DEPLOY_HOST=$(printf '%s' "$DEPLOY_HOST" | tr -d '[:space:]')
+          DEPLOY_USER=$(printf '%s' "$DEPLOY_USER" | tr -d '[:space:]')
+          # 서버에 등록된 배포 키는 배포 스크립트만 실행하도록 제한되어 있어, 요청한 명령 대신 항상 배포 스크립트가 실행된다
+          ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=20 -o ServerAliveInterval=30 \
             "$DEPLOY_USER@$DEPLOY_HOST" 'bash ~/FinTarget-BE/scripts/deploy.sh' 2>&1 | tee deploy.log
+          status=${PIPESTATUS[0]}
           {
-            echo '### 배포 결과'
+            if [ "$status" -eq 0 ]; then echo '### 배포 결과: 성공'; else echo "### 배포 결과: 실패 (종료 코드 $status)"; fi
             echo '```'
-            tail -n 20 deploy.log
+            tail -n 30 deploy.log
             echo '```'
+            if [ "$status" -eq 255 ]; then
+              echo 'SSH 접속 실패입니다. 위 로그의 원인(Permission denied, Host key verification failed, Connection timed out 등)을 확인해 주세요.'
+            fi
           } >> "$GITHUB_STEP_SUMMARY"
+          exit "$status"
 
       - name: SSH 키 삭제
         if: always()

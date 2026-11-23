@@ -8,8 +8,8 @@ spring:
     driver-class-name: org.postgresql.Driver
   jpa:
     hibernate:
-      ddl-auto: update
-    show-sql: true
+      ddl-auto: update   # 로컬 개발용. 운영은 docker-compose.yml이 validate로 덮어쓴다 (#219)
+    show-sql: false
   mvc:
     pathmatch:
       use-suffix-pattern: false
@@ -19,9 +19,8 @@ springdoc:
   swagger-ui:
     path: /swagger-ui.html
 kakao:
-  client-id: ${KAKAO_CLIENT_ID}
-  redirect-uri: http://localhost:8080/login/oauth2/code/kakao
-  client-secret: ${KAKAO_CLIENT_SECRET}
+  # 카카오 토큰의 발급 앱 확인용 앱 ID(숫자) (#218). 비우면 확인하지 않는다 (로컬 개발용)
+  app-id: ${KAKAO_APP_ID:}
 server:
   port: 8080
 jwt:
