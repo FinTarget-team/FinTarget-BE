@@ -1,8 +1,12 @@
 package kr.fintarget.api.domain.policy.service;
 
+import kr.fintarget.api.domain.policy.condition.HousingRequirement;
+import kr.fintarget.api.domain.policy.condition.IncomeBasis;
+import kr.fintarget.api.domain.policy.condition.TargetType;
 import kr.fintarget.api.domain.policy.dto.PolicyResponse;
 import kr.fintarget.api.domain.policy.dto.UserPolicyCreateRequest;
 import kr.fintarget.api.domain.policy.entity.Policy;
+import kr.fintarget.api.domain.policy.entity.PolicyCondition;
 import kr.fintarget.api.domain.policy.entity.PolicyText;
 import kr.fintarget.api.domain.policy.entity.PolicyType;
 import kr.fintarget.api.domain.policy.entity.UserPolicy;
@@ -11,6 +15,7 @@ import kr.fintarget.api.domain.policy.repository.UserPolicyRepository;
 import kr.fintarget.api.domain.user.entity.User;
 import kr.fintarget.api.domain.user.repository.UserRepository;
 import kr.fintarget.api.domain.user.validation.BirthYearValidator;
+import kr.fintarget.api.domain.user.code.IncomeBracket;
 import kr.fintarget.api.domain.user.code.SocialProvider;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -130,9 +135,10 @@ class PolicyServiceTest {
 
         List<PolicyResponse> result = policyService.getMatchingPolicies("user-1", null);
 
+        // 사용자 지역 정책이 전국 정책보다 먼저 온다 (#220 정렬). 같은 순위끼리는 조회 순서 유지
         assertThat(result).extracting(PolicyResponse::name)
-                .containsExactly("전국 정책", "울산 정책", "경남·울산 정책");
-        assertThat(result.get(2).regions()).containsExactly("GYEONGNAM", "ULSAN");
+                .containsExactly("울산 정책", "경남·울산 정책", "전국 정책");
+        assertThat(result.get(1).regions()).containsExactly("GYEONGNAM", "ULSAN");
     }
 
     @Test
@@ -254,5 +260,71 @@ class PolicyServiceTest {
                 .hasMessage("존재하지 않는 정책입니다.");
 
         verify(userPolicyRepository, never()).delete(any());
+    }
+
+    // #220: 추출 조건 필터는 기존 지역·나이 필터와 함께 적용되고, 확실히 해당하지 않는 정책만 뺀다
+    private User profiledUser(String region, String housing, String employment) {
+        return User.builder().id("user-1").provider(SocialProvider.KAKAO).providerId("provider-1")
+                .age(25).income(IncomeBracket.RANGE_300_380.getIncome()).region(region)
+                .housingStatus(housing).employmentType(employment).build();
+    }
+
+    private Policy policyWith(String name, String region, PolicyCondition condition) {
+        Policy policy = policy(name, region);
+        policy.updateCondition(condition);
+        return policy;
+    }
+
+    @Test
+    void 추출한_조건으로_확실히_해당하지_않는_정책만_빼고_지역_필터와_함께_적용한다() {
+        User user = profiledUser("SEOUL", "HOMEOWNER", "EMPLOYED");
+        when(userRepository.findById("user-1")).thenReturn(Optional.of(user));
+        when(policyRepository.findMatchingPolicies(25, 25, IncomeBracket.RANGE_300_380.getIncome(), null)).thenReturn(List.of(
+                policy("추출 전 정책", null),
+                policyWith("본인 소득 상한 250만원", null,
+                        PolicyCondition.builder().incomeBasis(IncomeBasis.INDIVIDUAL).incomeMaxMonthly(2_500_000L).build()),
+                policyWith("본인 소득 상한 300만원(구간 하한과 같음)", null,
+                        PolicyCondition.builder().incomeBasis(IncomeBasis.INDIVIDUAL).incomeMaxMonthly(3_000_000L).build()),
+                policyWith("중위소득 정책", null, PolicyCondition.builder().incomeBasis(IncomeBasis.MEDIAN_RATIO).build()),
+                policyWith("무주택 필수", null,
+                        PolicyCondition.builder().housingRequirement(HousingRequirement.HOMELESS_REQUIRED).build()),
+                policyWith("사업자 전용", null, PolicyCondition.builder().targetType(TargetType.BUSINESS).build()),
+                policyWith("추출 지역 전남", null, PolicyCondition.builder().extractedRegion("JEONNAM").build()),
+                policyWith("추출 지역 서울", null, PolicyCondition.builder().extractedRegion("SEOUL").build()),
+                policy("부산 정책", "BUSAN")));
+
+        List<Policy> candidates = policyService.findCandidatePolicies("user-1", null);
+
+        assertThat(candidates).extracting(Policy::getName).containsExactly(
+                "추출 전 정책", "본인 소득 상한 300만원(구간 하한과 같음)", "중위소득 정책", "추출 지역 서울");
+    }
+
+    @Test
+    void 직업_유형과_주택_보유를_모르면_대상_주택_조건으로_빼지_않는다() {
+        User user = profiledUser("SEOUL", null, null);
+        when(userRepository.findById("user-1")).thenReturn(Optional.of(user));
+        when(policyRepository.findMatchingPolicies(25, 25, IncomeBracket.RANGE_300_380.getIncome(), null)).thenReturn(List.of(
+                policyWith("무주택 필수", null,
+                        PolicyCondition.builder().housingRequirement(HousingRequirement.HOMELESS_REQUIRED).build()),
+                policyWith("사업자 전용", null, PolicyCondition.builder().targetType(TargetType.BUSINESS).build())));
+
+        assertThat(policyService.findCandidatePolicies("user-1", null)).hasSize(2);
+    }
+
+    @Test
+    void 맞춤_정책_목록은_신청_가능한_정책과_사용자_지역_정책을_먼저_보여준다() {
+        User user = profiledUser("SEOUL", "HOMELESS", "EMPLOYED");
+        when(userRepository.findById("user-1")).thenReturn(Optional.of(user));
+        when(policyRepository.findMatchingPolicies(25, 25, IncomeBracket.RANGE_300_380.getIncome(), null)).thenReturn(List.of(
+                Policy.create("마감 전국", "설명", 19, 34, null, null, PolicyType.ETC, null, null, null,
+                        PolicyText.builder().applyPeriod("20200101 ~ 20201231").build()),
+                Policy.create("상시 전국", "설명", 19, 34, null, null, PolicyType.ETC, null, null, null,
+                        PolicyText.builder().applyPeriodCode("0057002").build()),
+                Policy.create("상시 서울", "설명", 19, 34, null, null, PolicyType.ETC, "SEOUL", null, null,
+                        PolicyText.builder().applyPeriodCode("0057002").build())));
+
+        List<PolicyResponse> result = policyService.getMatchingPolicies("user-1", null);
+
+        assertThat(result).extracting(PolicyResponse::name).containsExactly("상시 서울", "상시 전국", "마감 전국");
     }
 }

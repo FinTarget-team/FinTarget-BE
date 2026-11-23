@@ -1,18 +1,22 @@
 package kr.fintarget.api.domain.policy.service;
 
+import kr.fintarget.api.domain.policy.condition.PolicyConditionMatcher;
 import kr.fintarget.api.domain.policy.dto.PolicyResponse;
 import kr.fintarget.api.domain.policy.dto.UserPolicyCreateRequest;
 import kr.fintarget.api.domain.policy.dto.UserPolicyResponse;
 import kr.fintarget.api.domain.policy.entity.Policy;
 import kr.fintarget.api.domain.policy.entity.PolicyType;
 import kr.fintarget.api.domain.policy.entity.UserPolicy;
+import kr.fintarget.api.domain.policy.recommend.PolicyRecommendationOrder;
 import kr.fintarget.api.domain.policy.repository.PolicyRepository;
 import kr.fintarget.api.domain.policy.repository.UserPolicyRepository;
 import kr.fintarget.api.domain.user.entity.User;
 import kr.fintarget.api.domain.user.repository.UserRepository;
+import kr.fintarget.api.domain.user.validation.BirthYearValidator;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -25,9 +29,15 @@ public class PolicyService {
     private final UserPolicyRepository userPolicyRepository;
     private final UserRepository userRepository;
 
+    /**
+     * 맞춤 정책 목록. 후보 정책({@link #findCandidatePolicies(User, String)})을 추천 순서로 정렬해 돌려준다 (#220).
+     * 정렬은 이 목록에만 적용하고, 같은 후보를 쓰는 정책 검색(#182)·통합 AI 답변(#183)은 자체 검색 순서를 쓴다.
+     */
     @Transactional(readOnly = true)
     public List<PolicyResponse> getMatchingPolicies(String userId, String policyType) {
-        return findCandidatePolicies(userId, policyType)
+        User user = findUser(userId);
+        List<Policy> candidates = findCandidatePolicies(user, policyType);
+        return PolicyRecommendationOrder.sort(candidates, user.getRegion(), LocalDate.now(BirthYearValidator.ZONE))
                 .stream()
                 .map(PolicyResponse::from)
                 .collect(Collectors.toList());
@@ -36,6 +46,8 @@ public class PolicyService {
     /**
      * 사용자 조건(나이·소득·유형·지역)에 맞는 정책 목록. 맞춤 정책 목록과 정책 검색(#182)이 같은 조건을 쓰도록 분리했다.
      * 나이나 소득을 모르는 사용자는 맞춤 여부를 판단할 수 없어 빈 목록이다.
+     * 원문에서 추출한 조건(#220)으로 확실히 해당하지 않는 정책(본인 소득 상한 초과, 무주택 필수 × 유주택, 사업자 전용 × 비자영업)을 빼고,
+     * 지역이 빈 정책은 원문에서 추출한 지역으로 판정한다 ({@link PolicyConditionMatcher}, {@link Policy#matchesRegion(String)}).
      */
     @Transactional(readOnly = true)
     public List<Policy> findCandidatePolicies(String userId, String policyType) {
@@ -56,7 +68,8 @@ public class PolicyService {
         // 페이지네이션을 도입하면 페이지 크기·전체 건수가 어긋나므로 그때는 지역을 쿼리 조건으로 옮겨야 한다 (예: policy_region 정규화)
         return policyRepository.findMatchingPolicies(ageRange.lower(), ageRange.upper(), user.getIncome(), parsePolicyType(policyType))
                 .stream()
-                .filter(policy -> policy.appliesToRegion(user.getRegion()))
+                .filter(policy -> policy.matchesRegion(user.getRegion()))
+                .filter(policy -> !PolicyConditionMatcher.excludes(policy, user))
                 .toList();
     }
 
