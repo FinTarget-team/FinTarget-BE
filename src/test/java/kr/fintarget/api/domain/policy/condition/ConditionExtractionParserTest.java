@@ -124,4 +124,30 @@ class ConditionExtractionParserTest {
         assertThat(ConditionExtractionParser.parse("{\"localScope\": \"true\"}").localScope()).isNull();
         assertThat(ConditionExtractionParser.parse("{\"localScope\": 1}").localScope()).isNull();
     }
+
+    @Test
+    void 특정_대상_전용_여부는_JSON_불리언만_읽고_없거나_잘못된_값이면_null이다() {
+        assertThat(ConditionExtractionParser.parse("{\"specialTarget\": true}").specialTarget()).isTrue();
+        assertThat(ConditionExtractionParser.parse("{\"specialTarget\": false}").specialTarget()).isFalse();
+        assertThat(ConditionExtractionParser.parse("{\"specialTarget\": null}").specialTarget()).isNull();
+        assertThat(ConditionExtractionParser.parse("{\"incomeBasis\": \"NONE\"}").specialTarget()).isNull();
+        assertThat(ConditionExtractionParser.parse("{\"specialTarget\": \"true\"}").specialTarget()).isNull();
+        assertThat(ConditionExtractionParser.parse("{\"specialTarget\": 1}").specialTarget()).isNull();
+    }
+
+    @Test
+    void 대상_집단은_특정_대상_전용일_때만_앞뒤_공백을_지워_50자까지_남긴다() {
+        assertThat(ConditionExtractionParser.parse("{\"specialTarget\": true, \"specialTargetGroup\": \"  자립준비청년 \"}")
+                .specialTargetGroup()).isEqualTo("자립준비청년");
+        assertThat(ConditionExtractionParser.parse("{\"specialTarget\": false, \"specialTargetGroup\": \"자립준비청년\"}")
+                .specialTargetGroup()).isNull();
+        assertThat(ConditionExtractionParser.parse("{\"specialTargetGroup\": \"자립준비청년\"}").specialTargetGroup()).isNull();
+        assertThat(ConditionExtractionParser.parse("{\"specialTarget\": true, \"specialTargetGroup\": \"   \"}")
+                .specialTargetGroup()).isNull();
+        assertThat(ConditionExtractionParser.parse("{\"specialTarget\": true, \"specialTargetGroup\": [\"장병\"]}")
+                .specialTargetGroup()).isNull();
+        String longGroup = "가".repeat(60);
+        assertThat(ConditionExtractionParser.parse("{\"specialTarget\": true, \"specialTargetGroup\": \"" + longGroup + "\"}")
+                .specialTargetGroup()).hasSize(50);
+    }
 }

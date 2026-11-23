@@ -116,6 +116,22 @@ class PolicyConditionPersistenceTest {
     }
 
     @Test
+    void 특정_대상_전용_여부와_대상_집단을_저장하고_없으면_일반_정책으로_읽는다() {
+        Policy saved = policyRepository.save(youthPolicy("EXT-C8", "자립준비청년 정착금"));
+        saved.updateCondition(new ConditionExtraction(IncomeBasis.NONE, null, HousingRequirement.NONE, TargetType.INDIVIDUAL,
+                List.of(), BenefitKind.MONEY, false, true, "자립준비청년")
+                .toPolicyCondition(VERSION, ConditionSource.of(saved).contentHash(), LocalDateTime.now()));
+        Policy v2 = policyRepository.save(youthPolicy("EXT-C9", "무주택 청년"));
+        v2.updateCondition(PolicyCondition.builder().benefitKind(BenefitKind.MONEY).promptVersion("policy-condition-v2").build());
+
+        assertThat(reload(saved).getCondition().getSpecialTarget()).isTrue();
+        assertThat(reload(saved).getCondition().getSpecialTargetGroup()).isEqualTo("자립준비청년");
+        assertThat(reload(saved).getCondition().isSpecialTarget()).isTrue();
+        assertThat(reload(v2).getCondition().getSpecialTarget()).isNull();
+        assertThat(reload(v2).getCondition().isSpecialTarget()).isFalse();
+    }
+
+    @Test
     void 시군구_한정_정형값을_저장하고_동기화_때_새_값으로_바꾼다() {
         Policy saved = policyRepository.save(youthPolicy("EXT-C7", "무주택 청년").withRegionLocalScope(true));
         Policy stored = reload(saved);

@@ -18,6 +18,7 @@ import java.util.UUID;
 import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class RuleBasedPolicyRecommendationSelectorTest {
 
@@ -258,5 +259,177 @@ class RuleBasedPolicyRecommendationSelectorTest {
                 .containsExactlyInAnyOrder("정신건강 심리상담 바우처 사업", "청년 월세 지원");
         assertThat(exempting.hasExcludedKeyword("금융 교육 바우처")).isFalse();
         assertThat(exempting.hasExcludedKeyword("금융 교육")).isTrue();
+    }
+
+    // ---- #227 특정 대상 전용 정책 후순위
+
+    private static Policy special(String name, String region, Boolean specialTarget, Boolean localScope) {
+        Policy policy = policy(name, BenefitKind.MONEY, region, "0057002");
+        policy.updateCondition(PolicyCondition.builder().benefitKind(BenefitKind.MONEY).localScope(localScope)
+                .specialTarget(specialTarget).specialTargetGroup(Boolean.TRUE.equals(specialTarget) ? "자립준비청년" : null).build());
+        return policy;
+    }
+
+    @Test
+    void 특정_대상_전용_정책은_사용자_지역_정책이어도_일반_정책보다_뒤에_둔다() {
+        // 서울 사용자에게 서울 자립준비청년 정책은 지역 정책이지만, 전국 일반 정책보다 뒤로 간다. 제외하지는 않는다
+        Policy seoulSpecial = special("서울 자립정착금", "SEOUL", true, false);
+        Policy nationalGeneral = special("전국 청년 수당", null, false, false);
+        Policy nationalUnknown = special("판단 불가 청년 지원금", null, null, false);
+        Policy seoulGeneral = special("서울 청년 월세", "SEOUL", false, false);
+
+        assertThat(names(selector(10).select(USER, List.of(seoulSpecial, nationalUnknown, nationalGeneral, seoulGeneral), TODAY)))
+                .containsExactly("서울 청년 월세", nationalOrder(nationalGeneral, nationalUnknown).get(0),
+                        nationalOrder(nationalGeneral, nationalUnknown).get(1), "서울 자립정착금");
+    }
+
+    // 같은 순위의 두 정책은 정책 ID 순서다
+    private static List<String> nationalOrder(Policy a, Policy b) {
+        return String.valueOf(a.getPolicyId()).compareTo(String.valueOf(b.getPolicyId())) < 0
+                ? List.of(a.getName(), b.getName()) : List.of(b.getName(), a.getName());
+    }
+
+    @Test
+    void 특정_대상_전용보다_신청_가능_여부와_시군구_한정_여부가_먼저다() {
+        Policy openSpecial = special("상시 자립정착금", null, true, false);
+        Policy closedGeneral = policy("마감 청년 수당", BenefitKind.MONEY, null, "0057003");
+        Policy localGeneral = special("강남구 청년 수당", "SEOUL", false, true);
+
+        assertThat(names(selector(10).select(USER, List.of(closedGeneral, localGeneral, openSpecial), TODAY)))
+                .containsExactly("상시 자립정착금", "강남구 청년 수당", "마감 청년 수당");
+    }
+
+    @Test
+    void 특정_대상_전용_여부가_모두_비어_있으면_기존과_같은_결과다() {
+        // v3 추출 전(specialTarget null)과 모두 일반 정책(false)인 경우는 specialTarget 정렬이 없던 결과와 같다
+        List<Policy> withoutField = mixedCandidates(null);
+        List<Policy> allFalse = mixedCandidates(false);
+
+        for (int limit : List.of(1, 3, 10)) {
+            assertThat(names(selector(limit).select(USER, allFalse, TODAY)))
+                    .isEqualTo(names(selector(limit).select(USER, withoutField, TODAY)));
+        }
+        List<String> result = names(selector(10).select(USER, withoutField, TODAY));
+        assertThat(result.subList(0, 2)).containsExactlyInAnyOrder("서울 월세 지원금", "서울 문화 바우처");
+        assertThat(result.subList(2, result.size()))
+                .containsExactly("전국 청년 수당", "강남구 교통비", "마감 서울 이사비", "미추출 정책", "전세 대출");
+    }
+
+    // 지역·신청기간·시·군·구 한정·혜택 유형이 섞인 후보. specialTarget만 인자로 바꾼다
+    private static List<Policy> mixedCandidates(Boolean specialTarget) {
+        List<Policy> policies = new ArrayList<>();
+        policies.add(withCondition("서울 월세 지원금", "SEOUL", "0057002", BenefitKind.MONEY, false, specialTarget));
+        policies.add(withCondition("서울 문화 바우처", "SEOUL", "0057002", BenefitKind.COST_SAVING, false, specialTarget));
+        policies.add(withCondition("전국 청년 수당", null, "0057002", BenefitKind.MONEY, false, specialTarget));
+        policies.add(withCondition("강남구 교통비", "SEOUL", "0057002", BenefitKind.MONEY, true, specialTarget));
+        policies.add(withCondition("마감 서울 이사비", "SEOUL", "0057003", BenefitKind.MONEY, false, specialTarget));
+        policies.add(withCondition("서울 청년 상담", "SEOUL", "0057002", BenefitKind.MONEY, false, specialTarget));
+        policies.add(withCondition("청년 공간", "SEOUL", "0057002", BenefitKind.NON_FINANCIAL, false, specialTarget));
+        policies.add(withCondition("전세 대출", null, "0057002", BenefitKind.LOAN, false, specialTarget));
+        policies.add(policy("미추출 정책", null));
+        return policies;
+    }
+
+    private static Policy withCondition(String name, String region, String applyPeriodCode, BenefitKind kind, Boolean localScope,
+                                        Boolean specialTarget) {
+        Policy policy = policy(name, kind, region, applyPeriodCode);
+        policy.updateCondition(PolicyCondition.builder().benefitKind(kind).localScope(localScope).specialTarget(specialTarget).build());
+        return policy;
+    }
+
+    // ---- #227 리랭킹 후보 목록
+
+    private static RuleBasedPolicyRecommendationSelector rerankSelector(int limit, int candidateLimit) {
+        return new RuleBasedPolicyRecommendationSelector(limit, KEYWORDS, List.of(), candidateLimit);
+    }
+
+    private static List<Policy> loans(int count) {
+        return IntStream.rangeClosed(1, count).mapToObj(i -> policy("대출 상품 " + i, BenefitKind.LOAN)).toList();
+    }
+
+    @Test
+    void 후보_목록은_최대_건수까지만_돌려주고_적으면_있는_만큼만_돌려준다() {
+        assertThat(rerankSelector(10, 50).rerankCandidates(USER, money(60), TODAY)).hasSize(50);
+        assertThat(rerankSelector(10, 50).rerankCandidates(USER, money(20), TODAY)).hasSize(20);
+        assertThat(rerankSelector(10, 50).rerankCandidates(USER, money(3), TODAY)).hasSize(3);
+        assertThat(rerankSelector(10, 50).rerankCandidates(USER, List.of(), TODAY)).isEmpty();
+    }
+
+    @Test
+    void 경제적_혜택_정책이_N건_이상이면_미추출_정책과_대출은_넣지_않는다() {
+        List<Policy> candidates = new ArrayList<>(money(15));
+        candidates.add(policy("미추출 정책", null));
+        candidates.addAll(loans(20));
+
+        List<Policy> result = rerankSelector(10, 50).rerankCandidates(USER, candidates, TODAY);
+
+        assertThat(result).hasSize(15).allMatch(policy -> policy.getCondition().getBenefitKind() == BenefitKind.MONEY);
+    }
+
+    @Test
+    void 경제적_혜택_정책이_부족하면_N건을_채울_만큼만_미추출_대출_순서로_보충한다() {
+        List<Policy> candidates = new ArrayList<>(money(3));
+        candidates.add(policy("미추출 정책 1", null));
+        candidates.add(policy("미추출 정책 2", null));
+        candidates.addAll(loans(20));
+
+        List<Policy> result = rerankSelector(10, 50).rerankCandidates(USER, candidates, TODAY);
+
+        assertThat(result).hasSize(10);
+        assertThat(names(result.subList(0, 3))).allMatch(name -> name.startsWith("현금 정책"));
+        assertThat(names(result.subList(3, 5))).containsExactlyInAnyOrder("미추출 정책 1", "미추출 정책 2");
+        assertThat(names(result.subList(5, 10))).allMatch(name -> name.startsWith("대출 상품"));
+    }
+
+    @Test
+    void 후보_목록에_제외_키워드_비금전_개인_혜택_아님_UNKNOWN_정책은_넣지_않는다() {
+        List<Policy> candidates = new ArrayList<>(money(2));
+        candidates.add(policy("청년 재무상담 지원금", BenefitKind.MONEY));
+        candidates.add(policy("청년 공간 운영", BenefitKind.NON_FINANCIAL));
+        candidates.add(policy("시설 조성", BenefitKind.NOT_FOR_INDIVIDUAL));
+        candidates.add(policy("알 수 없는 정책", BenefitKind.UNKNOWN));
+
+        assertThat(names(rerankSelector(10, 50).rerankCandidates(USER, candidates, TODAY)))
+                .containsExactlyInAnyOrder("현금 정책 1", "현금 정책 2");
+    }
+
+    @Test
+    void 후보_목록의_앞_N건은_상위_N_결과와_같고_뒤는_비슷한_이름_2건_제한을_지킨다() {
+        // 지역만 다른 "청년 수당" 6건 + 서로 다른 이름 12건
+        List<Policy> candidates = new ArrayList<>();
+        for (String region : List.of("서울", "부산", "대구", "인천", "광주", "대전")) {
+            candidates.add(policy(region + " 청년 수당", BenefitKind.MONEY));
+        }
+        IntStream.rangeClosed(1, 12).forEach(i -> candidates.add(policy("다른 지원금 " + (char) ('가' + i), BenefitKind.MONEY)));
+        candidates.add(special("자립정착금", null, true, false));
+
+        RuleBasedPolicyRecommendationSelector selector = rerankSelector(10, 50);
+        List<Policy> topN = selector.select(USER, candidates, TODAY);
+        List<Policy> result = selector.rerankCandidates(USER, candidates, TODAY);
+
+        assertThat(result.subList(0, topN.size())).isEqualTo(topN);
+        assertThat(names(result)).filteredOn(name -> name.endsWith("청년 수당")).hasSize(2);
+        assertThat(result).hasSize(2 + 12 + 1);
+        assertThat(names(result).getLast()).isEqualTo("자립정착금");
+    }
+
+    @Test
+    void 비슷한_이름_제한을_풀어_채운_상위_N도_후보_목록_앞에_그대로_있다() {
+        // 비슷한 이름 5건 + 다른 이름 3건: 상위 N은 제한을 풀어 8건을 모두 넣고, 후보 목록도 같은 8건이다
+        List<Policy> candidates = new ArrayList<>();
+        for (String region : List.of("서울", "부산", "대구", "인천", "광주")) {
+            candidates.add(policy(region + " 청년 수당", BenefitKind.MONEY));
+        }
+        candidates.addAll(money(3));
+
+        RuleBasedPolicyRecommendationSelector selector = rerankSelector(10, 50);
+
+        assertThat(selector.rerankCandidates(USER, candidates, TODAY)).isEqualTo(selector.select(USER, candidates, TODAY)).hasSize(8);
+    }
+
+    @Test
+    void 후보_최대_건수는_상위_N_건수보다_작을_수_없다() {
+        assertThatThrownBy(() -> rerankSelector(10, 9)).isInstanceOf(IllegalArgumentException.class);
+        assertThat(rerankSelector(10, 10).rerankCandidates(USER, money(30), TODAY)).hasSize(10);
     }
 }

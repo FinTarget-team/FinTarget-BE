@@ -17,6 +17,8 @@ import java.util.Set;
  * <ul>
  *   <li>필드가 없거나 정의되지 않은 enum 값이면 그 필드만 UNKNOWN (경제적 혜택 유형 benefitKind 포함, #225)</li>
  *   <li>시·군·구 한정 여부(localScope)는 JSON true/false만 받고, 없거나 다른 형식이면 null (#225)</li>
+ *   <li>특정 대상 전용 여부(specialTarget)도 JSON true/false만 받고, 없거나 다른 형식이면 null.
+ *       대상 집단(specialTargetGroup)은 specialTarget이 true일 때만 남기고 앞뒤 공백을 지워 50자로 자름 (#227)</li>
  *   <li>INDIVIDUAL인데 상한 금액·기간을 해석할 수 없거나 범위를 벗어나면 소득 기준을 UNKNOWN으로 낮춤 (금액 없이 INDIVIDUAL을 남기지 않음)</li>
  *   <li>지역 코드 중 정의되지 않은 값이 하나라도 있으면 지역 전체를 빈 목록으로 (일부만 남기면 다른 지역 사용자가 잘못 제외될 수 있음)</li>
  * </ul>
@@ -50,7 +52,9 @@ public final class ConditionExtractionParser {
                 enumValue(node, "targetType", TargetType.class, TargetType.UNKNOWN),
                 regions(node),
                 enumValue(node, "benefitKind", BenefitKind.class, BenefitKind.UNKNOWN),
-                booleanValue(node, "localScope"));
+                booleanValue(node, "localScope"),
+                booleanValue(node, "specialTarget"),
+                text(node, "specialTargetGroup"));
     }
 
     // 원문 금액과 기간(ANNUAL/MONTHLY)으로 월 상한을 계산한다. 연소득은 12로 나누고 원 미만은 버린다
