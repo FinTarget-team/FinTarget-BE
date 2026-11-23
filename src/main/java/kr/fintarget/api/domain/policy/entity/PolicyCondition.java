@@ -59,6 +59,15 @@ public class PolicyCondition {
     @Column(name = "local_scope")
     private Boolean localScope;
 
+    // 신청 자격이 온보딩 정보로 알 수 없는 특정 집단(자립준비청년, 장병, 신혼부부 등)으로 한정되는지 (#227, policy-condition-v3부터).
+    // 일반 청년 대상이면 false, 알 수 없으면 null. 추천 상위 N 정렬에서 뒤로만 보낸다
+    @Column(name = "special_target")
+    private Boolean specialTarget;
+
+    // specialTarget이 true일 때의 대상 집단 (예: "자립준비청년", 최대 50자). 정렬에는 쓰지 않고 리랭킹 때 LLM에 넘길 용도 (#227)
+    @Column(name = "special_target_group", length = PolicyCondition.SPECIAL_TARGET_GROUP_MAX_LENGTH)
+    private String specialTargetGroup;
+
     // 원문에서 읽은 신청 가능 지역 (Region 코드 쉼표 구분). 기존 region이 빈 정책의 지역 보완에만 쓴다
     @Column(name = "extracted_region")
     private String extractedRegion;
@@ -118,6 +127,14 @@ public class PolicyCondition {
     public BenefitKind benefitKindOrUnknown() {
         return benefitKind == null ? BenefitKind.UNKNOWN : benefitKind;
     }
+
+    /** 특정 대상 전용 정책인지 (#227). 추출 전이거나 알 수 없으면 false (일반 정책과 같은 순서) */
+    public boolean isSpecialTarget() {
+        return Boolean.TRUE.equals(specialTarget);
+    }
+
+    /** special_target_group 컬럼 길이 */
+    public static final int SPECIAL_TARGET_GROUP_MAX_LENGTH = 50;
 
     /** 조건 3개(소득·주택·대상)를 모두 모를 때의 unknownCount */
     public static final int MAX_UNKNOWN_COUNT = 3;
