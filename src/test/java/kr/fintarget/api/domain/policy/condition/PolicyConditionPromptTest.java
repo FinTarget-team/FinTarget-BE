@@ -16,7 +16,8 @@ class PolicyConditionPromptTest {
         assertThat(prompt.instructions()).contains("benefitKind", "COST_SAVING", "NON_FINANCIAL", "NOT_FOR_INDIVIDUAL",
                 "자기돌봄비 연 200만원", "참석 실비", "만남·연결", "localScope", "특정 시·군·구 거주자");
         assertThat(prompt.instructions()).contains("specialTarget", "specialTargetGroup", "자립준비청년", "신혼·예비부부",
-                "중소기업 재직자", "targetType으로 판단", "\"specialTargetGroup\": \"자립준비청년\"");
+                "중소기업 재직자", "targetType으로 판단", "\"specialTargetGroup\": \"자립준비청년\"",
+                "신혼·예비부부만 true", "미혼 청년", "부모와 별도 거주하는 청년", "1인가구", "생애최초 주택 구입자", "저소득층");
     }
 
     @Test
