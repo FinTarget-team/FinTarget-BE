@@ -11,7 +11,7 @@ import java.util.UUID;
 
 public record PolicyRagResponse(
         @Schema(description = "ANSWERED: 정책 원문을 근거로 답함 / NO_EVIDENCE: 질문과 관련된 정책을 찾지 못함 / "
-                + "PROFILE_INCOMPLETE: 나이 또는 소득 정보가 없어 맞춤 정책을 고를 수 없음",
+                + "PROFILE_INCOMPLETE: 나이와 소득 정보가 모두 없어 맞춤 정책을 고를 수 없음",
                 example = "ANSWERED")
         PolicyRagStatus status,
 

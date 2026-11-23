@@ -35,7 +35,7 @@ public class PolicyRagController {
                     + "찾은 정책 원문만 근거로 답합니다. 답변과 함께 근거 정책 목록(sources)을 돌려주며, "
                     + "후속 질문은 근거 정책의 단건 정책 AI 질문(POST /api/policies/{policyId}/ai-chat)으로 이어갑니다. "
                     + "이전 질문은 기억하지 않습니다(질문마다 독립). "
-                    + "관련 정책을 찾지 못하면 status=NO_EVIDENCE, 나이·소득 정보가 없으면 status=PROFILE_INCOMPLETE이며 둘 다 200입니다. "
+                    + "관련 정책을 찾지 못하면 status=NO_EVIDENCE, 나이와 소득 정보가 모두 없으면 status=PROFILE_INCOMPLETE이며 둘 다 200입니다. "
                     + "사용자별 하루 질문 횟수 제한이 있습니다(기본 20회, KST 자정 초기화). "
                     + "AI 호출이 있어 응답까지 수 초 이상 걸릴 수 있습니다."
     )

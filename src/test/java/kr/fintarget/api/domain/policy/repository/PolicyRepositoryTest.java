@@ -102,4 +102,31 @@ class PolicyRepositoryTest {
         assertThat(policyRepository.findMatchingPolicies(35, 36, 1_000_000L, null))
                 .extracting(Policy::getName).containsExactly("19세 이상");
     }
+
+    // #225: 나이나 소득을 모르면(null) 그 조건만 건너뛴다
+    @Test
+    void 나이를_모르면_나이_조건을_건너뛴다() {
+        policyRepository.save(Policy.create("청년 전용 정책", "설명", 19, 34, null, null, PolicyType.ETC, null, null, null));
+
+        assertThat(policyRepository.findMatchingPolicies(null, null, 1_000_000L, null))
+                .extracting(Policy::getName).contains("청년 전용 정책");
+    }
+
+    @Test
+    void 소득을_모르면_소득_조건을_건너뛴다() {
+        policyRepository.save(Policy.create("소득 상한 정책", "설명", null, null, 2_000_000L, null, PolicyType.ETC, null, null, null));
+
+        assertThat(policyRepository.findMatchingPolicies(25, 25, null, null))
+                .extracting(Policy::getName).contains("소득 상한 정책");
+        assertThat(policyRepository.findMatchingPolicies(25, 25, 4_500_000L, null))
+                .extracting(Policy::getName).doesNotContain("소득 상한 정책");
+    }
+
+    @Test
+    void 나이를_알면_나이_조건은_그대로_적용한다() {
+        policyRepository.save(Policy.create("40대 정책", "설명", 40, 49, null, null, PolicyType.ETC, null, null, null));
+
+        assertThat(policyRepository.findMatchingPolicies(25, 25, null, null))
+                .extracting(Policy::getName).doesNotContain("40대 정책");
+    }
 }

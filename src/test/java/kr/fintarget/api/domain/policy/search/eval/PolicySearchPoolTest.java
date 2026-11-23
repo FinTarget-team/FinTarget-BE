@@ -6,6 +6,7 @@ import kr.fintarget.api.domain.policy.search.eval.PolicySearchEvalSet.Profile;
 import kr.fintarget.api.domain.policy.search.eval.PolicySearchEvalSet.SearchCase;
 import kr.fintarget.api.domain.policy.search.eval.PolicySearchPool.CasePool;
 import kr.fintarget.api.domain.policy.search.eval.PolicySearchPool.Item;
+import kr.fintarget.api.domain.policy.recommend.RuleBasedPolicyRecommendationSelector;
 import kr.fintarget.api.domain.policy.service.PolicyService;
 import kr.fintarget.api.domain.user.validation.BirthYearValidator;
 import org.junit.jupiter.api.BeforeEach;
@@ -30,7 +31,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * <p>서울 25세 후보: 월세(R-1), 전세 대출(KINFA). 부산 이사비(R-2)는 후보가 아니다.
  */
 @DataJpaTest
-@Import(PolicyService.class)
+@Import({PolicyService.class, RuleBasedPolicyRecommendationSelector.class})
 class PolicySearchPoolTest {
 
     private static final PolicyKey SEOUL_RENT = new PolicyKey("YOUTH_CENTER", "R-1");

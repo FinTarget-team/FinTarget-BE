@@ -69,4 +69,27 @@ class ApplyPeriodClassifierTest {
 
         assertThat(ApplyPeriodClassifier.classify(businessOnly, TODAY)).isEqualTo(ApplyPeriodStatus.UNKNOWN);
     }
+
+    @Test
+    void 지금_신청_가능한_정책의_마감일을_구한다() {
+        assertThat(ApplyPeriodClassifier.deadline(PolicyText.builder().applyPeriod("20261101 ~ 20261130").build(), TODAY))
+                .isEqualTo(LocalDate.of(2026, 11, 30));
+        assertThat(ApplyPeriodClassifier.deadline(
+                PolicyText.builder().applyPeriod("20260101 ~ 20260331\n20261101 ~ 20261215").build(), TODAY))
+                .isEqualTo(LocalDate.of(2026, 12, 15));
+        assertThat(ApplyPeriodClassifier.deadline(PolicyText.builder().applyPeriod("~ 2026. 12. 31. (또는 자금 소진시 까지)").build(), TODAY))
+                .isEqualTo(LocalDate.of(2026, 12, 31));
+        assertThat(ApplyPeriodClassifier.deadline(PolicyText.builder().applyPeriod("2026년 1월~12월 예산소진시까지").build(), TODAY))
+                .isEqualTo(LocalDate.of(2026, 12, 31));
+    }
+
+    @Test
+    void 상시_소진_시까지_마감_판정_불가는_마감일이_없다() {
+        assertThat(ApplyPeriodClassifier.deadline(PolicyText.builder().applyPeriodCode("0057002").build(), TODAY)).isNull();
+        assertThat(ApplyPeriodClassifier.deadline(PolicyText.builder().applyPeriod("자금소진시까지").build(), TODAY)).isNull();
+        assertThat(ApplyPeriodClassifier.deadline(PolicyText.builder().applyPeriod("2026.1.15 ~ 자금소진시까지").build(), TODAY)).isNull();
+        assertThat(ApplyPeriodClassifier.deadline(PolicyText.builder().applyPeriod("20260101 ~ 20261031").build(), TODAY)).isNull();
+        assertThat(ApplyPeriodClassifier.deadline(PolicyText.builder().applyPeriod("기관 문의").build(), TODAY)).isNull();
+        assertThat(ApplyPeriodClassifier.deadline(null, TODAY)).isNull();
+    }
 }

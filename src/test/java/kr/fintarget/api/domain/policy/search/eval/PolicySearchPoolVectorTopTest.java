@@ -9,6 +9,7 @@ import kr.fintarget.api.domain.policy.search.eval.PolicySearchPool.Item;
 import kr.fintarget.api.domain.policy.search.eval.PolicySearchSnapshot.Manifest;
 import kr.fintarget.api.domain.policy.search.eval.PolicySearchSnapshot.SnapshotChunk;
 import kr.fintarget.api.domain.policy.search.eval.PolicySearchSnapshot.SnapshotPolicy;
+import kr.fintarget.api.domain.policy.recommend.RuleBasedPolicyRecommendationSelector;
 import kr.fintarget.api.domain.policy.service.PolicyService;
 import kr.fintarget.api.domain.user.validation.BirthYearValidator;
 import org.junit.jupiter.api.BeforeEach;
@@ -34,7 +35,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * 청크를 k×5개만 조회하면 50건을 채우지 못한다.
  */
 @DataJpaTest
-@Import(PolicyService.class)
+@Import({PolicyService.class, RuleBasedPolicyRecommendationSelector.class})
 class PolicySearchPoolVectorTopTest {
 
     private static final int CHUNKS_PER_POLICY = 6;
