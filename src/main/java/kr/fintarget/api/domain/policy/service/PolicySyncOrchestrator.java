@@ -2,6 +2,8 @@ package kr.fintarget.api.domain.policy.service;
 
 import kr.fintarget.api.domain.policy.benefit.BenefitExtractionInProgressException;
 import kr.fintarget.api.domain.policy.benefit.PolicyBenefitExtractionService;
+import kr.fintarget.api.domain.policy.condition.ConditionExtractionInProgressException;
+import kr.fintarget.api.domain.policy.condition.PolicyConditionExtractionService;
 import kr.fintarget.api.domain.policy.chunk.PolicyChunkRefreshResult;
 import kr.fintarget.api.domain.policy.chunk.PolicyChunkService;
 import kr.fintarget.api.domain.policy.embedding.PolicyChunkEmbeddingService;
@@ -17,7 +19,7 @@ import java.util.function.IntSupplier;
  * 온통청년/KINFA 정책 동기화를 순차 실행한다. 스케줄러와 수동 트리거 API가 공유한다.
  * 한쪽 API 장애가 다른 쪽 동기화를 막지 않도록 각각 격리해서 실행한다.
  * 같은 정책을 중복 저장하지 않도록 동시에 하나의 동기화만 실행하며, 실행 중 요청은 PolicySyncInProgressException으로 거절한다.
- * 동기화 후 검색용 청크 갱신(#180), 혜택 추출(#162), 청크 임베딩(#181)을 차례로 실행한다.
+ * 동기화 후 검색용 청크 갱신(#180), 혜택 추출(#162), 조건 추출(#220), 청크 임베딩(#181)을 차례로 실행한다.
  * 청크 백필과 임베딩 백필(관리자 API)도 같은 잠금을 써서, 동기화가 지우는 정책의 청크를 다시 만들거나
  * 지워지는 청크를 임베딩하는 경합을 막는다.
  */
@@ -29,6 +31,7 @@ public class PolicySyncOrchestrator {
     private final YouthCenterPolicySyncService youthCenterPolicySyncService;
     private final KinfaPolicySyncService kinfaPolicySyncService;
     private final PolicyBenefitExtractionService policyBenefitExtractionService;
+    private final PolicyConditionExtractionService policyConditionExtractionService;
     private final PolicyChunkService policyChunkService;
     private final PolicyChunkEmbeddingService policyChunkEmbeddingService;
     private final AtomicBoolean running = new AtomicBoolean(false);
@@ -41,6 +44,7 @@ public class PolicySyncOrchestrator {
             PolicySyncResult result = doSyncAll();
             refreshChunks();
             extractBenefits();
+            extractConditions();
             embedChunks();
             return result;
         } finally {
@@ -99,6 +103,18 @@ public class PolicySyncOrchestrator {
             log.warn("정책 혜택 추출(관리자 백필)이 이미 실행 중이어서 동기화 후 추출을 건너뜁니다");
         } catch (Exception e) {
             log.error("동기화 후 정책 혜택 추출 실패", e);
+        }
+    }
+
+    // 동기화로 새로 들어오거나 원문이 바뀐 정책의 신청 조건을 추출한다 (#220).
+    // 부가 작업이라 실패해도 동기화 결과에 영향을 주지 않는다 (추출 전 정책은 조건 UNKNOWN이라 추천에서 제외되지 않음)
+    private void extractConditions() {
+        try {
+            policyConditionExtractionService.extractPending();
+        } catch (ConditionExtractionInProgressException e) {
+            log.warn("정책 조건 추출(관리자 백필)이 이미 실행 중이어서 동기화 후 추출을 건너뜁니다");
+        } catch (Exception e) {
+            log.error("동기화 후 정책 조건 추출 실패", e);
         }
     }
 

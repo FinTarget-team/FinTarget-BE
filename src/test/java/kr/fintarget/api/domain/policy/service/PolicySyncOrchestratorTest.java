@@ -2,6 +2,8 @@ package kr.fintarget.api.domain.policy.service;
 
 import kr.fintarget.api.domain.policy.benefit.BenefitExtractionInProgressException;
 import kr.fintarget.api.domain.policy.benefit.PolicyBenefitExtractionService;
+import kr.fintarget.api.domain.policy.condition.ConditionExtractionInProgressException;
+import kr.fintarget.api.domain.policy.condition.PolicyConditionExtractionService;
 import kr.fintarget.api.domain.policy.chunk.PolicyChunkRefreshResult;
 import kr.fintarget.api.domain.policy.chunk.PolicyChunkService;
 import kr.fintarget.api.domain.policy.embedding.PolicyChunkEmbeddingService;
@@ -35,6 +37,9 @@ class PolicySyncOrchestratorTest {
 
     @Mock
     private PolicyBenefitExtractionService policyBenefitExtractionService;
+
+    @Mock
+    private PolicyConditionExtractionService policyConditionExtractionService;
 
     @Mock
     private PolicyChunkService policyChunkService;
@@ -327,5 +332,28 @@ class PolicySyncOrchestratorTest {
 
         release.countDown();
         refresh.get(5, TimeUnit.SECONDS);
+    }
+
+    @Test
+    void 동기화_후_혜택_추출_다음에_조건_추출을_실행한다() {
+        policySyncOrchestrator.syncAll();
+
+        InOrder inOrder = inOrder(kinfaPolicySyncService, policyBenefitExtractionService, policyConditionExtractionService,
+                policyChunkEmbeddingService);
+        inOrder.verify(kinfaPolicySyncService).sync();
+        inOrder.verify(policyBenefitExtractionService).extractPending();
+        inOrder.verify(policyConditionExtractionService).extractPending();
+        inOrder.verify(policyChunkEmbeddingService).refreshPending();
+    }
+
+    @Test
+    void 조건_추출이_실패하거나_이미_실행_중이어도_동기화_결과와_임베딩은_유지된다() {
+        when(youthCenterPolicySyncService.sync()).thenReturn(2);
+        when(policyConditionExtractionService.extractPending()).thenThrow(new ConditionExtractionInProgressException());
+
+        PolicySyncResult result = policySyncOrchestrator.syncAll();
+
+        assertThat(result.youthCenterSavedCount()).isEqualTo(2);
+        verify(policyChunkEmbeddingService).refreshPending();
     }
 }

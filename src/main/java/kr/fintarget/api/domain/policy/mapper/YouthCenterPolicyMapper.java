@@ -81,6 +81,7 @@ public class YouthCenterPolicyMapper {
                 .screeningMethod(PolicyTextCleaner.clean(item.srngMthdCn()))
                 .requiredDocuments(PolicyTextCleaner.clean(item.sbmsnDcmntCn()))
                 .applyPeriod(PolicyTextCleaner.clean(item.aplyYmd()))
+                .applyPeriodCode(PolicyTextCleaner.clean(item.aplyPrdSeCd()))
                 .businessPeriod(businessPeriod(item))
                 .referenceUrl(PolicyTextCleaner.clean(item.refUrlAddr1()))
                 .applyUrl(PolicyTextCleaner.clean(item.aplyUrlAddr()))
