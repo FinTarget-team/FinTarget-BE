@@ -59,6 +59,10 @@ services:
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_MODEL_DEFAULT: ${OPENAI_MODEL_DEFAULT:-}
       OPENAI_EMBEDDING_MODEL: ${OPENAI_EMBEDDING_MODEL:-}
+      # 운영에서는 엔티티 변경으로 스키마가 자동으로 바뀌지 않도록 검증만 한다 (#219). 서버의 application.yml보다 우선한다.
+      # 스키마 변경은 docs/sql/의 SQL을 배포 전에 직접 실행하고, 엔티티와 DB가 다르면 앱이 뜨지 않아 deploy.sh가 이전 버전으로 되돌린다
+      SPRING_JPA_HIBERNATE_DDL_AUTO: ${JPA_DDL_AUTO:-validate}
+      SPRING_JPA_SHOW_SQL: "false"
 
   # 시연용 가상 금융 서버 (#204). 브라우저에서 http://<서버 IP>:8081 로 접속하고 Basic Auth로 로그인한다.
   # 웹훅은 Docker 네트워크의 서비스 이름(app)으로 메인 서버에 바로 보내고, 키는 메인 서버와 같은 BANK_WEBHOOK_KEY를 쓴다.

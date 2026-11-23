@@ -18,6 +18,11 @@ import java.util.UUID;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Expense {
 
+    // 입력 상한 (#219). 넘는 값은 DB 오류(500) 대신 요청 검증에서 400으로 거른다
+    public static final long MAX_AMOUNT = 1_000_000_000L;     // 10억 원
+    public static final int MAX_CATEGORY_LENGTH = 20;        // 실제 값은 `문화/여가` 등 6개 한글 카테고리
+    public static final int MAX_DESCRIPTION_LENGTH = 255;    // description 컬럼 varchar(255)
+
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     @Column(name = "expense_id", columnDefinition = "uuid")

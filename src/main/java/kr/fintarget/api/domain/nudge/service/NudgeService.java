@@ -46,22 +46,22 @@ public class NudgeService {
 
     @Transactional
     public void markAsRead(String userId, String nudgeId) {
-        Nudge nudge = nudgeRepository.findById(nudgeId)
-                .orElseThrow(() -> new IllegalArgumentException("넛지를 찾을 수 없습니다."));
-        if (!nudge.getUserId().equals(userId)) {
-            throw new SecurityException("접근 권한이 없습니다.");
-        }
+        Nudge nudge = findOwnNudge(userId, nudgeId);
         nudge.markAsRead();
     }
 
     @Transactional
     public void deleteNudge(String userId, String nudgeId) {
-        Nudge nudge = nudgeRepository.findById(nudgeId)
-                .orElseThrow(() -> new IllegalArgumentException("넛지를 찾을 수 없습니다."));
-        if (!nudge.getUserId().equals(userId)) {
-            throw new SecurityException("접근 권한이 없습니다.");
-        }
+        Nudge nudge = findOwnNudge(userId, nudgeId);
         nudgeRepository.delete(nudge);
+    }
+
+    // 다른 사용자의 넛지는 없는 넛지와 같은 응답을 준다 (#219). 존재 여부를 드러내지 않고,
+    // 401로 응답하면 앱이 토큰 만료로 오인해 로그아웃할 수 있다
+    private Nudge findOwnNudge(String userId, String nudgeId) {
+        return nudgeRepository.findById(nudgeId)
+                .filter(nudge -> nudge.getUserId().equals(userId))
+                .orElseThrow(() -> new IllegalArgumentException("넛지를 찾을 수 없습니다."));
     }
 
     /**

@@ -109,4 +109,43 @@ class ExpenseControllerValidationTest {
         expectBadRequest("[{\"amount\": 15000, \"category\": \"식비\", \"spentAt\": \"2026-10-12\"},"
                 + "{\"amount\": 3000, \"category\": \"교통\"}]", "지출 날짜를 입력해주세요.");
     }
+
+    // 입력 상한 (#219). 넘는 값은 DB 오류(500)가 아니라 400으로 거른다
+    @Test
+    void 지출_금액이_10억을_넘으면_400() throws Exception {
+        expectBadRequest("[{\"amount\": 1000000001, \"category\": \"식비\", \"spentAt\": \"2026-10-12\"}]",
+                "지출 금액은 10억 원 이하여야 합니다.");
+    }
+
+    @Test
+    void 지출_금액이_정확히_10억이면_동기화한다() throws Exception {
+        sync("[{\"amount\": 1000000000, \"category\": \"식비\", \"spentAt\": \"2026-10-12\"}]")
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void 카테고리가_20자를_넘으면_400() throws Exception {
+        expectBadRequest("[{\"amount\": 15000, \"category\": \"" + "가".repeat(21) + "\", \"spentAt\": \"2026-10-12\"}]",
+                "지출 카테고리는 20자 이하로 입력해주세요.");
+    }
+
+    @Test
+    void 메모가_255자를_넘으면_400() throws Exception {
+        expectBadRequest("[{\"amount\": 15000, \"category\": \"식비\", \"description\": \"" + "가".repeat(256)
+                + "\", \"spentAt\": \"2026-10-12\"}]", "지출 메모는 255자 이하로 입력해주세요.");
+    }
+
+    @Test
+    void 메모가_정확히_255자면_동기화한다() throws Exception {
+        sync("[{\"amount\": 15000, \"category\": \"식비\", \"description\": \"" + "가".repeat(255)
+                + "\", \"spentAt\": \"2026-10-12\"}]")
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void 한_번에_1000건을_넘으면_400() throws Exception {
+        String item = "{\"amount\": 15000, \"category\": \"식비\", \"spentAt\": \"2026-10-12\"}";
+        String body = "[" + String.join(",", java.util.Collections.nCopies(ExpenseController.MAX_EXPENSES_PER_REQUEST + 1, item)) + "]";
+        expectBadRequest(body, "지출 내역은 한 번에 최대 1000건까지 보낼 수 있습니다.");
+    }
 }

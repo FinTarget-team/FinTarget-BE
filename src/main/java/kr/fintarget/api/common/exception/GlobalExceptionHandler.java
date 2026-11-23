@@ -59,10 +59,6 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResponse<?>> handleIllegalState(IllegalStateException e) {
         return ResponseEntity.status(409).body(ApiResponse.error(409, e.getMessage()));
     }
-    @ExceptionHandler(SecurityException.class)
-    public ResponseEntity<ApiResponse<?>> handleSecurity(SecurityException e) {
-        return ResponseEntity.status(401).body(ApiResponse.error(401, e.getMessage()));
-    }
     // ===== 클라이언트 요청 형식 오류: 아래 매핑이 없으면 Exception 처리로 떨어져 500이 된다 =====
     // JSON 문법 오류, UUID·날짜 형식 오류, 본문 누락
     @ExceptionHandler(HttpMessageNotReadableException.class)

@@ -158,6 +158,24 @@ class BankWebhookControllerTest {
     }
 
     @Test
+    void 금액이_10억을_넘으면_400() throws Exception {
+        String body = "[" + item("\"" + TRANSACTION_ID + "\"", "\"" + USER_ID + "\"", "1000000001", "\"식비\"", "\"2026-11-02\"") + "]";
+
+        send(body, KEY)
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("지출 금액은 10억 원 이하여야 합니다."));
+    }
+
+    @Test
+    void 카테고리가_20자를_넘으면_400() throws Exception {
+        String body = "[" + item("\"" + TRANSACTION_ID + "\"", "\"" + USER_ID + "\"", "12000", "\"" + "가".repeat(21) + "\"", "\"2026-11-02\"") + "]";
+
+        send(body, KEY)
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("지출 카테고리는 20자 이하로 입력해주세요."));
+    }
+
+    @Test
     void 지출_날짜가_없으면_400() throws Exception {
         String body = "[" + item("\"" + TRANSACTION_ID + "\"", "\"" + USER_ID + "\"", "12000", "\"식비\"", "null") + "]";
 

@@ -283,4 +283,11 @@ chore: application.yml gitignore 처리 (#3)
     | `Permission denied (publickey)` | 서버 `authorized_keys`의 배포 키와 Secret의 키가 다름 |
     | `Connection timed out` | 서버 꺼짐 또는 보안 그룹 22번 포트 차단 |
     | 배포 결과: 실패 (종료 코드 1) | SSH는 성공, 배포 스크립트 실패(앱 헬스 체크 실패 후 롤백, mock-bank 기동 실패 등). Summary의 로그 확인 |
+- **DB 스키마**: 운영 앱은 `ddl-auto: validate`로 실행되어 엔티티가 바뀌어도 스키마를 자동으로 바꾸지 않습니다(`docker-compose.yml`이 서버 `application.yml`보다 우선).
+  - 테이블·컬럼을 추가·변경하는 PR은 `docs/sql/<이슈번호>_*.sql`을 함께 올리고, **배포 전에** 서버에서 직접 실행합니다.
+    `docker exec -i fintarget-db psql -U "$DB_USERNAME" -d "$DB_NAME" < docs/sql/<파일>.sql`
+  - SQL을 적용하지 않고 배포하면 엔티티와 DB가 달라 앱이 뜨지 않고, `deploy.sh`가 이전 버전으로 되돌립니다.
+  - 급하게 띄워야 하면 서버 `.env`에 `JPA_DDL_AUTO=update`를 넣어 예전 방식으로 실행할 수 있습니다. SQL 적용 후 다시 지웁니다.
+- **DB 백업**: `scripts/backup-db.sh`가 `pg_dump`로 `~/backups/`에 백업하고 14일보다 오래된 파일을 지웁니다. 서버 cron에 등록해 매일 실행합니다.
+  `0 4 * * * ~/FinTarget-BE/scripts/backup-db.sh >> ~/backups/backup.log 2>&1` (복원 방법은 스크립트 주석 참고)
 - 컨테이너는 root가 아닌 전용 계정으로, 한국 시간대(`-Duser.timezone=Asia/Seoul`)로 실행됩니다.
