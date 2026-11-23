@@ -104,4 +104,24 @@ class ConditionExtractionParserTest {
         assertThatThrownBy(() -> ConditionExtractionParser.parse("{\"incomeBasis\": }"))
                 .isInstanceOf(ConditionExtractionException.class);
     }
+
+    @Test
+    void 경제적_혜택_유형을_읽고_정의되지_않았거나_없으면_UNKNOWN이다() {
+        assertThat(ConditionExtractionParser.parse("{\"benefitKind\": \"COST_SAVING\"}").benefitKind())
+                .isEqualTo(BenefitKind.COST_SAVING);
+        assertThat(ConditionExtractionParser.parse("{\"benefitKind\": \"loan\"}").benefitKind()).isEqualTo(BenefitKind.LOAN);
+        assertThat(ConditionExtractionParser.parse("{\"benefitKind\": \"CASH\"}").benefitKind()).isEqualTo(BenefitKind.UNKNOWN);
+        assertThat(ConditionExtractionParser.parse("{\"incomeBasis\": \"NONE\"}").benefitKind()).isEqualTo(BenefitKind.UNKNOWN);
+        assertThat(ConditionExtraction.unknown().benefitKind()).isEqualTo(BenefitKind.UNKNOWN);
+    }
+
+    @Test
+    void 시군구_한정_여부는_JSON_불리언만_읽고_없거나_잘못된_값이면_null이다() {
+        assertThat(ConditionExtractionParser.parse("{\"localScope\": true}").localScope()).isTrue();
+        assertThat(ConditionExtractionParser.parse("{\"localScope\": false}").localScope()).isFalse();
+        assertThat(ConditionExtractionParser.parse("{\"localScope\": null}").localScope()).isNull();
+        assertThat(ConditionExtractionParser.parse("{\"incomeBasis\": \"NONE\"}").localScope()).isNull();
+        assertThat(ConditionExtractionParser.parse("{\"localScope\": \"true\"}").localScope()).isNull();
+        assertThat(ConditionExtractionParser.parse("{\"localScope\": 1}").localScope()).isNull();
+    }
 }

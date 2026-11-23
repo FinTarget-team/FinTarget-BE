@@ -91,6 +91,40 @@ public final class ApplyPeriodClassifier {
         return ALWAYS_WORDS.matcher(normalized).find() ? ApplyPeriodStatus.OPEN : ApplyPeriodStatus.UNKNOWN;
     }
 
+    /**
+     * 지금 신청할 수 있는 정책의 신청 마감일 (#225, 추천 상위 N에서 마감이 가까운 정책을 먼저 보여주는 데 쓴다).
+     * 상시·소진 시까지처럼 마감일이 없거나, 지금 신청할 수 없거나, 판정할 수 없으면 null
+     */
+    public static LocalDate deadline(PolicyText text, LocalDate today) {
+        if (text == null || classify(text, today) != ApplyPeriodStatus.OPEN || CODE_ALWAYS.equals(text.getApplyPeriodCode())) {
+            return null;
+        }
+        String period = text.getApplyPeriod();
+        if (period == null || period.isBlank()) {
+            return null;
+        }
+        String normalized = period.replace('∼', '~').replace('～', '~');
+        List<LocalDate[]> ymdRanges = ymdRanges(normalized);
+        if (!ymdRanges.isEmpty()) {
+            return ymdRanges.stream()
+                    .filter(range -> !today.isBefore(range[0]) && !today.isAfter(range[1]))
+                    .map(range -> range[1])
+                    .min(LocalDate::compareTo)
+                    .orElse(null);
+        }
+        int tilde = normalized.indexOf('~');
+        if (tilde < 0) {
+            return null;
+        }
+        String right = normalized.substring(tilde + 1);
+        LocalDate end = firstDate(right, true);
+        if (end == null) {
+            LocalDate start = firstDate(normalized.substring(0, tilde), false);
+            end = start == null ? null : monthOnlyEnd(right, start.getYear());
+        }
+        return end;
+    }
+
     private static List<LocalDate[]> ymdRanges(String period) {
         List<LocalDate[]> ranges = new ArrayList<>();
         Matcher matcher = YMD_RANGE.matcher(period);

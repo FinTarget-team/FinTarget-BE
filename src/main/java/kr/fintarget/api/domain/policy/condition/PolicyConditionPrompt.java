@@ -17,7 +17,7 @@ import java.util.regex.Pattern;
 @Component
 public class PolicyConditionPrompt {
 
-    public static final String VERSION = "policy-condition-v1";
+    public static final String VERSION = "policy-condition-v2";
 
     private static final Pattern VERSION_PATTERN = Pattern.compile("policy-condition-v\\d+");
 

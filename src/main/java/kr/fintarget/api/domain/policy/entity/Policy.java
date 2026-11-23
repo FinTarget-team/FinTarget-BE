@@ -51,6 +51,12 @@ public class Policy {
     @Column(name = "region")
     private String region;
 
+    // 신청 자격이 특정 시·군·구로 한정되는지 (#225). 온통청년 zipCd(시·군·구 법정동 코드 목록)로 계산한 정형값이며,
+    // 추천 상위 N 정렬에서 AI 추출값(condition.localScope)보다 우선한다. KINFA·zipCd 없음은 null.
+    // region(시·도) 판정과는 별개이며 region 값은 바꾸지 않는다
+    @Column(name = "region_local_scope")
+    private Boolean regionLocalScope;
+
     @Column(name = "external_id")
     private String externalId;
 
@@ -142,6 +148,12 @@ public class Policy {
         return codes.contains(userRegion.trim());
     }
 
+    /** 소스 데이터로 계산한 시·군·구 한정 여부를 채운다 (#225, 매퍼에서 호출) */
+    public Policy withRegionLocalScope(Boolean regionLocalScope) {
+        this.regionLocalScope = regionLocalScope;
+        return this;
+    }
+
     /**
      * 추천 매칭에 쓰는 지역 코드 (#220). 기존 region이 있으면 그 값을 그대로 쓰고({@link #regionCodes()}),
      * region이 비어 있을 때만 원문에서 추출한 지역(condition.extractedRegion)으로 보완한다.
@@ -217,6 +229,7 @@ public class Policy {
         this.benefitAmount = fetched.benefitAmount;
         this.policyType = fetched.policyType;
         this.region = fetched.region;
+        this.regionLocalScope = fetched.regionLocalScope;
         this.text = fetched.text;
     }
 }

@@ -15,6 +15,7 @@ import kr.fintarget.api.domain.policy.search.eval.PolicySearchSnapshot;
 import kr.fintarget.api.domain.policy.search.eval.PolicySearchSnapshotLoader;
 import kr.fintarget.api.domain.policy.search.eval.QuestionEmbeddingCache;
 import kr.fintarget.api.domain.policy.search.eval.SearchConfig;
+import kr.fintarget.api.domain.policy.recommend.RuleBasedPolicyRecommendationSelector;
 import kr.fintarget.api.domain.policy.service.PolicyService;
 import kr.fintarget.api.domain.user.validation.BirthYearValidator;
 import org.junit.jupiter.api.Test;
@@ -40,7 +41,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * <p>서울 25세 후보: 월세(R-1, 거리 0 / 0.4), 전세 대출(KINFA). 운영 설정(k=5, 하한 0.5)으로 검색한다.
  */
 @DataJpaTest
-@Import(PolicyService.class)
+@Import({PolicyService.class, RuleBasedPolicyRecommendationSelector.class})
 class PolicyRagE2eEvalTest {
 
     private static final String RENT = "YOUTH_CENTER:R-1";

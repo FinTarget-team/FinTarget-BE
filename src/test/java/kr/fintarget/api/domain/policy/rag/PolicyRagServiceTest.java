@@ -139,8 +139,8 @@ class PolicyRagServiceTest {
     }
 
     @Test
-    void 나이나_소득이_없으면_AI를_호출하지_않고_조건_정보_부족이다() {
-        when(policyService.findUser(USER_ID)).thenReturn(user(null, 3_000_000L));
+    void 나이와_소득이_모두_없으면_AI를_호출하지_않고_조건_정보_부족이다() {
+        when(policyService.findUser(USER_ID)).thenReturn(user(null, null));
 
         PolicyRagResult result = service().answer(USER_ID, QUESTION);
 
@@ -148,9 +148,17 @@ class PolicyRagServiceTest {
         assertThat(result.answer()).isEqualTo(PolicyRagResult.PROFILE_INCOMPLETE_ANSWER);
         assertThat(result.sources()).isEmpty();
         verifyNoInteractions(searchService, aiTextClient, usageLimiter);
+    }
 
-        when(policyService.findUser(USER_ID)).thenReturn(user(2000, null));
-        assertThat(service().answer(USER_ID, QUESTION).status()).isEqualTo(PolicyRagStatus.PROFILE_INCOMPLETE);
+    @Test
+    void 나이나_소득_중_하나만_없으면_조건_정보_부족이_아니라_후보를_찾는다() {
+        // #225: 하나만 없으면 그 조건만 건너뛰고 후보를 찾는다
+        User noAge = user(null, 3_000_000L);
+        when(policyService.findUser(USER_ID)).thenReturn(noAge);
+        when(policyService.findCandidatePolicies(noAge, null)).thenReturn(List.of());
+
+        assertThat(service().answer(USER_ID, QUESTION).status()).isEqualTo(PolicyRagStatus.NO_EVIDENCE);
+        verify(policyService).findCandidatePolicies(noAge, null);
     }
 
     @Test

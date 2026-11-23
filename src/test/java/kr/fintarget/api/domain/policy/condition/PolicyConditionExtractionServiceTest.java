@@ -172,4 +172,22 @@ class PolicyConditionExtractionServiceTest {
         assertThat(result.failedCount()).isEqualTo(1);
         assertThat(policy.getCondition()).isNull();
     }
+
+    @Test
+    void 이전_프롬프트_버전으로_추출한_정책은_다시_추출하고_경제적_혜택_유형을_저장한다() {
+        // #225: v1로 추출된 정책은 버전이 달라 v2(현재 VERSION)로 다시 추출된다
+        when(extractor.promptVersion()).thenReturn(PolicyConditionPrompt.VERSION);
+        Policy policy = policy("월세 지원", "무주택 청년");
+        policy.updateCondition(homelessOnly().toPolicyCondition("policy-condition-v1",
+                ConditionSource.of(policy).contentHash(), LocalDateTime.now()));
+        when(policyRepository.findAll()).thenReturn(List.of(policy));
+        when(extractor.extract(any())).thenReturn(new ConditionExtraction(IncomeBasis.NONE, null,
+                HousingRequirement.HOMELESS_REQUIRED, TargetType.INDIVIDUAL, List.of(), BenefitKind.MONEY));
+
+        ConditionExtractionResult result = service.extractPending();
+
+        assertThat(result.targetCount()).isEqualTo(1);
+        assertThat(policy.getCondition().getPromptVersion()).isEqualTo("policy-condition-v2");
+        assertThat(policy.getCondition().getBenefitKind()).isEqualTo(BenefitKind.MONEY);
+    }
 }

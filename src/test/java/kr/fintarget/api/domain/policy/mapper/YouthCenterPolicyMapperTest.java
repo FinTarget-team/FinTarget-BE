@@ -11,6 +11,8 @@ import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
 
 import java.util.List;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -344,5 +346,41 @@ class YouthCenterPolicyMapperTest {
 
         assertThat(policy.getText().getApplyPeriodCode()).isEqualTo("0057002");
         assertThat(policy.getText().getApplyPeriod()).isNull();
+    }
+
+    @Test
+    void zipCd가_한_시도의_절반_이하_시군구만_담으면_시군구_한정이다() {
+        // #225: 은평구 1개, 원주시 1개, 대구 9개 중 4개 → 한정. 제주는 시가 2개라 1개도 한정
+        assertThat(YouthCenterPolicyMapper.resolveLocalScope("11380")).isTrue();
+        assertThat(YouthCenterPolicyMapper.resolveLocalScope("51130")).isTrue();
+        assertThat(YouthCenterPolicyMapper.resolveLocalScope("27110,27140,27170,27200")).isTrue();
+        assertThat(YouthCenterPolicyMapper.resolveLocalScope("50110")).isTrue();
+    }
+
+    @Test
+    void zipCd가_시도_절반을_넘거나_여러_시도_전국이면_시군구_한정이_아니다() {
+        String gyeonggi47 = IntStream.range(0, 47).mapToObj(i -> String.valueOf(41000 + i))
+                .collect(Collectors.joining(","));
+        assertThat(YouthCenterPolicyMapper.resolveLocalScope(gyeonggi47)).isFalse();
+        assertThat(YouthCenterPolicyMapper.resolveLocalScope("27110,27140,27170,27200,27230")).isFalse();
+        assertThat(YouthCenterPolicyMapper.resolveLocalScope("11380,41135")).isFalse();
+        // 세종은 시·군·구가 없어 코드 1개가 시 전체다
+        assertThat(YouthCenterPolicyMapper.resolveLocalScope("36110")).isFalse();
+    }
+
+    @Test
+    void zipCd가_없거나_코드_형식이_아니거나_모르는_시도면_판정하지_않는다() {
+        assertThat(YouthCenterPolicyMapper.resolveLocalScope(null)).isNull();
+        assertThat(YouthCenterPolicyMapper.resolveLocalScope(" ")).isNull();
+        assertThat(YouthCenterPolicyMapper.resolveLocalScope("abc")).isNull();
+        assertThat(YouthCenterPolicyMapper.resolveLocalScope("99110")).isNull();
+    }
+
+    @Test
+    void 시군구_한정_여부를_저장하되_시도_지역_값은_그대로_둔다() {
+        Policy policy = YouthCenterPolicyMapper.toPolicy(itemWithZipCd("11380"));
+
+        assertThat(policy.getRegionLocalScope()).isTrue();
+        assertThat(policy.getRegion()).isEqualTo("SEOUL");
     }
 }
