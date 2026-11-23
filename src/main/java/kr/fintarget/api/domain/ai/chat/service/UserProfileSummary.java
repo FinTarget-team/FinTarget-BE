@@ -71,7 +71,7 @@ public record UserProfileSummary(String age, String income, String region, Strin
         }
         Long annualMax = bracket.getMaxIncome() == null ? null : bracket.getMaxIncome() * 12;
         return range(bracket.getMinIncome(), bracket.getMaxIncome())
-                + " (연소득 환산 " + range(bracket.getMinIncome() * 12, annualMax) + ")";
+                + " (연으로 계산하면 " + range(bracket.getMinIncome() * 12, annualMax) + ")";
     }
 
     private static String range(long min, Long max) {

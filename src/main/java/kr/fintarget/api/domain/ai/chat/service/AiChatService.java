@@ -43,9 +43,9 @@ public class AiChatService {
     static final Duration CONVERSATION_TTL = Duration.ofHours(24);
     // AI에 이어 붙이는 이전 턴 수. 원문과 사용자 정보는 매 턴 시스템 프롬프트에 다시 넣으므로 오래된 턴을 빼도 근거는 남는다
     static final int HISTORY_TURNS = 6;
-    // #147 이후 답변에 참고 링크를 내려주지 않으므로 담당 기관만 안내한다 (#216)
+    // #147 이후 답변에 참고 링크를 내려주지 않으므로 담당 기관만 안내한다. 말투는 policy-qa-v3(온보딩과 같은 해요체)에 맞춘다 (#216)
     static final String SOURCE_LIMITED_NOTICE =
-            "\n\n※ 이 정책은 저장된 원문 정보가 적어 답변이 부정확할 수 있습니다. 정확한 내용은 담당 기관에서 확인해주세요.";
+            "\n\n※ 이 정책은 저장된 안내 정보가 적어서 답변이 정확하지 않을 수 있어요. 정확한 내용은 담당 기관에서 확인해 주세요.";
 
     private static final Pattern APPLY_URL = Pattern.compile("^https?://\\S+$");
 
