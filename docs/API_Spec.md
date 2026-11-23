@@ -1,7 +1,7 @@
 # FinTarget API 명세서 (iOS 프론트 전달용)
 
 > 작성일: 2026-06-12
-> 베이스 URL: `http://localhost:8080` (개발 서버)
+> 베이스 URL: `http://localhost:8080` (개발 서버). 운영은 `https://<도메인>` (HTTPS 적용 후, #218)
 > 인증: 모든 API는 JWT Bearer 토큰 필요 (로그인 API 제외)
 
 ---
@@ -15,17 +15,25 @@ Authorization: Bearer {accessToken}
 
 ## 1. 인증 (Auth)
 
+### 공통: 요청 횟수 제한
+- `/auth/**` API는 IP별로 1분에 30번까지 받습니다. 넘으면 429와 `Retry-After` 헤더(다시 시도할 수 있을 때까지 남은 초)를 응답합니다.
+```json
+{ "status": 429, "message": "요청이 너무 많습니다. 잠시 후 다시 시도해주세요.", "data": null }
+```
+
 ### 카카오 로그인
-- **POST** `/auth/kakao/login`
+- **POST** `/auth/kakao/login/token`
 - 인증 불필요
+- iOS/Android 카카오 SDK가 발급한 액세스 토큰을 보내면 서버가 카카오 API로 검증한 뒤 로그인/회원가입을 처리합니다.
+- 서버는 토큰이 **핀타겟 앱에서 발급됐는지**(카카오 `app_id`) 확인합니다. 다른 앱에서 발급받은 토큰이면 401 `이 앱에서 발급되지 않은 카카오 인증 정보입니다.`
+- 인가 코드 방식(`/auth/kakao/login`)은 제거됐습니다 (#218).
 - Request Body:
 ```json
 {
-  "authorizationCode": "string",
-  "redirectUri": "string"
+  "accessToken": "string"
 }
 ```
-- Response:
+- Response: 기존 회원 200, 신규 회원 201 (바디 구조 동일)
 ```json
 {
   "status": 201,
@@ -40,6 +48,7 @@ Authorization: Bearer {accessToken}
   }
 }
 ```
+- 유효하지 않거나 만료된 토큰이면 401
 
 ### 네이버 로그인
 - **POST** `/auth/naver/login/token`
@@ -62,6 +71,19 @@ Authorization: Bearer {accessToken}
   "refreshToken": "string"
 }
 ```
+- Response (200): 새 액세스 토큰과 **새 리프레시 토큰**
+```json
+{
+  "status": 200,
+  "message": "OK",
+  "data": {
+    "accessToken": "string",
+    "refreshToken": "string",
+    "expiresIn": 3600
+  }
+}
+```
+- **앱은 응답의 `refreshToken`으로 저장한 리프레시 토큰을 바꿔야 합니다 (#218).** 서버 설정으로 "사용한 리프레시 토큰 무효화"가 켜지면 한 번 쓴 리프레시 토큰은 다시 쓸 수 없어(401), 이전 토큰을 계속 쓰는 앱은 로그아웃됩니다. 이 설정은 앱 업데이트 후에 켭니다.
 - 리프레시 토큰이 유효하지 않거나 만료됐거나 블랙리스트에 있으면 401 (`Invalid refresh token`)
 - 탈퇴한 사용자의 리프레시 토큰도 401
 - 액세스 토큰을 보내면 401. 반대로 리프레시 토큰으로는 다른 API를 호출할 수 없음 (401)

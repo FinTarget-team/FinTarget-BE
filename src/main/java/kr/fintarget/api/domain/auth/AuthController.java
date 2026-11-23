@@ -6,7 +6,6 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import kr.fintarget.api.common.ApiResponse;
 import kr.fintarget.api.domain.auth.dto.AuthResponse;
-import kr.fintarget.api.domain.auth.dto.KakaoLoginRequest;
 import kr.fintarget.api.domain.auth.dto.KakaoTokenLoginRequest;
 import kr.fintarget.api.domain.auth.dto.NaverTokenLoginRequest;
 import kr.fintarget.api.domain.auth.dto.SocialUserInfo;
@@ -19,6 +18,7 @@ import kr.fintarget.api.security.BlacklistedTokenRepository;
 import kr.fintarget.api.security.JwtUtil;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -35,6 +35,9 @@ public class AuthController {
     private final KakaoOAuthClient kakaoOAuthClient;
     private final NaverOAuthClient naverOAuthClient;
     private final BlacklistedTokenRepository blacklistedTokenRepository;
+
+    @Value("${jwt.revoke-used-refresh-token:${JWT_REVOKE_USED_REFRESH_TOKEN:false}}")
+    private boolean revokeUsedRefreshToken;
 
     // 이메일은 소셜 제공자에게서 받은 값으로만 저장한다 (#173). 신규 가입이면 함께 저장하고,
     // 기존 회원은 저장된 이메일이 없을 때만 채운다 (이미 있는 이메일은 덮어쓰지 않음)
@@ -68,48 +71,6 @@ public class AuthController {
         return ResponseEntity.status(isNewUser ? 201 : 200).body(
                 isNewUser ? ApiResponse.created(response) : ApiResponse.ok(response)
         );
-    }
-
-    @Operation(
-            summary = "카카오 소셜 로그인",
-            description = "인가 코드(authorizationCode)로 카카오 사용자 정보를 조회해 로그인/회원가입을 처리합니다. " +
-                    "기존 회원이면 200, 신규 회원이면 자동 가입 후 201로 응답합니다. 응답 바디 구조는 두 경우 동일합니다."
-    )
-    @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(
-                    responseCode = "200",
-                    description = "기존 회원 로그인 성공",
-                    useReturnTypeSchema = true
-            ),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(
-                    responseCode = "201",
-                    description = "신규 회원 자동 가입 및 로그인 성공",
-                    useReturnTypeSchema = true
-            ),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(
-                    responseCode = "401",
-                    description = "유효하지 않거나 만료된 카카오 인증 정보",
-                    content = @Content(examples = @ExampleObject(
-                            name = "유효하지 않은 카카오 인증 정보",
-                            value = """
-                                    {"status": 401, "message": "유효하지 않거나 만료된 카카오 인증 정보입니다.", "data": null}
-                                    """
-                    ))
-            ),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(
-                    responseCode = "500",
-                    description = "카카오 인증 서버 호출 실패 등 처리 중 오류. message는 원인 예외 메시지이며 null일 수 있습니다.",
-                    content = @Content(examples = @ExampleObject(
-                            name = "서버 오류",
-                            value = """
-                                    {"status": 500, "message": null, "data": null}
-                                    """
-                    ))
-            )
-    })
-    @PostMapping("/kakao/login")
-    public ResponseEntity<ApiResponse<AuthResponse>> kakaoLogin(@RequestBody KakaoLoginRequest request) {
-        return socialLogin(kakaoOAuthClient.getKakaoUser(request.getAuthorizationCode()), SocialProvider.KAKAO);
     }
 
     @Operation(
@@ -221,7 +182,8 @@ public class AuthController {
 
     @Operation(
             summary = "액세스 토큰 재발급",
-            description = "유효한 리프레시 토큰으로 새 액세스 토큰을 발급합니다. 리프레시 토큰 자체는 재발급되지 않습니다. 액세스 토큰을 보내면 401입니다."
+            description = "유효한 리프레시 토큰으로 새 액세스 토큰과 새 리프레시 토큰을 발급합니다. 앱은 응답의 refreshToken으로 저장한 값을 바꿔야 합니다. " +
+                    "서버 설정(JWT_REVOKE_USED_REFRESH_TOKEN)이 켜져 있으면 사용한 리프레시 토큰은 즉시 무효화되어 다시 쓸 수 없습니다. 액세스 토큰을 보내면 401입니다."
     )
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(
@@ -252,8 +214,15 @@ public class AuthController {
             return ResponseEntity.status(401).body(ApiResponse.error(401, "Invalid refresh token"));
         }
         String newAccessToken = jwtUtil.generateToken(userId, "REFRESH");
+        // 리프레시 토큰도 새로 발급한다 (#218). 앱은 응답의 refreshToken으로 저장한 값을 바꿔야 한다
+        String newRefreshToken = jwtUtil.generateRefreshToken(userId);
+        // 사용한 리프레시 토큰 무효화는 앱이 새 토큰을 저장하도록 바뀐 뒤 켠다. 그 전에 켜면 앱이 이전 토큰으로
+        // 다시 재발급을 시도하다 401을 받고 로그아웃된다 (JWT_REVOKE_USED_REFRESH_TOKEN)
+        if (revokeUsedRefreshToken) {
+            blacklistToken(refreshToken);
+        }
         int expiresIn = (int) (jwtUtil.getExpirationMillis() / 1000);
-        return ResponseEntity.ok(ApiResponse.ok(new TokenRefreshResponse(newAccessToken, expiresIn)));
+        return ResponseEntity.ok(ApiResponse.ok(new TokenRefreshResponse(newAccessToken, newRefreshToken, expiresIn)));
     }
 
     @Operation(
