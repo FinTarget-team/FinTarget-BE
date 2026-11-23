@@ -69,7 +69,10 @@ public class PolicyCondition {
                 && promptVersion != null && promptVersion.equals(this.promptVersion);
     }
 
-    /** 추출한 지역 코드 목록. 비어 있거나 Region 코드가 아닌 값이 하나라도 있으면 빈 목록(지역 보완 안 함) */
+    /**
+     * 추출한 지역 코드 목록. 비어 있거나 Region 코드가 아닌 값이 하나라도 있으면 빈 목록(지역 보완 안 함).
+     * 17개 시·도를 모두 담은 값도 전국과 같으므로 빈 목록으로 본다 (정렬에서 모든 사용자에게 "지역 정책"으로 올라가지 않게)
+     */
     public List<String> extractedRegionCodes() {
         if (extractedRegion == null || extractedRegion.isBlank()) {
             return List.of();
@@ -79,7 +82,10 @@ public class PolicyCondition {
                 .filter(token -> !token.isEmpty())
                 .distinct()
                 .toList();
-        return codes.stream().allMatch(code -> Region.fromCode(code) != null) ? codes : List.of();
+        if (codes.size() >= Region.values().length || !codes.stream().allMatch(code -> Region.fromCode(code) != null)) {
+            return List.of();
+        }
+        return codes;
     }
 
     /** 소득·주택·대상 중 확인되지 않은(UNKNOWN 또는 null) 조건 수. 정렬에서 조건이 확인된 정책을 앞에 둔다 */

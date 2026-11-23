@@ -1,9 +1,13 @@
 package kr.fintarget.api.domain.policy.entity;
 
+import kr.fintarget.api.domain.user.code.Region;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
+
+import java.util.Arrays;
+import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -142,5 +146,8 @@ class PolicyRegionTest {
         assertThat(policyIn(null).matchesRegion("JEJU")).isTrue();
         assertThat(policyWithExtracted(null, null).matchesRegion("JEJU")).isTrue();
         assertThat(policyWithExtracted(null, "JEONNAM,HWASUN").matchesRegion("JEJU")).isTrue();
+        // 17개 시·도를 모두 추출한 값은 전국과 같다
+        String allRegions = Arrays.stream(Region.values()).map(Region::getCode).collect(Collectors.joining(","));
+        assertThat(policyWithExtracted(null, allRegions).matchingRegionCodes()).isEmpty();
     }
 }
