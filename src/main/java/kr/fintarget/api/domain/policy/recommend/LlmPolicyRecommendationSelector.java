@@ -58,7 +58,7 @@ import java.util.stream.Collectors;
  *   <li>상위 모델(openai.model.premium)에 사용자 정보 5개(구간만)와 후보 한 줄 요약을 보내고 최대 N건을 적합한 순서로 받는다</li>
  *   <li>후보 밖·중복·형식 오류 항목은 버리고, N건 미만이면 규칙 순서로 채운다. 0건이거나 해석할 수 없으면 규칙 상위 N</li>
  *   <li>결과는 사용자별 메모리 캐시({@link PolicyRerankCache})에 둔다. 입력 해시(사용자 정보 + 후보 정책 ID 목록 + 프롬프트 버전)가 같으면 캐시를 쓴다</li>
- *   <li>캐시가 없으면 동기 호출(policy.recommend.rerank.timeout, 기본 8초). 실패·시간 초과면 규칙 상위 N을 돌려주고 캐시하지 않으며, 비동기로 한 번 다시 계산한다</li>
+ *   <li>캐시가 없으면 동기 호출(policy.recommend.rerank.timeout, 기본 15초). 실패·시간 초과면 규칙 상위 N을 돌려주고 캐시하지 않으며, 비동기로 한 번 다시 계산한다</li>
  *   <li>같은 사용자의 계산이 진행 중이면 기다리지 않고 규칙 상위 N</li>
  * </ol>
  * 리랭킹이 꺼져 있거나(policy.recommend.rerank.enabled=false, 관리자 API로 실행 중 변경 가능) AI 키가 없으면 LLM을 호출하지 않고 규칙 상위 N이다.
@@ -94,7 +94,7 @@ public class LlmPolicyRecommendationSelector implements PolicyRecommendationSele
                                            OpenAiProperties openAiProperties, PolicyRerankPrompt prompt,
                                            PolicyRerankCache cache,
                                            @Value("${policy.recommend.rerank.enabled:true}") boolean enabled,
-                                           @Value("${policy.recommend.rerank.timeout:8s}") Duration timeout,
+                                           @Value("${policy.recommend.rerank.timeout:15s}") Duration timeout,
                                            @Value("${policy.recommend.rerank.max-output-tokens:" + DEFAULT_MAX_OUTPUT_TOKENS + "}") int maxOutputTokens) {
         this(ruleSelector, aiTextClient, openAiProperties, prompt, cache, enabled, timeout, maxOutputTokens,
                 Executors.newVirtualThreadPerTaskExecutor(), null);
