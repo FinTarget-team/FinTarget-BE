@@ -10,10 +10,12 @@ import kr.fintarget.api.domain.user.code.HousingStatus;
 import kr.fintarget.api.domain.user.code.IncomeBracket;
 import kr.fintarget.api.domain.user.code.Region;
 import kr.fintarget.api.domain.user.entity.User;
+import kr.fintarget.api.domain.user.event.UserProfileChangedEvent;
 import kr.fintarget.api.domain.user.repository.UserRepository;
 import kr.fintarget.api.domain.user.validation.BirthYearValidator;
 import kr.fintarget.api.domain.user.validation.NameValidator;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,6 +31,7 @@ public class OnboardingService {
     private final UserRepository userRepository;
     private final OnboardingAnswerRepository onboardingAnswerRepository;
     private final GoalService goalService;
+    private final ApplicationEventPublisher eventPublisher;
     static final int STEP_NAME = 1;
     static final int STEP_AGE = 2;
     static final int STEP_EMPLOYMENT = 3;
@@ -130,6 +133,8 @@ public class OnboardingService {
                     .orElseThrow(() -> new IllegalArgumentException("유저를 찾을 수 없습니다."));
             user.completeOnboarding();
             userRepository.save(user);
+            // 커밋 후 추천 리랭킹을 미리 계산한다 (#229)
+            eventPublisher.publishEvent(new UserProfileChangedEvent(userId));
 
             return OnboardingStepResponse.builder()
                     .step(STEP_GOAL).totalSteps(TOTAL_STEPS).progress(1.0)

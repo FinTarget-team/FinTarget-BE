@@ -7,6 +7,7 @@ import kr.fintarget.api.domain.user.code.Region;
 import kr.fintarget.api.domain.user.dto.UpdateProfileRequest;
 import kr.fintarget.api.domain.user.dto.UserProfileResponse;
 import kr.fintarget.api.domain.user.entity.User;
+import kr.fintarget.api.domain.user.event.UserProfileChangedEvent;
 import kr.fintarget.api.domain.user.repository.UserRepository;
 import kr.fintarget.api.domain.user.validation.BirthYearValidator;
 import kr.fintarget.api.domain.user.validation.NameValidator;
@@ -20,6 +21,7 @@ import kr.fintarget.api.domain.onboarding.repository.OnboardingAnswerRepository;
 import kr.fintarget.api.domain.policy.repository.UserPolicyRepository;
 import kr.fintarget.api.domain.simulation.repository.SimulationRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -39,6 +41,7 @@ public class UserService {
     private final AiConversationMessageRepository aiConversationMessageRepository;
     private final AiConversationRepository aiConversationRepository;
     private final AiDailyUsageRepository aiDailyUsageRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     public UserProfileResponse getProfile(String userId) {
         User user = userRepository.findById(userId)
@@ -75,6 +78,8 @@ public class UserService {
             user.updateHousingStatus(resolveHousingStatus(request.getHousingStatus()));
         }
 
+        // 커밋 후 추천 리랭킹을 미리 계산한다 (#229). 추천에 쓰지 않는 값(닉네임)만 바뀌었으면 입력 해시가 같아 LLM을 호출하지 않는다
+        eventPublisher.publishEvent(new UserProfileChangedEvent(userId));
         return UserProfileResponse.from(user);
     }
 
