@@ -12,10 +12,11 @@ import java.util.List;
  */
 public record PolicyRagResult(PolicyRagStatus status, String answer, List<Policy> sources) {
 
+    // 해요체 (#235). 정책과 관계없는 질문도 검색 결과가 없어 이 문구로 끝나므로, 답할 수 있는 범위를 함께 알린다
     static final String NO_EVIDENCE_ANSWER =
-            "질문과 관련된 정책 정보를 찾지 못했습니다. 질문을 조금 더 구체적으로 바꾸거나 정책 목록에서 확인해주세요.";
+            "질문에 맞는 정책을 찾지 못했어요. 청년 주거·금융·일자리 정책에 대한 질문에 답할 수 있어요. 지역이나 상황을 조금 더 구체적으로 알려주세요.";
     static final String PROFILE_INCOMPLETE_ANSWER =
-            "맞춤 정책을 찾으려면 나이와 소득 정보가 필요합니다. 내 정보에서 출생연도와 소득을 입력해주세요.";
+            "맞춤 정책을 찾으려면 나이나 소득 정보가 필요해요. 내 정보에서 출생연도와 소득을 입력해 주세요.";
 
     public PolicyRagResult {
         sources = List.copyOf(sources);

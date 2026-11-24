@@ -1,13 +1,18 @@
 package kr.fintarget.api.domain.policy.rag;
 
 import kr.fintarget.api.domain.ai.chat.service.UserProfileSummary;
+import kr.fintarget.api.domain.user.validation.BirthYearValidator;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Locale;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
@@ -16,15 +21,23 @@ import java.util.regex.Pattern;
  *
  * <p>검색된 청크는 목록 순서대로 [1], [2] 번호를 붙여 넣는다. 모델이 답변에 적은 번호는
  * {@link PolicyCitationParser}가 같은 순서로 정책에 되돌린다.
+ *
+ * <p>v3부터(#235) 단건 채팅(policy-qa-v3)과 같이 오늘 날짜와 1인 가구 기준 중위소득 비율이 든 사용자 정보
+ * ({@link UserProfileSummary#toQaPromptText()})를 넣는다. 비교용으로 읽는 v2 이하는 이전과 같다
+ * (날짜 없음, {@link UserProfileSummary#toPromptText()}).
  */
 @Component
 public class PolicyRagPrompt {
 
-    public static final String VERSION = "policy-rag-v2";
+    public static final String VERSION = "policy-rag-v3";
 
     private static final String CHUNKS_PLACEHOLDER = "{{chunks}}";
     private static final String PROFILE_PLACEHOLDER = "{{profile}}";
-    private static final Pattern VERSION_PATTERN = Pattern.compile("policy-rag-v\\d+");
+    private static final String TODAY_PLACEHOLDER = "{{today}}";
+    private static final DateTimeFormatter TODAY_FORMAT = DateTimeFormatter.ofPattern("yyyy년 M월 d일 (E)", Locale.KOREAN);
+    private static final Pattern VERSION_PATTERN = Pattern.compile("policy-rag-v(\\d+)");
+    // 이 버전부터 오늘 날짜와 중위소득 비율이 든 사용자 정보를 쓴다
+    private static final int QA_PROFILE_SINCE = 3;
 
     private final String version;
     private final String template;
@@ -60,16 +73,33 @@ public class PolicyRagPrompt {
     }
 
     /**
+     * 오늘 날짜(KST)로 채운다.
+     *
      * @param chunks 검색된 청크 본문. 목록 순서가 근거 번호다 (첫 번째 = [1])
      */
     public String render(List<String> chunks, UserProfileSummary profile) {
+        return render(chunks, profile, LocalDate.now(BirthYearValidator.ZONE));
+    }
+
+    /**
+     * @param chunks 검색된 청크 본문. 목록 순서가 근거 번호다 (첫 번째 = [1])
+     * @param today  오늘 날짜. "지금 신청할 수 있는지"를 신청 기간과 비교하도록 넣는다. 날짜 자리가 없는 v2 이하에는 들어가지 않는다
+     */
+    public String render(List<String> chunks, UserProfileSummary profile, LocalDate today) {
         if (chunks.isEmpty()) {
             throw new IllegalArgumentException("프롬프트에 넣을 청크가 없습니다.");
         }
-        // 사용자 정보를 먼저 채운다: 청크 본문에 "{{profile}}" 같은 문자열이 있어도 치환되지 않도록
+        String profileText = versionNumber() >= QA_PROFILE_SINCE ? profile.toQaPromptText() : profile.toPromptText();
+        // 사용자 정보·날짜를 먼저 채운다: 청크 본문에 "{{profile}}" 같은 문자열이 있어도 치환되지 않도록
         return template
-                .replace(PROFILE_PLACEHOLDER, profile.toPromptText())
+                .replace(PROFILE_PLACEHOLDER, profileText)
+                .replace(TODAY_PLACEHOLDER, TODAY_FORMAT.format(today))
                 .replace(CHUNKS_PLACEHOLDER, numbered(chunks));
+    }
+
+    private int versionNumber() {
+        Matcher matcher = VERSION_PATTERN.matcher(version);
+        return matcher.matches() ? Integer.parseInt(matcher.group(1)) : 0;
     }
 
     static String numbered(List<String> chunks) {

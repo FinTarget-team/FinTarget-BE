@@ -4,6 +4,8 @@ import kr.fintarget.api.domain.ai.client.AiClientException;
 import kr.fintarget.api.domain.ai.client.AiEmbeddingClient;
 import kr.fintarget.api.domain.ai.usage.AiUsageFeature;
 import kr.fintarget.api.domain.ai.usage.AiUsageLimiter;
+import kr.fintarget.api.domain.policy.condition.BenefitKind;
+import kr.fintarget.api.domain.policy.document.PolicySections;
 import kr.fintarget.api.domain.policy.entity.Policy;
 import kr.fintarget.api.domain.policy.search.PolicyChunkSearchRepository.ChunkMatch;
 import kr.fintarget.api.domain.policy.service.PolicyService;
@@ -138,6 +140,83 @@ public class PolicySearchService {
                     k, hits.size(), matches.size(), chunkMultiplier);
         }
         return hits;
+    }
+
+    /**
+     * 통합 정책 AI 답변(#183)용 검색 (#235). 한도를 차감하지 않는다. 정책 검색 API({@link #search})·{@link #searchCandidates}와 두 가지가 다르다.
+     * <ul>
+     *   <li>대출 의도가 없을 때 대출 상품을 빼되, 온통청년의 대출이자·보증료 지원 정책(혜택 유형 LOAN, 경제적 혜택 유형 MONEY·COST_SAVING)은
+     *       남긴다. "머물자리론"처럼 대출 단어 없이 물어도 검색된다. KINFA 상품과 일반 대출은 이전처럼 뺀다</li>
+     *   <li>질문에 후보 정책의 이름이 들어 있으면({@link PolicyNameMatch}) 그 정책을 벡터 거리·하한과 상관없이 결과 맨 앞에 넣는다.
+     *       이름으로 고른 정책은 KINFA 대출 상품이어도 넣는다 (이름을 말했으면 그 상품을 묻는 것이다)</li>
+     * </ul>
+     * 결과는 최대 k건이다.
+     *
+     * @param candidates 통합 답변 후보 정책 (비어 있으면 임베딩 없이 빈 목록)
+     */
+    @Transactional(readOnly = true)
+    public List<PolicySearchHit> searchForAnswer(List<Policy> candidates, String question) {
+        List<Policy> named = PolicyNameMatch.find(candidates, question);
+        List<Policy> searchable = excludeLoansExceptSupportUnlessAsked(candidates, question);
+        if (searchable.isEmpty() && named.isEmpty()) {
+            return List.of();
+        }
+
+        float[] questionVector = embeddingClient.embed(List.of(question)).getFirst();
+
+        List<ChunkMatch> matches = List.of();
+        List<PolicySearchHit> vectorHits = List.of();
+        if (!searchable.isEmpty()) {
+            Map<UUID, Policy> byId = new LinkedHashMap<>();
+            for (Policy policy : searchable) {
+                byId.put(policy.getPolicyId(), policy);
+            }
+            matches = searchRepository.search(new ArrayList<>(byId.keySet()), questionVector, k * chunkMultiplier);
+            vectorHits = groupByPolicy(matches, byId);
+        }
+        if (named.isEmpty()) {
+            return vectorHits;
+        }
+
+        // 이름이 맞은 정책을 앞에 두고, 그 정책의 청크 중 질문과 가장 가까운 것을 쓴다.
+        // 이미 조회한 청크(거리순)에 있으면 그것을, 없으면 그 정책만 다시 조회한다 (하한·k와 상관없이)
+        Map<UUID, PolicySearchHit> result = new LinkedHashMap<>();
+        for (Policy policy : named) {
+            ChunkMatch best = matches.stream()
+                    .filter(match -> match.policyId().equals(policy.getPolicyId()))
+                    .findFirst()
+                    .orElseGet(() -> searchRepository.search(List.of(policy.getPolicyId()), questionVector, 1)
+                            .stream().findFirst().orElse(null));
+            if (best != null) {
+                result.put(policy.getPolicyId(), new PolicySearchHit(
+                        policy, best.chunkId(), best.sectionLabel(), best.content(), best.distance()));
+            }
+        }
+        for (PolicySearchHit hit : vectorHits) {
+            if (result.size() >= k) {
+                break;
+            }
+            result.putIfAbsent(hit.policy().getPolicyId(), hit);
+        }
+        return List.copyOf(result.values());
+    }
+
+    // 통합 답변용 (#235): 대출 의도가 없으면 대출 상품만 뺀다. 혜택 유형(#162)이 LOAN이어도 온통청년 정책 중
+    // 경제적 혜택 유형(#225 benefitKind)이 MONEY·COST_SAVING인 이자 지원·보증료 지원은 남긴다.
+    // KINFA 상품, 온통청년의 일반 대출(benefitKind LOAN, 예: 주거안정월세대출·디딤돌 대출), 혜택 유형을 아직 모르는 정책은 이전처럼 뺀다
+    static List<Policy> excludeLoansExceptSupportUnlessAsked(List<Policy> candidates, String question) {
+        if (LoanIntent.of(question)) {
+            return candidates;
+        }
+        return candidates.stream().filter(policy -> !policy.isLoanProduct() || isSupportNotLoan(policy)).toList();
+    }
+
+    private static boolean isSupportNotLoan(Policy policy) {
+        if (PolicySections.isKinfa(policy) || policy.getCondition() == null) {
+            return false;
+        }
+        BenefitKind kind = policy.getCondition().getBenefitKind();
+        return kind == BenefitKind.MONEY || kind == BenefitKind.COST_SAVING;
     }
 
     /**

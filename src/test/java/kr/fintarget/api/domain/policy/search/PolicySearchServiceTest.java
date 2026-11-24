@@ -7,8 +7,10 @@ import kr.fintarget.api.domain.ai.usage.AiUsageFeature;
 import kr.fintarget.api.domain.ai.usage.AiUsageLimitExceededException;
 import kr.fintarget.api.domain.ai.usage.AiUsageLimiter;
 import kr.fintarget.api.domain.policy.benefit.BenefitType;
+import kr.fintarget.api.domain.policy.condition.BenefitKind;
 import kr.fintarget.api.domain.policy.entity.Policy;
 import kr.fintarget.api.domain.policy.entity.PolicyBenefit;
+import kr.fintarget.api.domain.policy.entity.PolicyCondition;
 import kr.fintarget.api.domain.policy.entity.PolicyType;
 import kr.fintarget.api.domain.policy.search.PolicyChunkSearchRepository.ChunkMatch;
 import kr.fintarget.api.domain.policy.service.PolicyService;
@@ -310,5 +312,85 @@ class PolicySearchServiceTest {
         assertThatThrownBy(() -> service(0, 0.5, 3)).isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> service(5, 0.5, 0)).isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> service(5, 0.5, 3, 0)).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    // #235 통합 답변 전용 검색
+
+    private Policy withSource(Policy policy, String source) {
+        ReflectionTestUtils.setField(policy, "source", source);
+        return policy;
+    }
+
+    private Policy withKind(Policy policy, BenefitKind kind) {
+        policy.updateCondition(PolicyCondition.builder().benefitKind(kind).build());
+        return policy;
+    }
+
+    @Test
+    void 통합_답변_검색은_대출_의도가_없으면_대출만_빼고_온통청년_이자_보증료_지원은_남긴다() {
+        Policy kinfaLoan = withKind(withSource(loan("햇살론유스"), "KINFA"), BenefitKind.MONEY);
+        Policy plainLoan = withKind(withSource(loan("주거안정월세대출"), "YOUTH_CENTER"), BenefitKind.LOAN);
+        Policy unknownLoan = withSource(loan("분석 전 대출"), "YOUTH_CENTER");
+        Policy interestSupport = withKind(withSource(loan("부산 청년 임차보증금 대출이자 지원"), "YOUTH_CENTER"), BenefitKind.MONEY);
+        Policy rent = policy("청년 월세 지원");
+        String question = "보증금 부담 줄이는 방법 있어?";
+        List<Policy> candidates = List.of(kinfaLoan, plainLoan, unknownLoan, interestSupport, rent);
+        stubRankedSearch(question, List.of(
+                match(kinfaLoan, "전체", "햇살론", 0.30),
+                match(plainLoan, "전체", "월세대출", 0.31),
+                match(unknownLoan, "전체", "대출", 0.32),
+                match(interestSupport, "전체", "이자 지원", 0.35),
+                match(rent, "전체", "월세", 0.40)));
+
+        List<PolicySearchHit> hits = service(5, 0.65, 3).searchForAnswer(candidates, question);
+
+        assertThat(hits).extracting(PolicySearchHit::policy).containsExactly(interestSupport, rent);
+        // 대출 의도가 있으면 모두 대상
+        assertThat(PolicySearchService.excludeLoansExceptSupportUnlessAsked(candidates, "대출 이자 지원 있어?")).hasSize(5);
+        // 정책 검색 API 경로(#182, #201)는 그대로: 혜택 유형 LOAN을 모두 뺀다
+        assertThat(service(5, 0.65, 3).searchCandidates(candidates, question))
+                .extracting(PolicySearchHit::policy).containsExactly(rent);
+    }
+
+    @Test
+    void 통합_답변_검색은_질문에_정책명이_있으면_거리와_상관없이_맨_앞에_넣는다() {
+        Policy stay = withSource(loan("부산 청년 임차보증금 대출 및 대출이자 지원(머물자리론)"), "YOUTH_CENTER");
+        Policy a = policy("부산 청년 중개보수 지원");
+        Policy b = policy("청년 월세 지원");
+        String question = "머물자리론 지금 신청 가능해?";
+        when(embeddingClient.embed(List.of(question))).thenReturn(List.of(VECTOR));
+        // 벡터 검색 조회 상한 안에 머물자리론 청크가 없다 (질문이 짧아 거리가 멀다)
+        when(searchRepository.search(anyList(), eq(VECTOR), eq(15))).thenReturn(List.of(
+                match(a, "전체", "중개보수", 0.50), match(b, "전체", "월세", 0.60)));
+        when(searchRepository.search(eq(List.of(stay.getPolicyId())), eq(VECTOR), eq(1)))
+                .thenReturn(List.of(match(stay, "전체", "머물자리론 본문", 0.70)));
+
+        List<PolicySearchHit> hits = service(5, 0.65, 3).searchForAnswer(List.of(stay, a, b), question);
+
+        assertThat(hits).extracting(PolicySearchHit::policy).containsExactly(stay, a, b);
+        assertThat(hits.getFirst().content()).isEqualTo("머물자리론 본문");
+    }
+
+    @Test
+    void 통합_답변_검색에서_이름이_맞은_정책이_벡터_결과에_있으면_그_청크를_쓰고_k건을_넘지_않는다() {
+        Policy kpass = policy("K-패스(K패스)");
+        Policy a = policy("A 정책");
+        Policy b = policy("B 정책");
+        String question = "K-패스 지금 신청할 수 있어?";
+        when(embeddingClient.embed(List.of(question))).thenReturn(List.of(VECTOR));
+        when(searchRepository.search(anyList(), eq(VECTOR), eq(6))).thenReturn(List.of(
+                match(a, "전체", "A", 0.40), match(b, "전체", "B", 0.45), match(kpass, "전체", "K-패스 청크", 0.55)));
+
+        List<PolicySearchHit> hits = service(2, 0.65, 3).searchForAnswer(List.of(kpass, a, b), question);
+
+        assertThat(hits).extracting(PolicySearchHit::policy).containsExactly(kpass, a);
+        assertThat(hits.getFirst().content()).isEqualTo("K-패스 청크");
+        verify(searchRepository, never()).search(eq(List.of(kpass.getPolicyId())), any(), eq(1));
+    }
+
+    @Test
+    void 통합_답변_검색은_후보가_없으면_임베딩을_호출하지_않는다() {
+        assertThat(service(5, 0.65, 3).searchForAnswer(List.of(), "질문")).isEmpty();
+        verifyNoInteractions(embeddingClient, searchRepository);
     }
 }
