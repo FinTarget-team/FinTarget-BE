@@ -166,6 +166,23 @@ deploy_mock_bank() {
   return 1
 }
 
+# mock-bank HTTPS 주소(bank.<도메인>) 확인 (#230). 시연용이라 실패해도 배포는 실패로 보지 않고 경고만 남긴다
+check_mock_bank_https() {
+  local domain=$1 code=""
+  [ -n "$(docker compose ps --status running -q mock-bank 2>/dev/null)" ] || return 0
+  local deadline=$((SECONDS + 60))
+  while [ "$SECONDS" -lt "$deadline" ]; do
+    # 로그인 없이 401이 오면 정상이다
+    code=$(curl -s -o /dev/null -w '%{http_code}' --resolve "bank.$domain:443:127.0.0.1" "https://bank.$domain/" || true)
+    if [ "$code" = "401" ] || [ "$code" = "200" ]; then
+      echo "mock-bank HTTPS 정상: https://bank.$domain"
+      return 0
+    fi
+    sleep 5
+  done
+  echo "주의: https://bank.$domain 이 응답하지 않습니다(마지막 응답 $code). bank.$domain DNS가 이 서버를 가리키는지 확인하세요." >&2
+}
+
 deploy_caddy() {
   local domain
   domain=$(env_value DOMAIN)
@@ -177,6 +194,7 @@ deploy_caddy() {
     code=$(curl -s -o /dev/null -w '%{http_code}' --resolve "$domain:443:127.0.0.1" "https://$domain/actuator/health" || true)
     if [ "$code" = "200" ]; then
       echo "HTTPS 프록시 정상: https://$domain"
+      check_mock_bank_https "$domain"
       return 0
     fi
     sleep 5

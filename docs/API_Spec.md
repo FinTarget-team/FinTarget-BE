@@ -1081,7 +1081,7 @@ X-Admin-Key: {ADMIN_API_KEY}
 
 ## 참고 사항
 
-- 운영 서버 주소: `http://54.180.93.46:8080` (HTTPS 미적용)
+- 운영 서버 주소: `https://3-38-27-99.sslip.io` (iOS 앱 전환 전까지 `http://3.38.27.99:8080`도 열어 둠)
 - 스웨거 UI: `{서버 주소}/swagger-ui.html`
 - 스웨거 JSON: `{서버 주소}/v3/api-docs`
 - JWT 토큰 만료 시간: 1시간 (3600초)
