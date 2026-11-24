@@ -65,9 +65,10 @@ services:
       SERVER_FORWARD_HEADERS_STRATEGY: native
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_MODEL_DEFAULT: ${OPENAI_MODEL_DEFAULT:-}
-      # 상위 모델 (#229 추천 리랭킹에만 사용). 비우면 코드 기본값 gpt-6.1-sol
-      OPENAI_MODEL_PREMIUM: ${OPENAI_MODEL_PREMIUM:-}
-      # 추천 목록 LLM 리랭킹 (#229). false면 LLM 없이 규칙 상위 N. 바꾼 뒤 `docker compose up -d --no-deps app`으로 컨테이너를 다시 만들어야 반영된다
+      # 상위 모델 (#229 추천 리랭킹에만 사용). .env에 없거나 비어 있으면 gpt-6.1-sol (코드 기본값과 같음)
+      OPENAI_MODEL_PREMIUM: ${OPENAI_MODEL_PREMIUM:-gpt-6.1-sol}
+      # 추천 목록 LLM 리랭킹 (#229). .env에 없거나 비어 있으면 true. false면 LLM 없이 규칙 상위 N.
+      # 바꾼 뒤 `docker compose up -d --no-deps app`으로 컨테이너를 다시 만들어야 반영된다
       POLICY_RECOMMEND_RERANK_ENABLED: ${POLICY_RECOMMEND_RERANK_ENABLED:-true}
       OPENAI_EMBEDDING_MODEL: ${OPENAI_EMBEDDING_MODEL:-}
       # 운영에서는 엔티티 변경으로 스키마가 자동으로 바뀌지 않도록 검증만 한다 (#219). 서버의 application.yml보다 우선한다.
