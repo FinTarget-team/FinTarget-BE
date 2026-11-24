@@ -86,9 +86,12 @@ services:
     depends_on:
       app:
         condition: service_started
+    # HTTPS(https://bank.<도메인>)로 접속하게 되면 .env에 MOCK_BANK_BIND_ADDRESS=127.0.0.1을 넣어 8081을 외부에서 막는다 (#230)
     ports:
-      - "8081:8081"
+      - "${MOCK_BANK_BIND_ADDRESS:-0.0.0.0}:8081:8081"
     environment:
+      # Caddy 뒤에서 https 주소로 리다이렉트하도록 X-Forwarded-* 헤더를 믿는다
+      SERVER_FORWARD_HEADERS_STRATEGY: native
       MOCK_BANK_USERNAME: ${MOCK_BANK_USERNAME:-}
       MOCK_BANK_PASSWORD: ${MOCK_BANK_PASSWORD:-}
       FINTARGET_BASE_URL: http://app:8080

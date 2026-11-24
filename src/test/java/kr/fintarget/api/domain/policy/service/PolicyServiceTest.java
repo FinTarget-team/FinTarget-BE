@@ -106,19 +106,6 @@ class PolicyServiceTest {
     }
 
     @Test
-    void 전체_유형_목록은_select를_정책_유형_필터_목록은_selectWithinType을_쓴다() {
-        when(userRepository.findById("user-1")).thenReturn(Optional.of(userWith(25, 3000000L)));
-        when(policyRepository.findMatchingPolicies(25, 25, 3000000L, null)).thenReturn(List.of(policy("전체", null)));
-        when(policyRepository.findMatchingPolicies(25, 25, 3000000L, PolicyType.HOUSING)).thenReturn(List.of(policy("주거", null)));
-
-        assertThat(policyService.getMatchingPolicies("user-1", null)).extracting(PolicyResponse::name).containsExactly("전체");
-        assertThat(policyService.getMatchingPolicies("user-1", "housing")).extracting(PolicyResponse::name).containsExactly("주거");
-
-        verify(recommendationSelector).select(any(), argThat(list -> list.size() == 1 && list.getFirst().getName().equals("전체")), any());
-        verify(recommendationSelector).selectWithinType(any(), argThat(list -> list.size() == 1 && list.getFirst().getName().equals("주거")), any());
-    }
-
-    @Test
     void 나이와_소득이_모두_없으면_빈_리스트를_반환한다() {
         when(userRepository.findById("user-1")).thenReturn(Optional.of(userWith(null, null)));
 

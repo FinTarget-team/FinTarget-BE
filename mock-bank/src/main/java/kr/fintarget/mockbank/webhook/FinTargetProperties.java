@@ -7,7 +7,7 @@ import java.time.Duration;
 /**
  * 핀타겟 메인 서버 웹훅 설정.
  *
- * @param baseUrl        메인 서버 주소 (예: http://54.180.93.46:8080)
+ * @param baseUrl        메인 서버 주소 (예: http://app:8080)
  * @param webhookKey     메인 서버 BANK_WEBHOOK_KEY와 같은 값. X-Bank-Webhook-Key 헤더로 보낸다
  * @param connectTimeout 연결 타임아웃
  * @param readTimeout    응답 타임아웃
