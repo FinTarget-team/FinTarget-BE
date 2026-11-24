@@ -35,17 +35,27 @@ public class PolicyService {
      * 맞춤 정책 목록. 후보 정책({@link #findCandidatePolicies(User, String)})을 추천 순서로 정렬하고(#220),
      * 경제적 혜택(현금·비용 절감) 정책 중 상위 N건만 골라 돌려준다 (#225, {@link PolicyRecommendationSelector}).
      * 정렬과 상위 N 선택은 이 목록에만 적용하고, 같은 후보를 쓰는 정책 검색(#182)·통합 AI 답변(#183)은 전체 후보에서 자체 검색 순서를 쓴다.
+     * 전체 유형 목록은 LLM이 규칙 후보 중 최종 N건을 고르고(#229, 실패 시 규칙 결과), 정책 유형 필터가 있으면 규칙 결과를 쓴다.
      */
     @Transactional(readOnly = true)
     public List<PolicyResponse> getMatchingPolicies(String userId, String policyType) {
         User user = findUser(userId);
-        List<Policy> candidates = findCandidatePolicies(user, policyType);
         LocalDate today = LocalDate.now(BirthYearValidator.ZONE);
-        List<Policy> sorted = PolicyRecommendationOrder.sort(candidates, user.getRegion(), today);
-        return recommendationSelector.select(user, sorted, today)
-                .stream()
+        List<Policy> sorted = sortedCandidatePolicies(user, policyType, today);
+        List<Policy> selected = parsePolicyType(policyType) == null
+                ? recommendationSelector.select(user, sorted, today)
+                : recommendationSelector.selectWithinType(user, sorted, today);
+        return selected.stream()
                 .map(PolicyResponse::from)
                 .collect(Collectors.toList());
+    }
+
+    /**
+     * 추천 정렬(#220)까지 거친 후보 정책. 맞춤 정책 목록과 추천 리랭킹 미리 계산(#229)이 같은 입력을 쓰도록 분리했다.
+     */
+    @Transactional(readOnly = true)
+    public List<Policy> sortedCandidatePolicies(User user, String policyType, LocalDate today) {
+        return PolicyRecommendationOrder.sort(findCandidatePolicies(user, policyType), user.getRegion(), today);
     }
 
     /**
