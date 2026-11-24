@@ -41,8 +41,9 @@ public class PolicySearchService {
     // 한 정책이 청크 여러 개를 차지하므로 k개 정책을 채우려면 청크를 더 많이 조회해야 한다
     // (2026-11-04 운영: 청크 976개 / 정책 883건 ≈ 1.1)
     static final int DEFAULT_CHUNK_MULTIPLIER = 3;
-    // 검색 API의 사용자별 하루 호출 수 (#183). 임베딩만 호출해 비용이 작아 통합 AI 답변(20)보다 넉넉하게 둔다
-    static final int DEFAULT_DAILY_LIMIT = 50;
+    // 검색 API의 사용자별 하루 호출 수 (#183). 0이면 무제한 (#239 부스 시연).
+    // 다시 걸려면 .env에 POLICY_SEARCH_DAILY_LIMIT=50처럼 양수를 넣는다 (임베딩만 호출해 비용이 작아 통합 답변보다 넉넉하게 둔다)
+    static final int DEFAULT_DAILY_LIMIT = 0;
 
     private final PolicyService policyService;
     private final PolicyChunkSearchRepository searchRepository;
@@ -67,9 +68,6 @@ public class PolicySearchService {
         if (chunkMultiplier < 1) {
             throw new IllegalArgumentException("policy.search.chunk-multiplier는 1 이상이어야 합니다: " + chunkMultiplier);
         }
-        if (dailyLimit < 1) {
-            throw new IllegalArgumentException("policy.search.daily-limit는 1 이상이어야 합니다: " + dailyLimit);
-        }
         this.policyService = policyService;
         this.searchRepository = searchRepository;
         this.embeddingClient = embeddingClient;
@@ -84,7 +82,7 @@ public class PolicySearchService {
      * 질문과 가까운 정책을 최대 k건, 유사도가 가까운 순서로 돌려준다.
      * 나이·소득을 모르는 사용자와 하한값을 넘는 결과만 있는 경우는 빈 목록이다 (오류가 아니다).
      *
-     * 검색 API 경로이며 사용자별 일일 한도(policy.search.daily-limit)를 1회 차감한다.
+     * 검색 API 경로이며 사용자별 일일 한도(policy.search.daily-limit)를 1회 차감한다. 한도가 0 이하면 차감하지 않는다 (#239).
      * 후보가 없으면 임베딩을 호출하지 않으므로 차감하지 않고, 임베딩 호출이 실패하면 되돌린다.
      *
      * @throws kr.fintarget.api.domain.ai.usage.AiUsageLimitExceededException 오늘 검색 한도를 모두 썼을 때 (429)

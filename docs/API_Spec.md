@@ -139,6 +139,46 @@ Authorization: Bearer {accessToken}
 - 바디를 보내지 않아도 탈퇴한 사용자의 리프레시 토큰은 토큰 갱신에서 401로 거부됩니다.
 - Response (200): `data: null`. 되돌릴 수 없습니다.
 
+### 내 계정 초기화 (부스 시연용, #239)
+- **POST** `/api/users/me/demo-reset`
+- 서버 설정 `demo.reset.enabled`(환경 변수 `DEMO_RESET_ENABLED`)가 `true`일 때만 열립니다. **기본값은 false이고, 그때는 404**입니다.
+- 로그인한 **본인만** 초기화합니다. 경로에 사용자 ID가 없어 다른 사람의 계정은 초기화할 수 없습니다.
+- 지우는 데이터: 온보딩 답변, 프로필 값(닉네임·출생연도·고용 형태·소득·지역·주택 보유 여부), 목표와 보관된 이전 목표, 시뮬레이션, 저장한 정책, 단건 채팅 대화·메시지, AI 하루 사용량 기록, 넛지
+- **남기는 데이터: 계정(사용자 행), 소셜 로그인 연결, 발급된 토큰, 지출(expense).** 응답 후에도 같은 액세스 토큰으로 계속 호출할 수 있습니다.
+- **지출은 지우지 않습니다** (#239): mock-bank로 들어온 거래를 시연마다 다시 만들 수 없기 때문입니다. 직접 입력한 지출도 함께 남고, 남은 건수는 `keptExpenses`로 응답합니다.
+- 넛지는 지워지지만 지출이 남아 있어, 초기화 후 `GET /nudges`에서 이상 지출 넛지(`UNUSUAL_SPENDING`)가 다시 만들어질 수 있습니다. 같은 유형·카테고리는 하루 한 번만 만들어져 반복되지 않습니다. 목표 마감 넛지(`GOAL_DEADLINE`)는 목표가 지워져 만들어지지 않습니다.
+- 초기화 후 온보딩 화면으로 보낼 판단은 `GET /users/me`의 `onboardingCompleted`가 `false`인지로 합니다. 온보딩 답변이 모두 지워져 `POST /onboarding/answer`는 1단계부터만 받습니다.
+- Response (200):
+```json
+{
+  "status": 200,
+  "message": "OK",
+  "data": {
+    "reset": true,
+    "userId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+    "deleted": {
+      "onboardingAnswers": 7,
+      "goals": 1,
+      "simulations": 2,
+      "savedPolicies": 3,
+      "aiConversations": 1,
+      "aiConversationMessages": 4,
+      "aiUsages": 2,
+      "nudges": 5
+    },
+    "keptExpenses": 13
+  }
+}
+```
+
+| 상황 | 상태 코드 | message |
+| --- | --- | --- |
+| 설정이 꺼져 있음 | 404 | `요청한 API를 찾을 수 없습니다.` |
+| 사용자를 찾을 수 없음 | 400 | `사용자를 찾을 수 없습니다.` |
+| 토큰 없음·만료 | 401 | `인증이 필요합니다. 토큰을 확인해주세요.` |
+
+> 비상용 관리자 API(앱에서는 호출하지 않음): `GET /api/admin/demo/users`로 사용자 ID·닉네임·로그인 방식·온보딩 완료 여부를 확인하고, `POST /api/admin/demo/users/{userId}/reset`으로 초기화합니다. 둘 다 `X-Admin-Key` 헤더가 필요하고 `demo.reset.enabled=true`일 때만 열립니다.
+
 ---
 
 ## 3. 온보딩 (Onboarding)
@@ -512,7 +552,7 @@ Authorization: Bearer {accessToken}
 
 > 질문을 임베딩하는 AI 호출이 있어 응답까지 1초 이상 걸릴 수 있습니다.
 >
-> **사용자별 하루 검색 횟수 제한** (#183): 기본 50회(`policy.search.daily-limit`), KST 자정에 초기화. 후보 정책이 없어 AI를 호출하지 않은 요청과 AI 호출이 실패한 요청(502/503)은 횟수에서 빠집니다. 통합 정책 AI 답변 내부의 검색은 이 횟수에 포함되지 않습니다.
+> **사용자별 하루 검색 횟수 제한** (#183): 기본 **무제한**(`policy.search.daily-limit`=0, 부스 시연 #239). 양수로 두면 그 횟수만큼만 허용하고 KST 자정에 초기화합니다. 후보 정책이 없어 AI를 호출하지 않은 요청과 AI 호출이 실패한 요청(502/503)은 횟수에서 빠집니다. 통합 정책 AI 답변 내부의 검색은 이 횟수에 포함되지 않습니다.
 
 ### 통합 정책 AI 답변
 - **POST** `/api/policies/ai-answer`
@@ -569,7 +609,7 @@ Authorization: Bearer {accessToken}
 | 임베딩·답변 생성 실패, 시간 초과 | 502 | `AI 응답을 받지 못했습니다. 잠시 후 다시 시도해주세요.` |
 | AI 기능 비활성(키 없음)·한도 초과 | 503 | `AI 기능을 지금 사용할 수 없습니다. 잠시 후 다시 시도해주세요.` |
 
-> **사용자별 하루 질문 횟수 제한**: 기본 20회(`policy.rag.daily-limit`), KST 자정에 초기화. `NO_EVIDENCE`도 검색(임베딩)이 실행됐으면 1회로 셉니다. 후보 정책이 없어 AI를 호출하지 않은 요청, `PROFILE_INCOMPLETE`, AI 호출이 실패한 요청(502/503)은 횟수에서 빠집니다.
+> **사용자별 하루 질문 횟수 제한**: 기본 **무제한**(`policy.rag.daily-limit`=0, 부스 시연 #239). 양수로 두면 그 횟수만큼만 허용하고 KST 자정에 초기화합니다. `NO_EVIDENCE`도 검색(임베딩)이 실행됐으면 1회로 셉니다. 후보 정책이 없어 AI를 호출하지 않은 요청, `PROFILE_INCOMPLETE`, AI 호출이 실패한 요청(502/503)은 횟수에서 빠집니다.
 >
 > 검색과 답변 생성 두 번의 AI 호출이 있어 응답까지 수 초 이상 걸릴 수 있습니다.
 

@@ -187,8 +187,10 @@ public class LlmPolicyRecommendationSelector implements PolicyRecommendationSele
             if (!cache.tryStart(user.getId())) {
                 return RefreshOutcome.IN_FLIGHT;
             }
+            // 계산 전 세대를 읽어 둔다. 계산 중에 시연 초기화로 캐시가 비워지면 결과를 저장하지 않는다 (#239)
+            long generation = cache.generation(user.getId());
             try {
-                return callAndStore(user.getId(), input, candidates, "precompute", () -> true)
+                return callAndStore(user.getId(), input, candidates, "precompute", generation, () -> true)
                         ? RefreshOutcome.COMPUTED : RefreshOutcome.FAILED;
             } finally {
                 cache.finish(user.getId());
@@ -222,9 +224,10 @@ public class LlmPolicyRecommendationSelector implements PolicyRecommendationSele
 
         // 시간 초과로 포기한 호출이 나중에 끝나도 캐시에 넣지 않도록, 결과를 쓸지 포기할지 한 번만 정한다
         AtomicInteger state = new AtomicInteger(CALL_RUNNING);
+        long generation = cache.generation(userId);
         Future<Boolean> future;
         try {
-            future = callExecutor.submit(() -> callAndStore(userId, input, candidates, "request",
+            future = callExecutor.submit(() -> callAndStore(userId, input, candidates, "request", generation,
                     () -> state.compareAndSet(CALL_RUNNING, CALL_STORED)));
         } catch (RuntimeException e) {
             cache.finish(userId);
@@ -274,8 +277,9 @@ public class LlmPolicyRecommendationSelector implements PolicyRecommendationSele
                 if (!isAvailable() || cache.find(userId, input.hash()).isPresent() || !cache.tryStart(userId)) {
                     return;
                 }
+                long generation = cache.generation(userId);
                 try {
-                    callAndStore(userId, input, candidates, "retry", () -> true);
+                    callAndStore(userId, input, candidates, "retry", generation, () -> true);
                 } finally {
                     cache.finish(userId);
                 }
@@ -289,10 +293,11 @@ public class LlmPolicyRecommendationSelector implements PolicyRecommendationSele
      * LLM을 호출하고 결과를 검증해 캐시에 넣는다. 1건 이상 고르면 true. 실패·0건이면 캐시하지 않고 false.
      * 호출마다 사용자 ID, 후보 수, 선택 수, 버린 수, 대체 여부(사유), 소요 시간, 프롬프트 버전, 모델명, 토큰 수를 남긴다 (사용자 정보 값은 남기지 않음).
      *
-     * @param canStore 결과를 캐시에 넣어도 되는지 (요청 경로에서 시간 초과로 포기했으면 false)
+     * @param generation 계산을 시작할 때 읽어 둔 캐시 세대. 계산 중에 시연 초기화로 캐시가 비워졌으면 저장하지 않는다 (#239)
+     * @param canStore   결과를 캐시에 넣어도 되는지 (요청 경로에서 시간 초과로 포기했으면 false)
      */
     private boolean callAndStore(String userId, RerankInput input, List<Policy> candidates, String trigger,
-                                 BooleanSupplier canStore) {
+                                 long generation, BooleanSupplier canStore) {
         long start = System.currentTimeMillis();
         int limit = ruleSelector.limit();
         String model = modelId();
@@ -310,15 +315,14 @@ public class LlmPolicyRecommendationSelector implements PolicyRecommendationSele
                 return false;
             }
             List<UUID> ids = selection.numbers().stream().map(number -> candidates.get(number - 1).getPolicyId()).toList();
-            boolean stored = canStore.getAsBoolean();
-            if (stored) {
-                cache.put(userId, new PolicyRerankCache.Entry(ids, selection.reasons(), input.hash(), prompt.version(),
-                        model, LocalDateTime.now()));
-            }
+            boolean allowed = canStore.getAsBoolean();
+            boolean stored = allowed && cache.putIfUnchanged(userId, generation,
+                    new PolicyRerankCache.Entry(ids, selection.reasons(), input.hash(), prompt.version(), model,
+                            LocalDateTime.now()));
             log.info("추천 리랭킹 호출 userId={} trigger={} candidates={} selected={} dropped={} fallback={} elapsedMs={} "
                             + "prompt={} model={} inputTokens={} outputTokens={} reasoningTokens={}",
                     userId, trigger, candidates.size(), ids.size(), selection.dropped(),
-                    stored ? (ids.size() < limit ? "FILLED_BY_RULE" : "none") : "TIMEOUT",
+                    stored ? (ids.size() < limit ? "FILLED_BY_RULE" : "none") : (allowed ? "RESET" : "TIMEOUT"),
                     elapsedMs, prompt.version(), model, result.inputTokens(), result.outputTokens(), result.reasoningTokens());
             return stored;
         } catch (AiClientException e) {

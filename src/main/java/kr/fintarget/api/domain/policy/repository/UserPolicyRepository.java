@@ -11,5 +11,6 @@ public interface UserPolicyRepository extends JpaRepository<UserPolicy, UUID> {
     Optional<UserPolicy> findByUserIdAndPolicyPolicyId(UUID userId, UUID policyId);
     Optional<UserPolicy> findByUserPolicyIdAndUserId(UUID userPolicyId, UUID userId);
     boolean existsByPolicyPolicyId(UUID policyId);
-    void deleteByUserId(UUID userId);
+    /** 지운 건수를 돌려준다 (시연 초기화 응답, #239) */
+    long deleteByUserId(UUID userId);
 }

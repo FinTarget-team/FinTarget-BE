@@ -2,6 +2,7 @@ package kr.fintarget.api.domain.ai.usage;
 
 /**
  * 일일 한도를 따로 세는 기능 (#183). 한도 값은 각 기능의 설정에 있다 (policy.rag.daily-limit, policy.search.daily-limit).
+ * 한도가 0 이하면 무제한이고 사용량을 세지 않는다 (#239).
  */
 public enum AiUsageFeature {
 

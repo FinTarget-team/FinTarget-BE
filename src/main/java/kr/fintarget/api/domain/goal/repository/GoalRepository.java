@@ -14,5 +14,6 @@ public interface GoalRepository extends JpaRepository<Goal, UUID> {
     }
 
     Optional<Goal> findByGoalIdAndUserId(UUID goalId, UUID userId);
-    void deleteByUserId(UUID userId);
+    /** 지운 건수를 돌려준다 (시연 초기화 응답, #239) */
+    long deleteByUserId(UUID userId);
 }
