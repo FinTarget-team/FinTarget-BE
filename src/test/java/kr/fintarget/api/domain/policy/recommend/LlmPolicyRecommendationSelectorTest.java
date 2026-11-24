@@ -368,4 +368,63 @@ class LlmPolicyRecommendationSelectorTest {
         assertThat(candidatesBefore.subList(0, N)).isEqualTo(topNBefore);
         assertThat(SORTED).isEqualTo(sortedBefore);
     }
+
+    // 시·군·구 한정 정책: 정형값(zipCd) 또는 AI 추출값
+    private static Policy localPolicy(String name, boolean structured) {
+        Policy policy = policy(name);
+        if (structured) {
+            policy.withRegionLocalScope(true);
+        } else {
+            policy.updateCondition(PolicyCondition.builder().benefitKind(BenefitKind.MONEY).specialTarget(false)
+                    .localScope(true).build());
+        }
+        return policy;
+    }
+
+    @Test
+    void 시군구_한정_정책은_LLM_입력에서_빠지고_후보_번호도_한정_아닌_정책만_매긴다() {
+        List<Policy> withLocal = new ArrayList<>(SORTED);
+        withLocal.add(localPolicy("영월군 주거비", true));
+        withLocal.add(localPolicy("여수시 도서구입비", false));
+        when(aiTextClient.generate(any())).thenReturn(reply(json(1, 2, 3)));
+
+        selector().select(USER, withLocal, TODAY);
+
+        verify(aiTextClient).generate(org.mockito.ArgumentMatchers.argThat((AiTextRequest request) -> {
+            String message = request.messages().getFirst().content();
+            return message.contains("[후보 정책] (8건)") && !message.contains("영월군") && !message.contains("여수시")
+                    && !message.contains("[9]");
+        }));
+        // 규칙 후보 자체에는 그대로 있다 (리랭킹 입력 단계에서만 거름)
+        assertThat(names(rule.rerankCandidates(USER, withLocal, TODAY))).contains("영월군 주거비", "여수시 도서구입비");
+    }
+
+    @Test
+    void 채울_때_시군구_한정_정책은_다른_정책을_다_쓴_뒤_마지막에만_쓴다() {
+        Policy local1 = localPolicy("영월군 주거비", true);
+        Policy local2 = localPolicy("여수시 도서구입비", false);
+        Policy a = policy("정책 A");
+        Policy b = policy("정책 B");
+        // 규칙 상위 N에 한정 정책이 앞에 있어도 한정 아닌 정책을 먼저 채운다
+        List<Policy> candidates = List.of(local1, a, local2, b);
+        List<Policy> ruleTopN = List.of(local1, a, local2);
+
+        assertThat(LlmPolicyRecommendationSelector.merge(List.of(), candidates, ruleTopN, 3)).containsExactly(a, b, local1);
+        assertThat(LlmPolicyRecommendationSelector.merge(List.of(b.getPolicyId()), candidates, ruleTopN, 4))
+                .containsExactly(b, a, local1, local2);
+        // LLM이 한정 정책 ID를 돌려줘도(캐시 등) 앞에 두지 않는다
+        assertThat(LlmPolicyRecommendationSelector.merge(List.of(local2.getPolicyId(), b.getPolicyId()), candidates, ruleTopN, 2))
+                .containsExactly(b, a);
+    }
+
+    @Test
+    void 한정_정책을_뺀_후보가_N건_이하면_LLM을_호출하지_않고_규칙_상위_N이다() {
+        List<Policy> few = new ArrayList<>(SORTED.subList(0, N));
+        few.add(localPolicy("영월군 주거비", true));
+        few.add(localPolicy("강진군 주거비", true));
+
+        assertThat(selector().select(USER, few, TODAY)).isEqualTo(rule.select(USER, few, TODAY));
+        assertThat(selector().refresh(USER, few, TODAY)).isEqualTo(RefreshOutcome.NOT_NEEDED);
+        verify(aiTextClient, never()).generate(any());
+    }
 }

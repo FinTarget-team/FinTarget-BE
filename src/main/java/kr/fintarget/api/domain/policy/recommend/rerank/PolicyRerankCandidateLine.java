@@ -23,7 +23,7 @@ public final class PolicyRerankCandidateLine {
 
     static final int NAME_MAX = 60;
     static final int TARGET_MAX = 80;
-    static final int SUPPORT_MAX = 90;
+    static final int SUPPORT_MAX = 120;
     static final int GROUP_MAX = 30;
 
     private PolicyRerankCandidateLine() {

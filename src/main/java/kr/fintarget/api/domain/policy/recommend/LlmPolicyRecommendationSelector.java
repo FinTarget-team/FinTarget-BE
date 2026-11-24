@@ -54,15 +54,16 @@ import java.util.stream.Collectors;
  * 규칙 후보 중 LLM이 사용자에게 가장 맞는 N건을 고른다 (#229). 기본으로 주입되는 추천 선택기다.
  *
  * <ol>
- *   <li>후보: {@link RuleBasedPolicyRecommendationSelector#rerankCandidates} (최대 M건, 앞 N건은 규칙 상위 N)</li>
+ *   <li>후보: {@link RuleBasedPolicyRecommendationSelector#rerankCandidates} (최대 M건, 앞 N건은 규칙 상위 N)에서
+ *       시·군·구 한정 정책({@link PolicyLocalScope})을 뺀 목록. 온보딩 지역이 시·도 단위라 그 시·군·구 거주 여부를 알 수 없다</li>
  *   <li>상위 모델(openai.model.premium)에 사용자 정보 5개(구간만)와 후보 한 줄 요약을 보내고 최대 N건을 적합한 순서로 받는다</li>
- *   <li>후보 밖·중복·형식 오류 항목은 버리고, N건 미만이면 규칙 순서로 채운다. 0건이거나 해석할 수 없으면 규칙 상위 N</li>
+ *   <li>후보 밖·중복·형식 오류 항목은 버리고, N건 미만이면 규칙 순서로 채운다(시·군·구 한정 정책은 맨 마지막). 0건이거나 해석할 수 없으면 규칙 상위 N</li>
  *   <li>결과는 사용자별 메모리 캐시({@link PolicyRerankCache})에 둔다. 입력 해시(사용자 정보 + 후보 정책 ID 목록 + 프롬프트 버전)가 같으면 캐시를 쓴다</li>
  *   <li>캐시가 없으면 동기 호출(policy.recommend.rerank.timeout, 기본 15초). 실패·시간 초과면 규칙 상위 N을 돌려주고 캐시하지 않으며, 비동기로 한 번 다시 계산한다</li>
  *   <li>같은 사용자의 계산이 진행 중이면 기다리지 않고 규칙 상위 N</li>
  * </ol>
  * 리랭킹이 꺼져 있거나(policy.recommend.rerank.enabled=false, 관리자 API로 실행 중 변경 가능) AI 키가 없으면 LLM을 호출하지 않고 규칙 상위 N이다.
- * 후보가 N건 이하면 고를 것이 없어 호출하지 않는다. 정책 유형 필터가 있는 목록은 규칙 결과를 쓴다 ({@link #selectWithinType}).
+ * 한정 정책을 뺀 후보가 N건 이하면 고를 것이 없어 호출하지 않는다. 정책 유형 필터가 있는 목록은 규칙 결과를 쓴다 ({@link #selectWithinType}).
  * 어떤 경우에도 예외를 밖으로 던지지 않는다 (규칙 결과로 대체).
  */
 @Slf4j
@@ -175,7 +176,7 @@ public class LlmPolicyRecommendationSelector implements PolicyRecommendationSele
             if (!isAvailable()) {
                 return RefreshOutcome.DISABLED;
             }
-            List<Policy> candidates = ruleSelector.rerankCandidates(user, sortedCandidates, today);
+            List<Policy> candidates = llmCandidates(ruleSelector.rerankCandidates(user, sortedCandidates, today));
             if (candidates.size() <= ruleSelector.limit()) {
                 return RefreshOutcome.NOT_NEEDED;
             }
@@ -202,7 +203,8 @@ public class LlmPolicyRecommendationSelector implements PolicyRecommendationSele
         if (!isAvailable()) {
             return fallback;
         }
-        List<Policy> candidates = ruleSelector.rerankCandidates(user, sortedCandidates, today);
+        List<Policy> allCandidates = ruleSelector.rerankCandidates(user, sortedCandidates, today);
+        List<Policy> candidates = llmCandidates(allCandidates);
         int limit = ruleSelector.limit();
         if (candidates.size() <= limit) {
             return fallback;
@@ -211,7 +213,7 @@ public class LlmPolicyRecommendationSelector implements PolicyRecommendationSele
         RerankInput input = input(user, candidates, today);
         Optional<PolicyRerankCache.Entry> cached = cache.find(userId, input.hash());
         if (cached.isPresent()) {
-            return merge(cached.get().policyIds(), candidates, fallback, limit);
+            return merge(cached.get().policyIds(), allCandidates, fallback, limit);
         }
         if (!cache.tryStart(userId)) {
             log.info("추천 리랭킹 대체 userId={} candidates={} fallback=IN_FLIGHT", userId, candidates.size());
@@ -233,7 +235,7 @@ public class LlmPolicyRecommendationSelector implements PolicyRecommendationSele
             boolean stored = future.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
             if (stored) {
                 return cache.find(userId, input.hash())
-                        .map(entry -> merge(entry.policyIds(), candidates, fallback, limit))
+                        .map(entry -> merge(entry.policyIds(), allCandidates, fallback, limit))
                         .orElse(fallback);
             }
             return fallback;
@@ -247,7 +249,7 @@ public class LlmPolicyRecommendationSelector implements PolicyRecommendationSele
             }
             // 시간 초과 직전에 결과를 저장했다 (드묾)
             return cache.find(userId, input.hash())
-                    .map(entry -> merge(entry.policyIds(), candidates, fallback, limit))
+                    .map(entry -> merge(entry.policyIds(), allCandidates, fallback, limit))
                     .orElse(fallback);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
@@ -345,12 +347,21 @@ public class LlmPolicyRecommendationSelector implements PolicyRecommendationSele
         return new RerankInput(prompt.userMessage(profileText, lines), hash);
     }
 
+    /** LLM에 넘길 후보: 리랭킹 후보에서 시·군·구 한정 정책을 뺀다 (순서 유지) */
+    static List<Policy> llmCandidates(List<Policy> rerankCandidates) {
+        return rerankCandidates.stream().filter(policy -> !PolicyLocalScope.isLocal(policy)).toList();
+    }
+
     /**
-     * LLM이 고른 정책을 순서대로 놓고, 현재 후보에 없는 ID는 뺀 뒤 규칙 순서로 N건까지 채운다.
-     * 채우는 순서는 규칙 상위 N → 나머지 후보.
+     * LLM이 고른 정책을 순서대로 놓고, 현재 후보에 없는 ID와 시·군·구 한정 정책은 뺀 뒤 규칙 순서로 N건까지 채운다.
+     * 채우는 순서는 규칙 상위 N 중 한정 아닌 정책 → 나머지 한정 아닌 후보 → 규칙 상위 N 중 한정 정책 → 나머지 한정 후보.
+     * 시·군·구 한정 정책은 다른 정책을 다 쓴 뒤에만 들어간다.
+     *
+     * @param candidates 리랭킹 후보 전체 ({@link RuleBasedPolicyRecommendationSelector#rerankCandidates}, 한정 정책 포함)
      */
     static List<Policy> merge(List<UUID> chosenIds, List<Policy> candidates, List<Policy> ruleTopN, int limit) {
         Map<UUID, Policy> byId = candidates.stream()
+                .filter(policy -> !PolicyLocalScope.isLocal(policy))
                 .collect(Collectors.toMap(Policy::getPolicyId, Function.identity(), (a, b) -> a));
         Set<Policy> result = new LinkedHashSet<>();
         for (UUID id : chosenIds) {
@@ -362,12 +373,16 @@ public class LlmPolicyRecommendationSelector implements PolicyRecommendationSele
                 result.add(policy);
             }
         }
-        for (List<Policy> source : List.of(ruleTopN, candidates)) {
-            for (Policy policy : source) {
-                if (result.size() >= limit) {
-                    return List.copyOf(result);
+        for (boolean local : new boolean[]{false, true}) {
+            for (List<Policy> source : List.of(ruleTopN, candidates)) {
+                for (Policy policy : source) {
+                    if (result.size() >= limit) {
+                        return List.copyOf(result);
+                    }
+                    if (PolicyLocalScope.isLocal(policy) == local) {
+                        result.add(policy);
+                    }
                 }
-                result.add(policy);
             }
         }
         return List.copyOf(result);
