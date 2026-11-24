@@ -63,6 +63,11 @@ public class PolicyText {
     @Column(name = "apply_period", columnDefinition = "TEXT")
     private String applyPeriod;
 
+    // 온통청년 신청기간 구분 코드 (aplyPrdSeCd, #220): 0057001 특정기간, 0057002 상시, 0057003 마감.
+    // 상시 정책은 신청 기간(aplyYmd)이 비어 있어, 추천 정렬에서 "지금 신청 가능"을 판정하려고 저장한다. KINFA는 null
+    @Column(name = "apply_period_code", length = 10)
+    private String applyPeriodCode;
+
     // 사업 기간 (신청 기간과 별개)
     @Column(name = "business_period", columnDefinition = "TEXT")
     private String businessPeriod;

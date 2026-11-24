@@ -26,7 +26,7 @@ import java.util.List;
 /**
  * 검색 결과 기반 통합 정책 AI 답변 (#183). 질문마다 독립적으로 처리한다 (이전 대화를 반영하지 않음).
  * <ol>
- *   <li>나이·소득이 없으면 AI 호출 없이 PROFILE_INCOMPLETE</li>
+ *   <li>나이와 소득이 모두 없으면 AI 호출 없이 PROFILE_INCOMPLETE (하나만 없으면 그 조건만 건너뛰고 후보를 찾는다, #225)</li>
  *   <li>조건에 맞는 후보 정책이 없으면 AI 호출 없이 NO_EVIDENCE (임베딩도 호출하지 않아 한도를 차감하지 않음)</li>
  *   <li>일일 한도(policy.rag.daily-limit) 1회 차감. 이후 임베딩·생성 호출이 실패하면(502/503) 되돌린다</li>
  *   <li>후보 안에서 검색({@link PolicySearchService#searchCandidates}, 검색 한도는 차감하지 않음). 결과가 없으면 NO_EVIDENCE</li>

@@ -289,6 +289,7 @@ chore: application.yml gitignore 처리 (#3)
   2. EC2 보안 그룹에서 80·443(TCP)과 443(UDP)을 엽니다. 80은 인증서 발급·갱신에 필요합니다.
   3. 서버 `.env`에 `DOMAIN=<도메인>`을 넣고 `scripts/deploy.sh`를 실행합니다. `https://<도메인>/actuator/health`가 200이면 완료입니다.
   4. iOS 앱이 `https://<도메인>`으로 바뀌어 배포되면 `.env`에 `APP_BIND_ADDRESS=127.0.0.1`을 넣고 `FORCE_BUILD=1 scripts/deploy.sh`로 다시 띄워 8080을 외부에서 막고, 보안 그룹에서 8080을 닫습니다.
+  5. mock-bank 화면은 `https://bank.<도메인>`으로도 열립니다(#230). sslip.io는 하위 이름도 같은 IP로 응답하고, 직접 산 도메인이면 `bank` A 레코드를 추가합니다. 팀이 이 주소로 옮기면 `.env`에 `MOCK_BANK_BIND_ADDRESS=127.0.0.1`을 넣고 같은 방법으로 다시 띄운 뒤 보안 그룹에서 8081을 닫습니다.
   - 앱은 `server.forward-headers-strategy=native`로 Caddy가 붙인 `X-Forwarded-For`의 실제 클라이언트 IP를 씁니다(Docker 내부망 프록시만 신뢰). `/auth/**` 요청 횟수 제한(IP별 1분 30회)이 이 IP 기준입니다.
 - **DB 스키마**: 운영 앱은 `ddl-auto: validate`로 실행되어 엔티티가 바뀌어도 스키마를 자동으로 바꾸지 않습니다(`docker-compose.yml`이 서버 `application.yml`보다 우선).
   - 테이블·컬럼을 추가·변경하는 PR은 `docs/sql/<이슈번호>_*.sql`을 함께 올리고, **배포 전에** 서버에서 직접 실행합니다.

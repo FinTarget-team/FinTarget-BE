@@ -1,18 +1,23 @@
 package kr.fintarget.api.domain.policy.service;
 
+import kr.fintarget.api.domain.policy.condition.PolicyConditionMatcher;
 import kr.fintarget.api.domain.policy.dto.PolicyResponse;
 import kr.fintarget.api.domain.policy.dto.UserPolicyCreateRequest;
 import kr.fintarget.api.domain.policy.dto.UserPolicyResponse;
 import kr.fintarget.api.domain.policy.entity.Policy;
 import kr.fintarget.api.domain.policy.entity.PolicyType;
 import kr.fintarget.api.domain.policy.entity.UserPolicy;
+import kr.fintarget.api.domain.policy.recommend.PolicyRecommendationOrder;
+import kr.fintarget.api.domain.policy.recommend.PolicyRecommendationSelector;
 import kr.fintarget.api.domain.policy.repository.PolicyRepository;
 import kr.fintarget.api.domain.policy.repository.UserPolicyRepository;
 import kr.fintarget.api.domain.user.entity.User;
 import kr.fintarget.api.domain.user.repository.UserRepository;
+import kr.fintarget.api.domain.user.validation.BirthYearValidator;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -24,10 +29,20 @@ public class PolicyService {
     private final PolicyRepository policyRepository;
     private final UserPolicyRepository userPolicyRepository;
     private final UserRepository userRepository;
+    private final PolicyRecommendationSelector recommendationSelector;
 
+    /**
+     * 맞춤 정책 목록. 후보 정책({@link #findCandidatePolicies(User, String)})을 추천 순서로 정렬하고(#220),
+     * 경제적 혜택(현금·비용 절감) 정책 중 상위 N건만 골라 돌려준다 (#225, {@link PolicyRecommendationSelector}).
+     * 정렬과 상위 N 선택은 이 목록에만 적용하고, 같은 후보를 쓰는 정책 검색(#182)·통합 AI 답변(#183)은 전체 후보에서 자체 검색 순서를 쓴다.
+     */
     @Transactional(readOnly = true)
     public List<PolicyResponse> getMatchingPolicies(String userId, String policyType) {
-        return findCandidatePolicies(userId, policyType)
+        User user = findUser(userId);
+        List<Policy> candidates = findCandidatePolicies(user, policyType);
+        LocalDate today = LocalDate.now(BirthYearValidator.ZONE);
+        List<Policy> sorted = PolicyRecommendationOrder.sort(candidates, user.getRegion(), today);
+        return recommendationSelector.select(user, sorted, today)
                 .stream()
                 .map(PolicyResponse::from)
                 .collect(Collectors.toList());
@@ -35,7 +50,9 @@ public class PolicyService {
 
     /**
      * 사용자 조건(나이·소득·유형·지역)에 맞는 정책 목록. 맞춤 정책 목록과 정책 검색(#182)이 같은 조건을 쓰도록 분리했다.
-     * 나이나 소득을 모르는 사용자는 맞춤 여부를 판단할 수 없어 빈 목록이다.
+     * 나이나 소득 중 하나만 모르면 그 조건만 건너뛰고(#225), 둘 다 모르면 맞춤 여부를 판단할 수 없어 빈 목록이다.
+     * 원문에서 추출한 조건(#220)으로 확실히 해당하지 않는 정책(본인 소득 상한 초과, 무주택 필수 × 유주택, 사업자 전용 × 비자영업)을 빼고,
+     * 지역이 빈 정책은 원문에서 추출한 지역으로 판정한다 ({@link PolicyConditionMatcher}, {@link Policy#matchesRegion(String)}).
      */
     @Transactional(readOnly = true)
     public List<Policy> findCandidatePolicies(String userId, String policyType) {
@@ -51,20 +68,24 @@ public class PolicyService {
             return List.of();
         }
         User.AgeRange ageRange = user.ageRange();
+        Integer ageLower = ageRange == null ? null : ageRange.lower();
+        Integer ageUpper = ageRange == null ? null : ageRange.upper();
 
         // 지역은 조회 후 거른다. 목록 API가 페이지네이션 없이 전체를 반환하므로 결과는 DB에서 거르는 것과 같다.
         // 페이지네이션을 도입하면 페이지 크기·전체 건수가 어긋나므로 그때는 지역을 쿼리 조건으로 옮겨야 한다 (예: policy_region 정규화)
-        return policyRepository.findMatchingPolicies(ageRange.lower(), ageRange.upper(), user.getIncome(), parsePolicyType(policyType))
+        return policyRepository.findMatchingPolicies(ageLower, ageUpper, user.getIncome(), parsePolicyType(policyType))
                 .stream()
-                .filter(policy -> policy.appliesToRegion(user.getRegion()))
+                .filter(policy -> policy.matchesRegion(user.getRegion()))
+                .filter(policy -> !PolicyConditionMatcher.excludes(policy, user))
                 .toList();
     }
 
     /**
-     * 맞춤 조건을 판단할 수 있는 사용자인지 (나이 구간과 소득이 모두 있음). 맞춤 정책 목록, 정책 검색(#182), 통합 AI 답변(#183)이 같은 기준을 쓴다.
+     * 맞춤 조건을 판단할 수 있는 사용자인지 (나이 구간과 소득 중 하나라도 있음). 맞춤 정책 목록, 정책 검색(#182), 통합 AI 답변(#183)이 같은 기준을 쓴다.
+     * 하나만 있으면 없는 조건만 건너뛰고 매칭한다 (#225). 둘 다 없으면 온보딩 전 사용자로 보고 매칭하지 않는다.
      */
     public static boolean hasMatchingProfile(User user) {
-        return user.ageRange() != null && user.getIncome() != null;
+        return user.ageRange() != null || user.getIncome() != null;
     }
 
     @Transactional(readOnly = true)

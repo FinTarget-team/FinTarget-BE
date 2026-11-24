@@ -1,11 +1,15 @@
 package kr.fintarget.api.domain.ai.chat.service;
 
+import kr.fintarget.api.domain.user.validation.BirthYearValidator;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.util.Locale;
 import java.util.regex.Pattern;
 
 /**
@@ -16,10 +20,12 @@ import java.util.regex.Pattern;
 @Component
 public class PolicyQaPrompt {
 
-    public static final String VERSION = "policy-qa-v2";
+    public static final String VERSION = "policy-qa-v3";
 
     private static final String POLICY_PLACEHOLDER = "{{policy}}";
     private static final String PROFILE_PLACEHOLDER = "{{profile}}";
+    private static final String TODAY_PLACEHOLDER = "{{today}}";
+    private static final DateTimeFormatter TODAY_FORMAT = DateTimeFormatter.ofPattern("yyyy년 M월 d일 (E)", Locale.KOREAN);
     private static final Pattern VERSION_PATTERN = Pattern.compile("policy-qa-v\\d+");
 
     private final String version;
@@ -56,9 +62,18 @@ public class PolicyQaPrompt {
     }
 
     public String render(PolicyDocument document, UserProfileSummary profile) {
-        // 사용자 정보를 먼저 채운다: 정책 원문에 "{{profile}}" 같은 문자열이 있어도 치환되지 않도록
+        return render(document, profile, LocalDate.now(BirthYearValidator.ZONE));
+    }
+
+    /**
+     * @param today 오늘 날짜. "지금 신청할 수 있는지" 같은 질문을 신청 기간과 비교하도록 넣는다 (#216).
+     *              {{today}} 자리가 없는 이전 버전 템플릿에는 들어가지 않는다
+     */
+    public String render(PolicyDocument document, UserProfileSummary profile, LocalDate today) {
+        // 사용자 정보·날짜를 먼저 채운다: 정책 원문에 "{{profile}}" 같은 문자열이 있어도 치환되지 않도록
         return template
-                .replace(PROFILE_PLACEHOLDER, profile.toPromptText())
+                .replace(TODAY_PLACEHOLDER, TODAY_FORMAT.format(today))
+                .replace(PROFILE_PLACEHOLDER, profile.toQaPromptText())
                 .replace(POLICY_PLACEHOLDER, document.text());
     }
 

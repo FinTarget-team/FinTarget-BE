@@ -57,8 +57,16 @@ jobs:
           DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
         run: |
           set -euo pipefail
-          # 웹에서 붙여넣을 때 섞일 수 있는 앞뒤 공백·줄바꿈을 지운다 (호스트 이름이 known_hosts와 달라지는 것을 막음)
-          DEPLOY_HOST=$(printf '%s' "$DEPLOY_HOST" | tr -d '[:space:]')
+          # 웹에서 붙여넣을 때 섞일 수 있는 앞뒤 공백·줄바꿈만 지운다 (호스트 이름이 known_hosts와 달라지는 것을 막음)
+          DEPLOY_HOST="${DEPLOY_HOST#"${DEPLOY_HOST%%[![:space:]]*}"}"
+          DEPLOY_HOST="${DEPLOY_HOST%"${DEPLOY_HOST##*[![:space:]]}"}"
+          # 주소 칸에 known_hosts 줄 등을 잘못 붙여넣으면 가운데에 공백·줄바꿈이 남는다. 값은 출력하지 않는다 (#230)
+          if [[ "$DEPLOY_HOST" =~ [[:space:]] ]]; then
+            echo "::error::DEPLOY_HOST에 공백이나 여러 줄이 들어 있습니다. 서버 주소(IP 또는 도메인) 한 줄만 등록해 주세요."
+            exit 1
+          fi
+          # GitHub은 등록한 원래 값만 로그에서 가린다. 다듬은 값도 가리도록 따로 등록한다 (공개 저장소라 로그도 공개됨)
+          echo "::add-mask::$DEPLOY_HOST"
           install -m 700 -d ~/.ssh
           # 줄 끝에 섞일 수 있는 CR(\r)을 지운다
           printf '%s\n' "$DEPLOY_SSH_KEY" | tr -d '\r' > ~/.ssh/deploy_key
@@ -72,7 +80,7 @@ jobs:
           echo "배포 키 지문: $(ssh-keygen -lf ~/.ssh/deploy_key | awk '{print $2}')"
 
           if ! ssh-keygen -F "$DEPLOY_HOST" -f ~/.ssh/known_hosts > /dev/null; then
-            echo "::error::DEPLOY_KNOWN_HOSTS에 DEPLOY_HOST($DEPLOY_HOST) 항목이 없습니다. ssh-keyscan $DEPLOY_HOST 결과를 다시 등록해 주세요."
+            echo "::error::DEPLOY_KNOWN_HOSTS에 DEPLOY_HOST 항목이 없습니다. 로컬에서 ssh-keyscan <DEPLOY_HOST 값> 결과를 다시 등록해 주세요."
             exit 1
           fi
 
@@ -88,6 +96,8 @@ jobs:
           set -uo pipefail
           DEPLOY_HOST=$(printf '%s' "$DEPLOY_HOST" | tr -d '[:space:]')
           DEPLOY_USER=$(printf '%s' "$DEPLOY_USER" | tr -d '[:space:]')
+          echo "::add-mask::$DEPLOY_HOST"
+          echo "::add-mask::$DEPLOY_USER"
           # 서버에 등록된 배포 키는 배포 스크립트만 실행하도록 제한되어 있어, 요청한 명령 대신 항상 배포 스크립트가 실행된다
           ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" -o ConnectTimeout=20 -o ServerAliveInterval=30 \

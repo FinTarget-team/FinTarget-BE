@@ -25,7 +25,7 @@ class UserProfileSummaryTest {
         UserProfileSummary summary = UserProfileSummary.of(user, YEAR);
 
         assertThat(summary.age()).isEqualTo("만 25세 또는 만 26세 (생일 전후에 따라 다름)");
-        assertThat(summary.income()).isEqualTo("150만원 이상 260만원 미만");
+        assertThat(summary.income()).isEqualTo("150만원 이상 260만원 미만 (연으로 계산하면 1,800만원 이상 3,120만원 미만)");
         assertThat(summary.region()).isEqualTo("서울");
         assertThat(summary.housing()).isEqualTo("무주택");
         assertThat(summary.employment()).isEqualTo("직장인");
@@ -33,11 +33,31 @@ class UserProfileSummaryTest {
     }
 
     @Test
+    void 중위소득_비율은_단건_질문용_프롬프트에만_넣는다() {
+        User user = base().birthYear(2000).income(IncomeBracket.UNDER_150.getIncome()).build();
+
+        UserProfileSummary summary = UserProfileSummary.of(user, YEAR);
+
+        assertThat(summary.incomeMedianRatio()).isEqualTo("59% 미만");
+        assertThat(summary.toQaPromptText()).startsWith(summary.toPromptText())
+                .endsWith("\n- 1인 가구 기준 중위소득 대비: 59% 미만");
+        assertThat(summary.toPromptText()).doesNotContain("중위소득");
+    }
+
+    @Test
+    void 소득을_모르거나_기준값이_없는_연도면_중위소득_비율은_확인_필요() {
+        assertThat(UserProfileSummary.of(base().build(), YEAR).toQaPromptText())
+                .endsWith("- 1인 가구 기준 중위소득 대비: 확인 필요");
+        assertThat(UserProfileSummary.of(base().income(IncomeBracket.UNDER_150.getIncome()).build(), Year.of(2030))
+                .incomeMedianRatio()).isNull();
+    }
+
+    @Test
     void 소득_구간의_양_끝을_표현한다() {
         assertThat(UserProfileSummary.of(base().income(IncomeBracket.UNDER_150.getIncome()).build(), YEAR).income())
-                .isEqualTo("150만원 미만");
+                .isEqualTo("150만원 미만 (연으로 계산하면 1,800만원 미만)");
         assertThat(UserProfileSummary.of(base().income(IncomeBracket.OVER_410.getIncome()).build(), YEAR).income())
-                .isEqualTo("410만원 이상");
+                .isEqualTo("410만원 이상 (연으로 계산하면 4,920만원 이상)");
     }
 
     @Test
@@ -61,6 +81,6 @@ class UserProfileSummaryTest {
     void 프롬프트에_출생연도와_소득_원래_값을_넣지_않는다() {
         User user = base().birthYear(2000).income(IncomeBracket.RANGE_300_380.getIncome()).build();
 
-        assertThat(UserProfileSummary.of(user, YEAR).toPromptText()).doesNotContain("2000", "3400000", "340만");
+        assertThat(UserProfileSummary.of(user, YEAR).toPromptText()).doesNotContain("2000", "3400000", "340만", "4,080만");
     }
 }

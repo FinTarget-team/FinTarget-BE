@@ -11,6 +11,8 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -51,6 +53,16 @@ public class YouthCenterPolicyMapper {
         PREFIX_TO_REGION.put("52", Region.JEONBUK); // 근거 확인됨
     }
 
+    // 시·도 prefix별 시·군·구 법정동 코드 수 (#225 시·군·구 한정 판정용). 2026-11-23 온통청년 API 전체 3,989건에서 관측한 값이며,
+    // 구 코드(29 광주, 42 강원, 45 전북, 46 전남)는 행정구역 수로 채웠다. 행정구역 개편으로 코드가 바뀌면 갱신한다.
+    // 판정이 "절반 이하"라 몇 개가 어긋나도 결과는 거의 바뀌지 않는다
+    static final Map<String, Integer> DISTRICT_COUNTS = Map.ofEntries(
+            Map.entry("11", 25), Map.entry("12", 27), Map.entry("26", 16), Map.entry("27", 9), Map.entry("28", 14),
+            Map.entry("29", 5), Map.entry("30", 6), Map.entry("31", 5), Map.entry("36", 1), Map.entry("41", 48),
+            Map.entry("42", 18), Map.entry("43", 14), Map.entry("44", 17), Map.entry("45", 15), Map.entry("46", 22),
+            Map.entry("47", 23), Map.entry("48", 22), Map.entry("50", 2), Map.entry("51", 18), Map.entry("52", 15));
+    private static final Pattern DISTRICT_CODE = Pattern.compile("\\d{5}");
+
     private YouthCenterPolicyMapper() {
     }
 
@@ -67,7 +79,35 @@ public class YouthCenterPolicyMapper {
                 item.plcyNo(),
                 SOURCE,
                 toPolicyText(item)
-        );
+        ).withRegionLocalScope(resolveLocalScope(item.zipCd()));
+    }
+
+    /**
+     * zipCd로 신청 자격이 특정 시·군·구로 한정되는지 판정한다 (#225).
+     * 코드가 한 시·도 안에 있고 그 시·도 시·군·구 코드의 절반 이하만 담으면 true(예: 은평구 1개, 원주시 1개),
+     * 절반을 넘거나 여러 시·도·전국이면 false(예: 경기 48개 중 47개). zipCd가 없거나 시·도 코드 수를 모르면 null.
+     */
+    static Boolean resolveLocalScope(String zipCd) {
+        if (zipCd == null || zipCd.isBlank()) {
+            return null;
+        }
+        Set<String> codes = new LinkedHashSet<>();
+        Matcher matcher = DISTRICT_CODE.matcher(zipCd);
+        while (matcher.find()) {
+            codes.add(matcher.group());
+        }
+        if (codes.isEmpty()) {
+            return null;
+        }
+        Set<String> prefixes = codes.stream().map(code -> code.substring(0, 2)).collect(Collectors.toSet());
+        if (prefixes.size() > 1) {
+            return false;
+        }
+        Integer total = DISTRICT_COUNTS.get(prefixes.iterator().next());
+        if (total == null) {
+            return null;
+        }
+        return codes.size() < total && codes.size() * 2 <= total;
     }
 
     // 온통청년 원문 필드 → PolicyText. 컬럼마다 원문 필드 하나를 정제해 넣는다 (사업 기간만 합침)
@@ -81,6 +121,7 @@ public class YouthCenterPolicyMapper {
                 .screeningMethod(PolicyTextCleaner.clean(item.srngMthdCn()))
                 .requiredDocuments(PolicyTextCleaner.clean(item.sbmsnDcmntCn()))
                 .applyPeriod(PolicyTextCleaner.clean(item.aplyYmd()))
+                .applyPeriodCode(PolicyTextCleaner.clean(item.aplyPrdSeCd()))
                 .businessPeriod(businessPeriod(item))
                 .referenceUrl(PolicyTextCleaner.clean(item.refUrlAddr1()))
                 .applyUrl(PolicyTextCleaner.clean(item.aplyUrlAddr()))

@@ -14,3 +14,18 @@
 	# SSE(/api/events/stream)는 text/event-stream 응답이라 Caddy가 버퍼링 없이 바로 흘려보낸다
 	reverse_proxy app:8080
 }
+
+# 가상 금융 서버(mock-bank) 화면. Basic Auth 비밀번호가 평문으로 오가지 않도록 HTTPS로만 연다 (#230)
+# sslip.io처럼 와일드카드 DNS면 bank.<도메인>도 같은 서버를 가리킨다. 직접 산 도메인이면 bank 레코드를 추가해야 한다
+bank.{$DOMAIN} {
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "no-referrer"
+		-Server
+	}
+
+	reverse_proxy mock-bank:8081
+}
