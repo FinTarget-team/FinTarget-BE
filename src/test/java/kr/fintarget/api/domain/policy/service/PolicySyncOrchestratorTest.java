@@ -11,6 +11,7 @@ import kr.fintarget.api.domain.policy.embedding.PolicyEmbeddingRefreshResult;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InOrder;
+import kr.fintarget.api.domain.policy.recommend.rerank.PolicyRerankPrecomputer;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -46,6 +47,9 @@ class PolicySyncOrchestratorTest {
 
     @Mock
     private PolicyChunkEmbeddingService policyChunkEmbeddingService;
+
+    @Mock
+    private PolicyRerankPrecomputer policyRerankPrecomputer;
 
     @InjectMocks
     private PolicySyncOrchestrator policySyncOrchestrator;

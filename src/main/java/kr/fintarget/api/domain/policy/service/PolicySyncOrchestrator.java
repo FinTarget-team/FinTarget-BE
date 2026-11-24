@@ -8,6 +8,7 @@ import kr.fintarget.api.domain.policy.chunk.PolicyChunkRefreshResult;
 import kr.fintarget.api.domain.policy.chunk.PolicyChunkService;
 import kr.fintarget.api.domain.policy.embedding.PolicyChunkEmbeddingService;
 import kr.fintarget.api.domain.policy.embedding.PolicyEmbeddingRefreshResult;
+import kr.fintarget.api.domain.policy.recommend.rerank.PolicyRerankPrecomputer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -34,6 +35,7 @@ public class PolicySyncOrchestrator {
     private final PolicyConditionExtractionService policyConditionExtractionService;
     private final PolicyChunkService policyChunkService;
     private final PolicyChunkEmbeddingService policyChunkEmbeddingService;
+    private final PolicyRerankPrecomputer policyRerankPrecomputer;
     private final AtomicBoolean running = new AtomicBoolean(false);
 
     public PolicySyncResult syncAll() {

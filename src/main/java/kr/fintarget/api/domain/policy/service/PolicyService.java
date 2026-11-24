@@ -49,6 +49,14 @@ public class PolicyService {
     }
 
     /**
+     * 추천 정렬(#220)까지 거친 후보 정책. 맞춤 정책 목록과 추천 리랭킹 미리 계산(#229)이 같은 입력을 쓰도록 분리했다.
+     */
+    @Transactional(readOnly = true)
+    public List<Policy> sortedCandidatePolicies(User user, String policyType, LocalDate today) {
+        return PolicyRecommendationOrder.sort(findCandidatePolicies(user, policyType), user.getRegion(), today);
+    }
+
+    /**
      * 사용자 조건(나이·소득·유형·지역)에 맞는 정책 목록. 맞춤 정책 목록과 정책 검색(#182)이 같은 조건을 쓰도록 분리했다.
      * 나이나 소득 중 하나만 모르면 그 조건만 건너뛰고(#225), 둘 다 모르면 맞춤 여부를 판단할 수 없어 빈 목록이다.
      * 원문에서 추출한 조건(#220)으로 확실히 해당하지 않는 정책(본인 소득 상한 초과, 무주택 필수 × 유주택, 사업자 전용 × 비자영업)을 빼고,
