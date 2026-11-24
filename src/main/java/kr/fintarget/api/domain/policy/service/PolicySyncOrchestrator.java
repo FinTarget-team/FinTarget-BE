@@ -20,7 +20,7 @@ import java.util.function.IntSupplier;
  * 온통청년/KINFA 정책 동기화를 순차 실행한다. 스케줄러와 수동 트리거 API가 공유한다.
  * 한쪽 API 장애가 다른 쪽 동기화를 막지 않도록 각각 격리해서 실행한다.
  * 같은 정책을 중복 저장하지 않도록 동시에 하나의 동기화만 실행하며, 실행 중 요청은 PolicySyncInProgressException으로 거절한다.
- * 동기화 후 검색용 청크 갱신(#180), 혜택 추출(#162), 조건 추출(#220), 청크 임베딩(#181)을 차례로 실행한다.
+ * 동기화 후 검색용 청크 갱신(#180), 혜택 추출(#162), 조건 추출(#220), 추천 리랭킹 미리 계산 예약(#229), 청크 임베딩(#181)을 차례로 실행한다.
  * 청크 백필과 임베딩 백필(관리자 API)도 같은 잠금을 써서, 동기화가 지우는 정책의 청크를 다시 만들거나
  * 지워지는 청크를 임베딩하는 경합을 막는다.
  */
@@ -47,6 +47,7 @@ public class PolicySyncOrchestrator {
             refreshChunks();
             extractBenefits();
             extractConditions();
+            precomputeRerank();
             embedChunks();
             return result;
         } finally {
@@ -117,6 +118,16 @@ public class PolicySyncOrchestrator {
             log.warn("정책 조건 추출(관리자 백필)이 이미 실행 중이어서 동기화 후 추출을 건너뜁니다");
         } catch (Exception e) {
             log.error("동기화 후 정책 조건 추출 실패", e);
+        }
+    }
+
+    // 조건 추출로 추천 후보가 바뀌었을 수 있으므로 전체 사용자의 추천 리랭킹을 비동기로 다시 계산한다 (#229).
+    // 입력이 같은 사용자는 LLM을 호출하지 않는다. 예약만 하고 기다리지 않으며, 실패해도 동기화 결과에 영향을 주지 않는다
+    private void precomputeRerank() {
+        try {
+            policyRerankPrecomputer.requestAll();
+        } catch (Exception e) {
+            log.error("동기화 후 추천 리랭킹 미리 계산 예약 실패", e);
         }
     }
 

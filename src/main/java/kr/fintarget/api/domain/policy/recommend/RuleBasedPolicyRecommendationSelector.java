@@ -41,7 +41,8 @@ import java.util.Set;
  * </ol>
  * 정책 유형 필터가 있는 요청도 같은 규칙을 쓴다 (입력이 이미 그 유형으로 걸러져 있다).
  *
- * <p>{@link #rerankCandidates}는 LLM 리랭킹(다음 이슈)에 넘길 후보 목록을 같은 규칙으로 만든다 (#227, 아직 호출하는 곳 없음).
+ * <p>{@link #rerankCandidates}는 LLM 리랭킹({@link LlmPolicyRecommendationSelector}, #229)에 넘길 후보 목록을 같은 규칙으로 만든다 (#227).
+ * 이 클래스는 LLM 리랭킹의 대체 결과로도 쓰이므로 결과를 바꾸면 리랭킹 실패 시 목록도 바뀐다.
  */
 @Component
 public class RuleBasedPolicyRecommendationSelector implements PolicyRecommendationSelector {
@@ -84,6 +85,11 @@ public class RuleBasedPolicyRecommendationSelector implements PolicyRecommendati
     /** 예외 키워드 없이 만든다 (테스트용) */
     public RuleBasedPolicyRecommendationSelector(int limit, List<String> excludeKeywords) {
         this(limit, excludeKeywords, List.of());
+    }
+
+    /** 추천 목록 건수 N (policy.recommend.limit) */
+    public int limit() {
+        return limit;
     }
 
     private static List<String> clean(List<String> keywords) {
