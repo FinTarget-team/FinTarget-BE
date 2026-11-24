@@ -11,6 +11,7 @@ import kr.fintarget.api.domain.user.repository.UserRepository;
 import kr.fintarget.api.domain.user.code.SocialProvider;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import kr.fintarget.api.domain.user.event.UserProfileChangedEvent;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.springframework.context.ApplicationEventPublisher;
@@ -441,6 +442,22 @@ class OnboardingServiceTest {
         assertThat(user.getHousingStatus()).isEqualTo("HOMELESS");
         verify(userRepository).save(user);
         verify(goalService, never()).upsertFromOnboarding(any(), anyLong());
+        // 추천 입력이 모두 정해졌으므로 목표 금액을 입력하는 동안 리랭킹을 미리 계산한다 (#237)
+        verify(eventPublisher).publishEvent(new UserProfileChangedEvent(userId));
+        assertThat(user.isOnboardingCompleted()).isFalse();
+    }
+
+    @Test
+    void step6_이전_단계_제출은_리랭킹_미리_계산_이벤트를_발행하지_않는다() {
+        String userId = UUID.randomUUID().toString();
+        User user = User.builder().id(userId).provider(SocialProvider.KAKAO).providerId("provider-1").build();
+
+        when(onboardingAnswerRepository.existsByUserIdAndStep(UUID.fromString(userId), STEP_INCOME)).thenReturn(true);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+        onboardingService.submitAnswer(userId, answerRequest(STEP_REGION, "SEOUL"));
+
+        verify(eventPublisher, never()).publishEvent(any());
     }
 
     @Test
