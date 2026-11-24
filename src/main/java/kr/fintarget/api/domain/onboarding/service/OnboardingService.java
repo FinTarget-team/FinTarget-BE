@@ -125,6 +125,12 @@ public class OnboardingService {
         // step별 답변을 User 엔티티에 반영 (STEP_NAME: name, STEP_AGE: birthYear, STEP_EMPLOYMENT: employmentType, STEP_INCOME: income, STEP_REGION: region, STEP_HOUSING: housingStatus)
         applyAnswerToUser(userId, request.getStep(), request.getValue());
 
+        // 주택 보유 여부(6단계)까지 내면 추천 입력(나이·직업·소득·지역·주택)이 모두 정해지므로, 목표 금액을 입력하는 동안
+        // 추천 리랭킹을 미리 계산한다 (#237). 목표 금액은 리랭킹 입력에 들어가지 않아 7단계 완료 때 다시 계산하지 않는다
+        if (request.getStep() == STEP_HOUSING) {
+            eventPublisher.publishEvent(new UserProfileChangedEvent(userId));
+        }
+
         // 마지막 단계면 목표 생성 후 완료 처리
         if (request.getStep() == STEP_GOAL) {
             goalService.upsertFromOnboarding(UUID.fromString(userId), resolveTargetAmount(request.getValue()));
@@ -133,7 +139,7 @@ public class OnboardingService {
                     .orElseThrow(() -> new IllegalArgumentException("유저를 찾을 수 없습니다."));
             user.completeOnboarding();
             userRepository.save(user);
-            // 커밋 후 추천 리랭킹을 미리 계산한다 (#229)
+            // 커밋 후 추천 리랭킹을 미리 계산한다 (#229). 6단계에서 시작한 계산과 입력이 같으면 캐시가 있거나 계산 중이라 건너뛴다 (#237)
             eventPublisher.publishEvent(new UserProfileChangedEvent(userId));
 
             return OnboardingStepResponse.builder()
