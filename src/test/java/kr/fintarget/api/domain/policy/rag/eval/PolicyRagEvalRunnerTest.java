@@ -124,7 +124,7 @@ class PolicyRagEvalRunnerTest {
         PolicyRagEvalReport.write(tempDir, "답변 평가 테스트", results, Map.of("실행", "test"));
 
         String md = Files.readString(tempDir.resolve("report.md"), StandardCharsets.UTF_8);
-        assertThat(md).contains("# 답변 평가 테스트", "| policy-rag-v2 | 2/2 | 2/2 | 1/1 | 0 | 1/1 | 0 | 0 | 0 | 0 |",
+        assertThat(md).contains("# 답변 평가 테스트", "| policy-rag-v3 | 2/2 | 2/2 | 1/1 | 0 | 1/1 | 0 | 0 | 0 | 0 |",
                 "### single-02-miso-rate (SINGLE_MATCH)", "[2] 미소금융 창업자금_창업초기 시설자금 (`kinfa-miso-startup`)",
                 "원문 답변:\n\n> " + MISO_ANSWER, "- [ ] 사람 검수:", "| SINGLE_MATCH | 1/1 |");
         JsonNode json = new ObjectMapper().readTree(tempDir.resolve("results.json").toFile());

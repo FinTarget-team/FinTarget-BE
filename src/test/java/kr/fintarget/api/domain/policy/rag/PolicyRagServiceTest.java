@@ -12,12 +12,14 @@ import kr.fintarget.api.domain.ai.usage.AiUsageFeature;
 import kr.fintarget.api.domain.ai.usage.AiUsageLimitExceededException;
 import kr.fintarget.api.domain.ai.usage.AiUsageLimiter;
 import kr.fintarget.api.domain.policy.entity.Policy;
+import kr.fintarget.api.domain.policy.entity.PolicyCondition;
 import kr.fintarget.api.domain.policy.entity.PolicyType;
 import kr.fintarget.api.domain.policy.search.PolicySearchHit;
 import kr.fintarget.api.domain.policy.search.PolicySearchService;
 import kr.fintarget.api.domain.policy.service.PolicyService;
 import kr.fintarget.api.domain.user.code.SocialProvider;
 import kr.fintarget.api.domain.user.entity.User;
+import kr.fintarget.api.domain.user.validation.BirthYearValidator;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -101,7 +103,7 @@ class PolicyRagServiceTest {
         Policy a = policy("청년 월세 지원", null);
         Policy b = policy("서울시 청년월세", "SEOUL");
         readyUser(List.of(a, b));
-        when(searchService.searchCandidates(List.of(a, b), QUESTION))
+        when(searchService.searchForAnswer(List.of(a, b), QUESTION))
                 .thenReturn(List.of(hit(a, "정책명: 청년 월세 지원\n월 20만원"), hit(b, "정책명: 서울시 청년월세")));
         when(aiTextClient.generate(any())).thenReturn(aiAnswer(
                 "**월세 지원 정책은 2개입니다.**\n* 서울시 청년월세를 신청할 수 있습니다 [2]\n* 청년 월세 지원은 월 20만원입니다 [1]."));
@@ -128,7 +130,7 @@ class PolicyRagServiceTest {
         Policy busan = policy("전세보증금반환보증 보증료 지원", "BUSAN");
         Policy ulsan = policy("전세보증금반환보증 보증료 지원", "GYEONGNAM,ULSAN");
         readyUser(List.of(busan, ulsan));
-        when(searchService.searchCandidates(anyList(), anyString()))
+        when(searchService.searchForAnswer(anyList(), anyString()))
                 .thenReturn(List.of(hit(busan, "부산 원문"), hit(ulsan, "경남·울산 원문")));
         when(aiTextClient.generate(any())).thenReturn(aiAnswer("경남·울산 거주자는 보증료를 지원받을 수 있습니다 [2]."));
 
@@ -176,7 +178,7 @@ class PolicyRagServiceTest {
     @Test
     void 검색_결과가_없으면_AI를_호출하지_않고_근거_없음이며_한도는_차감된다() {
         readyUser(List.of(policy("정책", null)));
-        when(searchService.searchCandidates(anyList(), anyString())).thenReturn(List.of());
+        when(searchService.searchForAnswer(anyList(), anyString())).thenReturn(List.of());
 
         PolicyRagResult result = service().answer(USER_ID, QUESTION);
 
@@ -192,7 +194,7 @@ class PolicyRagServiceTest {
     void 근거_번호가_없는_답변은_버리고_근거_없음_고정_문구로_바꾼다() {
         Policy a = policy("정책 A", null);
         readyUser(List.of(a));
-        when(searchService.searchCandidates(anyList(), anyString())).thenReturn(List.of(hit(a, "원문")));
+        when(searchService.searchForAnswer(anyList(), anyString())).thenReturn(List.of(hit(a, "원문")));
         when(aiTextClient.generate(any())).thenReturn(aiAnswer("일반적으로 청년은 월세 지원을 받을 수 있습니다."));
 
         PolicyRagResult result = service().answer(USER_ID, QUESTION);
@@ -207,7 +209,7 @@ class PolicyRagServiceTest {
         Policy a = policy("정책 A", null);
         Policy b = policy("정책 B", null);
         readyUser(List.of(a, b));
-        when(searchService.searchCandidates(anyList(), anyString())).thenReturn(List.of(hit(a, "A"), hit(b, "B")));
+        when(searchService.searchForAnswer(anyList(), anyString())).thenReturn(List.of(hit(a, "A"), hit(b, "B")));
         when(aiTextClient.generate(any())).thenReturn(aiAnswer("정책 A가 해당합니다 [1][4]. 그 외 정책도 있습니다 [9]."));
 
         PolicyRagResult result = service().answer(USER_ID, QUESTION);
@@ -221,7 +223,7 @@ class PolicyRagServiceTest {
     void 유효하지_않은_번호만_있으면_근거_없음이다() {
         Policy a = policy("정책 A", null);
         readyUser(List.of(a));
-        when(searchService.searchCandidates(anyList(), anyString())).thenReturn(List.of(hit(a, "A")));
+        when(searchService.searchForAnswer(anyList(), anyString())).thenReturn(List.of(hit(a, "A")));
         when(aiTextClient.generate(any())).thenReturn(aiAnswer("해당합니다 [3]."));
 
         PolicyRagResult result = service().answer(USER_ID, QUESTION);
@@ -246,7 +248,7 @@ class PolicyRagServiceTest {
     @Test
     void 임베딩_호출이_실패하면_예외를_전파하고_차감한_횟수를_되돌린다() {
         readyUser(List.of(policy("정책", null)));
-        when(searchService.searchCandidates(anyList(), anyString()))
+        when(searchService.searchForAnswer(anyList(), anyString()))
                 .thenThrow(new AiUnavailableException(AiClientException.Reason.DISABLED));
 
         assertThatThrownBy(() -> service().answer(USER_ID, QUESTION)).isInstanceOf(AiUnavailableException.class);
@@ -259,7 +261,7 @@ class PolicyRagServiceTest {
     void 텍스트_생성이_실패하면_예외를_전파하고_차감한_횟수를_되돌린다() {
         Policy a = policy("정책", null);
         readyUser(List.of(a));
-        when(searchService.searchCandidates(anyList(), anyString())).thenReturn(List.of(hit(a, "원문")));
+        when(searchService.searchForAnswer(anyList(), anyString())).thenReturn(List.of(hit(a, "원문")));
         when(aiTextClient.generate(any())).thenThrow(new AiCallFailedException(AiClientException.Reason.TIMEOUT));
 
         assertThatThrownBy(() -> service().answer(USER_ID, QUESTION)).isInstanceOf(AiCallFailedException.class);
@@ -273,5 +275,79 @@ class PolicyRagServiceTest {
                 .isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> new PolicyRagService(policyService, searchService, aiTextClient, prompt, usageLimiter, 20, 0))
                 .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    // #235
+
+    private static Policy localPolicy(String name) {
+        return policy(name, "JEONNAM").withRegionLocalScope(true);
+    }
+
+    @Test
+    void 시군구_한정_정책은_검색_후보에서_빼고_추천_공통_후보는_그대로_쓴다() {
+        Policy national = policy("청년 월세 지원", null);
+        Policy gokseong = localPolicy("곡성군 일하잡(job)센터 지원사업");
+        readyUser(List.of(national, gokseong));
+        when(searchService.searchForAnswer(List.of(national), QUESTION)).thenReturn(List.of(hit(national, "정책명: 청년 월세 지원")));
+        when(aiTextClient.generate(any())).thenReturn(aiAnswer("월세 지원 정책을 1개 찾았어요 [1]"));
+
+        PolicyRagResult result = service().answer(USER_ID, QUESTION);
+
+        assertThat(result.sources()).containsExactly(national);
+        verify(searchService).searchForAnswer(List.of(national), QUESTION);
+    }
+
+    @Test
+    void 질문에_그_시군구_이름이_있으면_한정_정책을_남긴다() {
+        Policy national = policy("청년 월세 지원", null);
+        Policy gokseong = localPolicy("곡성군 일하잡(job)센터 지원사업");
+        String question = "곡성에서 일자리 구할 때 도움받을 수 있어?";
+        User user = user(2000, 3_000_000L);
+        when(policyService.findUser(USER_ID)).thenReturn(user);
+        when(policyService.findCandidatePolicies(user, null)).thenReturn(List.of(national, gokseong));
+        when(usageLimiter.acquire(USER_ID, AiUsageFeature.POLICY_RAG, 20)).thenReturn(TICKET);
+        when(searchService.searchForAnswer(List.of(national, gokseong), question)).thenReturn(List.of(hit(gokseong, "정책명: 곡성군")));
+        when(aiTextClient.generate(any())).thenReturn(aiAnswer("곡성군 정책을 찾았어요 [1]"));
+
+        assertThat(service().answer(USER_ID, question).sources()).containsExactly(gokseong);
+    }
+
+    @Test
+    void 후보가_모두_시군구_한정이면_임베딩_없이_근거_없음이고_한도를_차감하지_않는다() {
+        User user = user(2000, 3_000_000L);
+        when(policyService.findUser(USER_ID)).thenReturn(user);
+        when(policyService.findCandidatePolicies(user, null)).thenReturn(List.of(localPolicy("곡성군 일하잡(job)센터 지원사업")));
+
+        PolicyRagResult result = service().answer(USER_ID, QUESTION);
+
+        assertThat(result.status()).isEqualTo(PolicyRagStatus.NO_EVIDENCE);
+        verifyNoInteractions(searchService, aiTextClient, usageLimiter);
+    }
+
+    @Test
+    void 특정_대상_전용_정책은_청크_앞에_대상_집단을_붙이고_오늘_날짜를_넣는다() {
+        Policy special = policy("자립준비청년 자립수당", null);
+        special.updateCondition(PolicyCondition.builder().specialTarget(true).specialTargetGroup("자립준비청년").build());
+        Policy general = policy("청년 월세 지원", null);
+        readyUser(List.of(special, general));
+        when(searchService.searchForAnswer(List.of(special, general), QUESTION))
+                .thenReturn(List.of(hit(special, "정책명: 자립준비청년 자립수당"), hit(general, "정책명: 청년 월세 지원")));
+        when(aiTextClient.generate(any())).thenReturn(aiAnswer("월세 지원 정책을 찾았어요 [2]"));
+
+        service().answer(USER_ID, QUESTION);
+
+        ArgumentCaptor<AiTextRequest> request = ArgumentCaptor.forClass(AiTextRequest.class);
+        verify(aiTextClient).generate(request.capture());
+        assertThat(request.getValue().systemPrompt())
+                .contains("[1]\n[신청 대상 한정] 자립준비청년\n정책명: 자립준비청년 자립수당", "[2]\n정책명: 청년 월세 지원",
+                        "[오늘 날짜]\n" + LocalDate.now(BirthYearValidator.ZONE).getYear() + "년");
+    }
+
+    @Test
+    void 고정_문구는_해요체이고_근거_없음은_답할_수_있는_범위를_알린다() {
+        assertThat(PolicyRagResult.NO_EVIDENCE_ANSWER)
+                .contains("찾지 못했어요", "청년 주거·금융·일자리 정책에 대한 질문에 답할 수 있어요")
+                .doesNotContain("습니다");
+        assertThat(PolicyRagResult.PROFILE_INCOMPLETE_ANSWER).contains("필요해요").doesNotContain("습니다", "합니다");
     }
 }

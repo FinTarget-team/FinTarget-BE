@@ -11,6 +11,8 @@ import kr.fintarget.api.domain.ai.client.AiTextResult;
 import kr.fintarget.api.domain.ai.usage.AiUsageFeature;
 import kr.fintarget.api.domain.ai.usage.AiUsageLimiter;
 import kr.fintarget.api.domain.policy.entity.Policy;
+import kr.fintarget.api.domain.policy.entity.PolicyCondition;
+import kr.fintarget.api.domain.policy.recommend.PolicyLocalScope;
 import kr.fintarget.api.domain.policy.search.PolicySearchHit;
 import kr.fintarget.api.domain.policy.search.PolicySearchService;
 import kr.fintarget.api.domain.policy.service.PolicyService;
@@ -27,10 +29,12 @@ import java.util.List;
  * 검색 결과 기반 통합 정책 AI 답변 (#183). 질문마다 독립적으로 처리한다 (이전 대화를 반영하지 않음).
  * <ol>
  *   <li>나이와 소득이 모두 없으면 AI 호출 없이 PROFILE_INCOMPLETE (하나만 없으면 그 조건만 건너뛰고 후보를 찾는다, #225)</li>
- *   <li>조건에 맞는 후보 정책이 없으면 AI 호출 없이 NO_EVIDENCE (임베딩도 호출하지 않아 한도를 차감하지 않음)</li>
+ *   <li>조건에 맞는 후보에서 시·군·구 한정 정책을 뺀다 (질문에 그 시·군·구 이름이 있으면 남김, #235).
+ *       후보가 없으면 AI 호출 없이 NO_EVIDENCE (임베딩도 호출하지 않아 한도를 차감하지 않음)</li>
  *   <li>일일 한도(policy.rag.daily-limit) 1회 차감. 이후 임베딩·생성 호출이 실패하면(502/503) 되돌린다</li>
- *   <li>후보 안에서 검색({@link PolicySearchService#searchCandidates}, 검색 한도는 차감하지 않음). 결과가 없으면 NO_EVIDENCE</li>
- *   <li>청크를 [1], [2] 번호로 넣어 답을 받고, 답변의 번호를 근거 정책으로 바꾼다.
+ *   <li>후보 안에서 검색({@link PolicySearchService#searchForAnswer}: KINFA 대출 상품만 대출 의도가 없을 때 제외,
+ *       질문에 정책명이 있으면 그 정책을 앞에, 검색 한도는 차감하지 않음). 결과가 없으면 NO_EVIDENCE</li>
+ *   <li>청크를 [1], [2] 번호로 넣어 답을 받고(특정 대상 전용 정책은 "[신청 대상 한정]" 줄을 붙임, 오늘 날짜 포함), 답변의 번호를 근거 정책으로 바꾼다.
  *       유효한 번호가 하나도 없으면 답변을 버리고 NO_EVIDENCE (청크 밖 지식으로 답했을 수 있어 내보내지 않음)</li>
  * </ol>
  *
@@ -86,7 +90,7 @@ public class PolicyRagService {
             log.info("통합 정책 AI 답변 status={}", PolicyRagStatus.PROFILE_INCOMPLETE);
             return PolicyRagResult.profileIncomplete();
         }
-        List<Policy> candidates = policyService.findCandidatePolicies(user, null);
+        List<Policy> candidates = answerable(policyService.findCandidatePolicies(user, null), question);
         if (candidates.isEmpty()) {
             log.info("통합 정책 AI 답변 status={} candidates=0", PolicyRagStatus.NO_EVIDENCE);
             return PolicyRagResult.noEvidence();
@@ -108,7 +112,7 @@ public class PolicyRagService {
      * @param candidates 사용자 조건에 맞는 후보 정책 ({@link PolicyService#findCandidatePolicies(User, String)})
      */
     public PolicyRagResult answerFrom(User user, List<Policy> candidates, String question) {
-        List<PolicySearchHit> hits = searchService.searchCandidates(candidates, question);
+        List<PolicySearchHit> hits = searchService.searchForAnswer(answerable(candidates, question), question);
         if (hits.isEmpty()) {
             log.info("통합 정책 AI 답변 status={} candidates={} hits=0", PolicyRagStatus.NO_EVIDENCE, candidates.size());
             return PolicyRagResult.noEvidence();
@@ -127,7 +131,7 @@ public class PolicyRagService {
             log.info("통합 정책 AI 답변 status={} hits=0", PolicyRagStatus.NO_EVIDENCE);
             return PolicyRagResult.noEvidence();
         }
-        String systemPrompt = prompt.render(hits.stream().map(PolicySearchHit::content).toList(), profile);
+        String systemPrompt = prompt.render(hits.stream().map(PolicyRagService::promptText).toList(), profile);
         AiTextResult result = aiTextClient.generate(new AiTextRequest(
                 systemPrompt, List.of(AiMessage.user(question)), AiModelTier.DEFAULT, maxOutputTokens));
 
@@ -150,5 +154,26 @@ public class PolicyRagService {
                 PolicyRagStatus.ANSWERED, prompt.version(), result.model(), hits.size(), sources.size(),
                 result.inputTokens(), result.outputTokens());
         return PolicyRagResult.answered(answer, sources);
+    }
+
+    /**
+     * 통합 답변 후보 (#235): 시·군·구 한정 정책({@link PolicyLocalScope})은 뺀다. 온보딩 지역이 시·도 단위라 그 시·군·구에 사는지 알 수 없어서다.
+     * 단, 질문에 그 시·군·구 이름이 있으면 남긴다 ({@link LocalPlaceMention}). 추천 목록·정책 검색 API에는 적용하지 않는다.
+     */
+    static List<Policy> answerable(List<Policy> candidates, String question) {
+        return LocalPlaceMention.filter(candidates, question, PolicyLocalScope::isLocal);
+    }
+
+    /**
+     * 프롬프트에 넣을 청크 본문. 특정 대상 전용 정책(#227 specialTarget)이면 청크 맨 앞에 "[신청 대상 한정] 대상 집단" 줄을 붙여,
+     * 모델이 받을 수 있는 정책처럼 안내하지 않고 조건으로만 말하게 한다 (#235).
+     */
+    static String promptText(PolicySearchHit hit) {
+        PolicyCondition condition = hit.policy().getCondition();
+        if (condition == null || !condition.isSpecialTarget()) {
+            return hit.content();
+        }
+        String group = condition.getSpecialTargetGroup();
+        return "[신청 대상 한정] " + (group == null || group.isBlank() ? "특정 대상" : group.strip()) + "\n" + hit.content();
     }
 }
