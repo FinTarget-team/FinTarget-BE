@@ -145,8 +145,36 @@ class AiUsageLimiterTest {
     }
 
     @Test
-    void 한도가_1보다_작으면_거부한다() {
-        assertThatThrownBy(() -> limiter(LATE_NIGHT).acquire(USER, AiUsageFeature.POLICY_RAG, 0))
-                .isInstanceOf(IllegalArgumentException.class);
+    void 한도가_0_이하면_무제한이고_사용량을_세지_않는다() {
+        AiUsageLimiter limiter = limiter(LATE_NIGHT);
+
+        for (int i = 0; i < 25; i++) {
+            AiUsageLimiter.Ticket ticket = limiter.acquire(USER, AiUsageFeature.POLICY_RAG, 0);
+            assertThat(ticket.unlimited()).isTrue();
+        }
+        assertThat(limiter.acquire(USER, AiUsageFeature.POLICY_RAG, -1).unlimited()).isTrue();
+
+        assertThat(used(USER, LocalDate.of(2026, 11, 5), AiUsageFeature.POLICY_RAG)).isZero();
+        assertThat(repository.count()).isZero();
+    }
+
+    @Test
+    void 무제한_티켓을_되돌려도_아무_일도_없다() {
+        AiUsageLimiter limiter = limiter(LATE_NIGHT);
+
+        limiter.release(limiter.acquire(USER, AiUsageFeature.POLICY_RAG, 0));
+
+        assertThat(repository.count()).isZero();
+    }
+
+    @Test
+    void 한도가_양수면_기존처럼_제한한다() {
+        AiUsageLimiter limiter = limiter(LATE_NIGHT);
+
+        limiter.acquire(USER, AiUsageFeature.POLICY_RAG, 1);
+
+        assertThatThrownBy(() -> limiter.acquire(USER, AiUsageFeature.POLICY_RAG, 1))
+                .isInstanceOf(AiUsageLimitExceededException.class);
+        assertThat(used(USER, LocalDate.of(2026, 11, 5), AiUsageFeature.POLICY_RAG)).isEqualTo(1);
     }
 }

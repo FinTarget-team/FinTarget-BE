@@ -15,6 +15,9 @@ import java.time.LocalDate;
 /**
  * 사용자별·기능별 일일 AI 호출 한도 (#183). 날짜는 KST 기준이라 자정(KST)에 다시 채워진다.
  *
+ * <p>한도가 0 이하면 무제한이다 (#239 부스 시연). 이때는 사용량을 세지 않아 DB를 건드리지 않는다.
+ * 호출 자체는 각 기능의 로그에 남으므로 시연 중 사용량은 로그로 확인한다.
+ *
  * <p>각 단계는 별도 트랜잭션(REQUIRES_NEW)으로 바로 커밋한다. 호출하는 쪽 트랜잭션(읽기 전용일 수 있음)과 섞이지 않고,
  * AI 호출 중에 행 잠금을 쥐고 있지 않기 위해서다.
  *
@@ -41,14 +44,20 @@ public class AiUsageLimiter {
         this.clock = clock;
     }
 
+    /** 한도가 0 이하면 무제한 (#239). 호출하는 쪽에서 설정값을 확인할 때도 쓴다 */
+    public static boolean isUnlimited(int dailyLimit) {
+        return dailyLimit < 1;
+    }
+
     /**
      * 오늘 횟수를 1 차감한다. AI 호출이 실패하면 돌려받은 Ticket으로 {@link #release}를 호출해 되돌린다.
+     * 한도가 0 이하면 차감하지 않고 바로 통과시킨다 (#239).
      *
      * @throws AiUsageLimitExceededException 오늘 한도를 모두 썼을 때 (429)
      */
     public Ticket acquire(String userId, AiUsageFeature feature, int dailyLimit) {
-        if (dailyLimit < 1) {
-            throw new IllegalArgumentException("일일 한도는 1 이상이어야 합니다: " + dailyLimit);
+        if (isUnlimited(dailyLimit)) {
+            return Ticket.unlimited(userId, feature);
         }
         LocalDate today = LocalDate.now(clock);
         if (increment(userId, today, feature, dailyLimit)) {
@@ -71,9 +80,12 @@ public class AiUsageLimiter {
 
     /**
      * acquire로 차감한 1회를 되돌린다. 차감한 날짜 기준이라 자정을 넘겨 실패해도 그 날 횟수가 돌아간다.
-     * 되돌리기가 실패해도 원래 예외를 가리지 않도록 로그만 남긴다.
+     * 되돌리기가 실패해도 원래 예외를 가리지 않도록 로그만 남긴다. 무제한 티켓은 되돌릴 것이 없다 (#239).
      */
     public void release(Ticket ticket) {
+        if (ticket.unlimited()) {
+            return;
+        }
         try {
             tx.executeWithoutResult(status -> repository.decrement(ticket.userId(), ticket.date(), ticket.feature()));
         } catch (RuntimeException e) {
@@ -91,6 +103,16 @@ public class AiUsageLimiter {
                 repository.findByUserIdAndUsageDateAndFeature(userId, date, feature).isPresent()));
     }
 
+    /** @param date 차감한 날짜. 무제한이라 차감하지 않았으면 null (#239) */
     public record Ticket(String userId, LocalDate date, AiUsageFeature feature) {
+
+        static Ticket unlimited(String userId, AiUsageFeature feature) {
+            return new Ticket(userId, null, feature);
+        }
+
+        /** 차감하지 않은 티켓인지 (한도가 0 이하) */
+        public boolean unlimited() {
+            return date == null;
+        }
     }
 }

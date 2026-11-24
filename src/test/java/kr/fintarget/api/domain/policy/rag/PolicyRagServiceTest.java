@@ -32,6 +32,7 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
@@ -270,11 +271,19 @@ class PolicyRagServiceTest {
     }
 
     @Test
-    void 한도와_출력_상한_설정값이_1보다_작으면_기동에_실패한다() {
-        assertThatThrownBy(() -> new PolicyRagService(policyService, searchService, aiTextClient, prompt, usageLimiter, 0, 1000))
-                .isInstanceOf(IllegalArgumentException.class);
+    void 출력_상한_설정값이_1보다_작으면_기동에_실패한다() {
         assertThatThrownBy(() -> new PolicyRagService(policyService, searchService, aiTextClient, prompt, usageLimiter, 20, 0))
                 .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void 한도_설정값이_0_이하면_무제한으로_기동한다() {
+        // 0 이하는 무제한이라 기동을 막지 않는다. 차감 여부는 AiUsageLimiter가 판단한다 (#239)
+        assertThatCode(() -> new PolicyRagService(policyService, searchService, aiTextClient, prompt, usageLimiter, 0, 1000))
+                .doesNotThrowAnyException();
+        assertThatCode(() -> new PolicyRagService(policyService, searchService, aiTextClient, prompt, usageLimiter, -1, 1000))
+                .doesNotThrowAnyException();
+        assertThat(PolicyRagService.DEFAULT_DAILY_LIMIT).isZero();
     }
 
     // #235

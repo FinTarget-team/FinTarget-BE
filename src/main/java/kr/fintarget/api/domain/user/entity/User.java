@@ -130,4 +130,20 @@ public class User {
     public void updateName(String name) {
         this.name = name;
     }
+
+    /**
+     * 부스 시연 초기화 (#239). 온보딩에서 받은 프로필 값을 모두 비우고 온보딩을 미완료로 되돌려,
+     * 다음 방문자가 1단계(닉네임)부터 다시 시작하게 한다. 닉네임이 1단계라 이름도 비운다.
+     * 계정 식별 값(provider, providerId, email, createdAt)은 그대로 둬서 같은 토큰으로 로그인 상태가 유지된다.
+     */
+    public void resetForDemo() {
+        this.name = null;
+        this.birthYear = null;
+        this.age = null;
+        this.income = null;
+        this.employmentType = null;
+        this.region = null;
+        this.housingStatus = null;
+        this.onboardingCompleted = false;
+    }
 }

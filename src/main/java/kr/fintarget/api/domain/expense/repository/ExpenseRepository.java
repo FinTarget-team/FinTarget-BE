@@ -14,7 +14,8 @@ import java.util.UUID;
 public interface ExpenseRepository extends JpaRepository<Expense, UUID> {
     List<Expense> findByUserId(UUID userId);
     List<Expense> findByUserIdAndSpentAtBetween(UUID userId, LocalDate start, LocalDate end);
-    void deleteByUserId(UUID userId);
+    /** 지운 건수를 돌려준다 (시연 초기화 응답, #239) */
+    long deleteByUserId(UUID userId);
 
     @Query("SELECT new kr.fintarget.api.domain.expense.dto.ExpenseCategoryStat(e.category, SUM(e.amount)) " +
             "FROM Expense e WHERE e.userId = :userId AND e.spentAt BETWEEN :start AND :end " +

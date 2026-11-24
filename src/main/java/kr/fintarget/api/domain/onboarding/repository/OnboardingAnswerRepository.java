@@ -9,7 +9,8 @@ import java.util.UUID;
 
 public interface OnboardingAnswerRepository extends JpaRepository<OnboardingAnswer, String> {
     List<OnboardingAnswer> findByUserIdOrderByStepAsc(UUID userId);
-    void deleteByUserId(UUID userId);
+    /** 지운 건수를 돌려준다 (시연 초기화 응답, #239) */
+    long deleteByUserId(UUID userId);
     // 유니크 제약이 생기기 전에 쌓인 중복이 남아 있어도 오류 없이 최신 답변을 고르도록 정렬해서 하나만 가져온다
     Optional<OnboardingAnswer> findFirstByUserIdAndStepOrderByCreatedAtDesc(UUID userId, Integer step);
     boolean existsByUserIdAndStep(UUID userId, Integer step);

@@ -26,6 +26,7 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -311,7 +312,14 @@ class PolicySearchServiceTest {
     void k와_배수_설정값이_1보다_작으면_기동에_실패한다() {
         assertThatThrownBy(() -> service(0, 0.5, 3)).isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> service(5, 0.5, 0)).isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> service(5, 0.5, 3, 0)).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void 한도_설정값이_0_이하면_무제한으로_기동한다() {
+        // 0 이하는 무제한이라 기동을 막지 않는다. 차감 여부는 AiUsageLimiter가 판단한다 (#239)
+        assertThatCode(() -> service(5, 0.5, 3, 0)).doesNotThrowAnyException();
+        assertThatCode(() -> service(5, 0.5, 3, -1)).doesNotThrowAnyException();
+        assertThat(PolicySearchService.DEFAULT_DAILY_LIMIT).isZero();
     }
 
     // #235 통합 답변 전용 검색

@@ -31,7 +31,8 @@ import java.util.List;
  *   <li>나이와 소득이 모두 없으면 AI 호출 없이 PROFILE_INCOMPLETE (하나만 없으면 그 조건만 건너뛰고 후보를 찾는다, #225)</li>
  *   <li>조건에 맞는 후보에서 시·군·구 한정 정책을 뺀다 (질문에 그 시·군·구 이름이 있으면 남김, #235).
  *       후보가 없으면 AI 호출 없이 NO_EVIDENCE (임베딩도 호출하지 않아 한도를 차감하지 않음)</li>
- *   <li>일일 한도(policy.rag.daily-limit) 1회 차감. 이후 임베딩·생성 호출이 실패하면(502/503) 되돌린다</li>
+ *   <li>일일 한도(policy.rag.daily-limit) 1회 차감. 이후 임베딩·생성 호출이 실패하면(502/503) 되돌린다.
+ *       한도가 0 이하면 무제한이라 차감하지 않는다 (#239)</li>
  *   <li>후보 안에서 검색({@link PolicySearchService#searchForAnswer}: KINFA 대출 상품만 대출 의도가 없을 때 제외,
  *       질문에 정책명이 있으면 그 정책을 앞에, 검색 한도는 차감하지 않음). 결과가 없으면 NO_EVIDENCE</li>
  *   <li>청크를 [1], [2] 번호로 넣어 답을 받고(특정 대상 전용 정책은 "[신청 대상 한정]" 줄을 붙임, 오늘 날짜 포함), 답변의 번호를 근거 정책으로 바꾼다.
@@ -44,7 +45,8 @@ import java.util.List;
 @Service
 public class PolicyRagService {
 
-    static final int DEFAULT_DAILY_LIMIT = 20;
+    // 0이면 무제한 (#239 부스 시연). 다시 걸려면 .env에 POLICY_RAG_DAILY_LIMIT=20처럼 양수를 넣는다
+    static final int DEFAULT_DAILY_LIMIT = 0;
     // 추론 토큰 포함. 단건 채팅 평균 출력 88·추론 14토큰(docs/ai/eval-results-2026-11)이고 여러 정책을 다뤄도 이 안에 든다.
     // 넘으면 응답이 불완전(INCOMPLETE)으로 끝나 502가 된다
     static final int DEFAULT_MAX_OUTPUT_TOKENS = 1000;
@@ -64,9 +66,6 @@ public class PolicyRagService {
                             AiUsageLimiter usageLimiter,
                             @Value("${policy.rag.daily-limit:" + DEFAULT_DAILY_LIMIT + "}") int dailyLimit,
                             @Value("${policy.rag.max-output-tokens:" + DEFAULT_MAX_OUTPUT_TOKENS + "}") int maxOutputTokens) {
-        if (dailyLimit < 1) {
-            throw new IllegalArgumentException("policy.rag.daily-limit는 1 이상이어야 합니다: " + dailyLimit);
-        }
         if (maxOutputTokens < 1) {
             throw new IllegalArgumentException("policy.rag.max-output-tokens는 1 이상이어야 합니다: " + maxOutputTokens);
         }
