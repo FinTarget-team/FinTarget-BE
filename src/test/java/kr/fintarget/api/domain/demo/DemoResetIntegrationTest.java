@@ -4,7 +4,7 @@ import kr.fintarget.api.domain.ai.chat.entity.AiConversation;
 import kr.fintarget.api.domain.ai.chat.entity.AiConversationMessage;
 import kr.fintarget.api.domain.ai.chat.repository.AiConversationMessageRepository;
 import kr.fintarget.api.domain.ai.chat.repository.AiConversationRepository;
-import kr.fintarget.api.domain.demo.dto.DemoResetCounts;
+import kr.fintarget.api.domain.demo.dto.DemoResetResult;
 import kr.fintarget.api.domain.expense.entity.Expense;
 import kr.fintarget.api.domain.expense.repository.ExpenseRepository;
 import kr.fintarget.api.domain.goal.entity.Goal;
@@ -62,8 +62,9 @@ class DemoResetIntegrationTest {
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
-    private static final String[] USER_TABLES = {
-            "goal", "expense", "onboarding_answer", "nudges", "ai_conversation", "ai_conversation_message", "ai_daily_usage"
+    // 초기화로 비워지는 표. 지출(expense)은 남기므로 넣지 않는다 (#239)
+    private static final String[] CLEARED_TABLES = {
+            "goal", "onboarding_answer", "nudges", "ai_conversation", "ai_conversation_message", "ai_daily_usage"
     };
 
     private String resetUserId;
@@ -116,12 +117,20 @@ class DemoResetIntegrationTest {
     }
 
     @Test
-    void 초기화하면_사용자_데이터가_모두_지워진다() {
+    void 초기화하면_지출을_뺀_사용자_데이터가_모두_지워진다() {
         demoResetService.reset(resetUserId);
 
-        for (String table : USER_TABLES) {
+        for (String table : CLEARED_TABLES) {
             assertThat(count(table, resetUserId)).as(table).isZero();
         }
+    }
+
+    @Test
+    void 초기화해도_지출은_그대로_남는다() {
+        demoResetService.reset(resetUserId);
+
+        assertThat(count("expense", resetUserId)).isEqualTo(1);
+        assertThat(expenseRepository.findByUserId(UUID.fromString(resetUserId))).hasSize(1);
     }
 
     @Test
@@ -163,9 +172,10 @@ class DemoResetIntegrationTest {
     void 초기화해도_다른_사용자의_데이터와_프로필은_그대로다() {
         demoResetService.reset(resetUserId);
 
-        for (String table : USER_TABLES) {
+        for (String table : CLEARED_TABLES) {
             assertThat(count(table, otherUserId)).as(table).isPositive();
         }
+        assertThat(count("expense", otherUserId)).isEqualTo(1);
         UserProfileResponse other = userService.getProfile(otherUserId);
         assertThat(other.isOnboardingCompleted()).isTrue();
         assertThat(other.getName()).isEqualTo("지원");
@@ -173,27 +183,29 @@ class DemoResetIntegrationTest {
     }
 
     @Test
-    void 응답에_지운_항목별_건수가_담긴다() {
-        DemoResetCounts counts = demoResetService.reset(resetUserId);
+    void 응답에_지운_항목별_건수와_남긴_지출_건수가_담긴다() {
+        DemoResetResult result = demoResetService.reset(resetUserId);
 
-        assertThat(counts.onboardingAnswers()).isEqualTo(2);
-        assertThat(counts.goals()).isEqualTo(1);
-        assertThat(counts.expenses()).isEqualTo(1);
-        assertThat(counts.nudges()).isEqualTo(1);
-        assertThat(counts.aiConversations()).isEqualTo(1);
-        assertThat(counts.aiConversationMessages()).isEqualTo(1);
-        assertThat(counts.aiUsages()).isEqualTo(1);
-        assertThat(counts.simulations()).isZero();
-        assertThat(counts.savedPolicies()).isZero();
+        assertThat(result.deleted().onboardingAnswers()).isEqualTo(2);
+        assertThat(result.deleted().goals()).isEqualTo(1);
+        assertThat(result.deleted().nudges()).isEqualTo(1);
+        assertThat(result.deleted().aiConversations()).isEqualTo(1);
+        assertThat(result.deleted().aiConversationMessages()).isEqualTo(1);
+        assertThat(result.deleted().aiUsages()).isEqualTo(1);
+        assertThat(result.deleted().simulations()).isZero();
+        assertThat(result.deleted().savedPolicies()).isZero();
+        assertThat(result.keptExpenses()).isEqualTo(1);
     }
 
     @Test
-    void 두_번_연속_초기화해도_오류가_없고_건수가_0이다() {
+    void 두_번_연속_초기화해도_오류가_없고_지운_건수가_0이다() {
         demoResetService.reset(resetUserId);
 
-        DemoResetCounts second = demoResetService.reset(resetUserId);
-        assertThat(second.onboardingAnswers()).isZero();
-        assertThat(second.goals()).isZero();
+        DemoResetResult second = demoResetService.reset(resetUserId);
+        assertThat(second.deleted().onboardingAnswers()).isZero();
+        assertThat(second.deleted().goals()).isZero();
+        // 지출은 지우지 않으므로 두 번째에도 그대로 세어진다
+        assertThat(second.keptExpenses()).isEqualTo(1);
         assertThat(userRepository.existsById(resetUserId)).isTrue();
     }
 

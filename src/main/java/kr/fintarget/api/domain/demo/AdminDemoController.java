@@ -45,7 +45,7 @@ public class AdminDemoController {
     @Operation(
             summary = "시연 계정 초기화 (비상용)",
             description = "지정한 사용자의 데이터를 지우고 온보딩을 미완료로 되돌립니다. 내 계정 초기화(POST /api/users/me/demo-reset)와 같은 로직이며, "
-                    + "계정·소셜 로그인 연결·발급된 토큰은 지우지 않습니다."
+                    + "계정·소셜 로그인 연결·발급된 토큰과 지출(expense)은 지우지 않습니다."
     )
     @PostMapping("/users/{userId}/reset")
     public ResponseEntity<ApiResponse<DemoResetResponse>> reset(
