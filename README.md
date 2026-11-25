@@ -296,6 +296,6 @@ chore: application.yml gitignore 처리 (#3)
     `docker exec -i fintarget-db psql -U "$DB_USERNAME" -d "$DB_NAME" < docs/sql/<파일>.sql`
   - SQL을 적용하지 않고 배포하면 엔티티와 DB가 달라 앱이 뜨지 않고, `deploy.sh`가 이전 버전으로 되돌립니다.
   - 급하게 띄워야 하면 서버 `.env`에 `JPA_DDL_AUTO=update`를 넣어 예전 방식으로 실행할 수 있습니다. SQL 적용 후 다시 지웁니다.
-- **DB 백업**: `scripts/backup-db.sh`가 `pg_dump`로 `~/backups/`에 백업하고 14일보다 오래된 파일을 지웁니다. 서버 cron에 등록해 매일 실행합니다.
-  `0 4 * * * ~/FinTarget-BE/scripts/backup-db.sh >> ~/backups/backup.log 2>&1` (복원 방법은 스크립트 주석 참고)
+- **DB 백업**: `scripts/backup-db.sh`가 `pg_dump`로 `~/backups/`에 백업하고, 스크립트가 만든 백업(`fintarget-YYYYMMDD-HHMMSS.dump`) 중 14일보다 오래된 파일만 지웁니다. 손으로 만든 백업은 지우지 않습니다. 서버 cron에 등록해 매일 04:00(KST)에 실행합니다. 서버 시간대가 UTC라 19시로 적습니다.
+  `0 19 * * * ~/FinTarget-BE/scripts/backup-db.sh >> ~/backups/backup.log 2>&1` (복원 방법은 스크립트 주석 참고)
 - 컨테이너는 root가 아닌 전용 계정으로, 한국 시간대(`-Duser.timezone=Asia/Seoul`)로 실행됩니다.
