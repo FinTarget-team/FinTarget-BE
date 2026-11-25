@@ -1084,12 +1084,16 @@ X-Admin-Key: {ADMIN_API_KEY}
 - 외부 정책 ID(`MANUAL-...`)로 upsert하므로 여러 번 실행해도 결과가 같습니다. 출처가 `MANUAL`이라 매일 03:00 동기화(온통청년·KINFA)가 지우거나 덮어쓰지 않습니다.
 - 등록 후 정책 동기화와 같은 순서로 청크 분할 → 혜택 추출 → 조건 추출 → 리소스 혜택 값 적용 → 리랭킹 미리 계산 → 임베딩을 실행합니다. 바뀐 것이 없으면 AI를 호출하지 않습니다.
 - 시뮬레이션 혜택 값(유형·월 금액·개월 수·1회 금액·최대 기준)은 AI 추출 결과 대신 리소스 값을 저장합니다.
+- **혜택 보정 (`benefitOverrides`)**: 온통청년 정책 중 혜택 분류가 틀린 정책은 출처와 외부 정책 ID(온통청년 정책번호 `plcyNo`)로 지정해 시뮬레이션 혜택 값만 리소스 값으로 덮습니다. 출처·원문·조건은 동기화 결과 그대로입니다.
+    - 대상: 2026 청년 월세 지원(서울, 월 20만원 × 12개월), 청년월세 지원(경기, 월 20만원 × 24개월), 청년 월세 지원(울산, 월 20만원 × 24개월), (옹진군) 인천시 청년월세 지원사업(월 20만원 × 12개월), 국민취업지원제도(전국·제주 등록본, 구직촉진수당 최소 월 60만원 × 6개월)
+    - 정책명이 리소스와 같을 때만 덮습니다 (외부 ID가 다른 정책에 다시 쓰이는 경우 방지). 동기화로 원문이 바뀌어 혜택을 다시 추출해도 유지됩니다
+    - 이 환경에 그 외부 ID의 정책이 없으면 적용하지 않고 응답 `benefitOverrides[].found=false`로 알립니다
 - 앱 시작 시 자동 실행하지 않습니다. 다른 작업(03:00 동기화, 관리자 백필)과 겹친 단계는 건너뛰고 `steps`에 `skipped: 사유`를 남깁니다. 이미 실행 중이면 409
 
 **운영 배포 후 실행 절차**
 1. dev 머지 → CD 배포 완료 확인
 2. `POST /api/admin/policy/manual/sync` 1회 호출 (로컬 기준 약 10초)
-3. 응답에서 정책 4건의 `status`(첫 실행 `CREATED`), `chunkCount` 1 이상, `simulationReflected: true` 확인
+3. 응답에서 정책 4건의 `status`(첫 실행 `CREATED`), `chunkCount` 1 이상, `simulationReflected: true` 확인. 혜택 보정 6건은 `found`·`nameMatches`·`simulationReflected`가 모두 true인지 확인 (false면 운영 정책번호가 달라진 것이므로 리소스의 외부 ID를 고침)
 4. `steps.embedding.embeddedCount`가 4이면 검색·통합 답변에 바로 나옵니다. 다시 호출하면 `UPDATED`이고 AI 호출 없이 끝납니다
 
 **예상 비용 (첫 실행 1회)**
@@ -1142,6 +1146,7 @@ X-Admin-Key: {ADMIN_API_KEY}
 | `policies[].status` | `CREATED`(새로 등록) / `UPDATED`(이미 있어 리소스 내용으로 갱신) |
 | `policies[].incomeBasis` ~ `benefitKind` | 조건 추출(v3) 결과. 추출 전이거나 실패하면 null |
 | `policies[].benefitType` ~ `oneTimeAmount` | 시뮬레이션 혜택 값 (리소스 값) |
+| `benefitOverrides[]` | 혜택 보정 대상별 결과: `source`, `externalId`, `name`, `found`(이 환경에 정책이 있는지), `nameMatches`(정책명이 같은지, 다르면 덮지 않음), 저장된 `benefitType`·`monthlyAmount`·`months`·`oneTimeAmount`, `simulationReflected` |
 | `steps.benefitOverride` | 리소스 값과 달라 고친 정책 수. 혜택 추출이 건너뛰어졌거나 리소스 혜택 값만 바꾼 경우 0보다 큼 |
 | `steps.*` | 각 단계 결과(기존 관리자 API 응답과 같은 형식) 또는 `skipped: 사유` |
 

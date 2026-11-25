@@ -1,5 +1,5 @@
 {
-  "description": "공공 API(온통청년, KINFA)로 수집되지 않는 정책을 직접 등록한다 (#245). POST /api/admin/policy/manual/sync가 externalId로 upsert하고, benefit 값은 AI 혜택 추출 결과보다 우선한다. 내용은 sources에 적은 공식 출처와 보도 범위 안에서만 쓴다.",
+  "description": "공공 API(온통청년, KINFA)로 수집되지 않는 정책을 직접 등록한다 (#245). POST /api/admin/policy/manual/sync가 externalId로 upsert하고, benefit 값은 AI 혜택 추출 결과보다 우선한다. 내용은 sources에 적은 공식 출처와 보도 범위 안에서만 쓴다. benefitOverrides는 동기화 정책(온통청년 등) 중 혜택 분류가 틀린 정책의 시뮬레이션 혜택 값만 출처·외부 정책 ID로 지정해 덮는다 (정책명이 같을 때만).",
   "policies": [
     {
       "externalId": "MANUAL-HOPE-DOUBLE-2026",
@@ -101,6 +101,92 @@
         "oneTimeAmount": null,
         "maximum": false,
         "evidence": "구직 활동비를 매월 50만원씩 최대 6개월 지원합니다."
+      }
+    }
+  ],
+  "benefitOverrides": [
+    {
+      "source": "YOUTH_CENTER",
+      "externalId": "20261021005400214208",
+      "name": "2026 청년 월세 지원",
+      "reason": "월 정액 임차료 현금 지원인데 AI 추출이 SERVICE로 분류. 서울시 12개월·국토부 24개월 중 낮은 쪽",
+      "benefit": {
+        "type": "CASH",
+        "monthlyAmount": 200000,
+        "months": 12,
+        "oneTimeAmount": null,
+        "maximum": true,
+        "evidence": "월 임차료 지원(최대 20만원/서울시 12개월, 국토부 24개월)"
+      }
+    },
+    {
+      "source": "YOUTH_CENTER",
+      "externalId": "20261030005400214649",
+      "name": "청년월세 지원",
+      "reason": "월 정액 월세 현금 지원인데 AI 추출이 SERVICE로 분류 (경기)",
+      "benefit": {
+        "type": "CASH",
+        "monthlyAmount": 200000,
+        "months": 24,
+        "oneTimeAmount": null,
+        "maximum": true,
+        "evidence": "실제 납부하는 월세 최대 20만원까지 지원(※생애 1회, 최대 24개월)"
+      }
+    },
+    {
+      "source": "YOUTH_CENTER",
+      "externalId": "20260409005400212654",
+      "name": "청년 월세 지원",
+      "reason": "월 정액 임차료 현금 지원인데 AI 추출이 SERVICE로 분류 (울산)",
+      "benefit": {
+        "type": "CASH",
+        "monthlyAmount": 200000,
+        "months": 24,
+        "oneTimeAmount": null,
+        "maximum": true,
+        "evidence": "임차료 월 최대 20만원씩 최대 24개월간 지원(실비지급)"
+      }
+    },
+    {
+      "source": "YOUTH_CENTER",
+      "externalId": "20260506005400213155",
+      "name": "(옹진군) 인천시 청년월세 지원사업",
+      "reason": "월 정액 월세 현금 지원인데 AI 추출이 SERVICE로 분류 (인천 옹진군)",
+      "benefit": {
+        "type": "CASH",
+        "monthlyAmount": 200000,
+        "months": 12,
+        "oneTimeAmount": null,
+        "maximum": true,
+        "evidence": "지원금액 : 1인 월 20만원씩, 최대 12개월(회) 월세 지원"
+      }
+    },
+    {
+      "source": "YOUTH_CENTER",
+      "externalId": "20260710005400113256",
+      "name": "국민취업지원제도",
+      "reason": "구직촉진수당이 월 정액 현금인데 AI 추출이 UNKNOWN으로 분류. 원문 범위(월 60~100만원)의 최소 금액이라 최대 기준 아님",
+      "benefit": {
+        "type": "CASH",
+        "monthlyAmount": 600000,
+        "months": 6,
+        "oneTimeAmount": null,
+        "maximum": false,
+        "evidence": "구직촉진수당 : 취업활동계획에 따른 구직활동 이행시 월 60~100만원*, 6개월 지원"
+      }
+    },
+    {
+      "source": "YOUTH_CENTER",
+      "externalId": "20260421005400212823",
+      "name": "국민취업지원제도",
+      "reason": "같은 제도의 제주 등록본. 구직촉진수당 원문 범위(월 60~100만원)의 최소 금액",
+      "benefit": {
+        "type": "CASH",
+        "monthlyAmount": 600000,
+        "months": 6,
+        "oneTimeAmount": null,
+        "maximum": false,
+        "evidence": "취업활동계획에 따른 구직활동 이행시 월 60~100만원*, 6개월 지원"
       }
     }
   ]

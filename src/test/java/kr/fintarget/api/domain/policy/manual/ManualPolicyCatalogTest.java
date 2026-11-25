@@ -93,4 +93,55 @@ class ManualPolicyCatalogTest {
         return new ManualPolicy(externalId, name, "FINANCE_WELFARE", region, 19, 34, "설명", "지원 내용", null, null, null,
                 "상시", null, null, null, null, benefit);
     }
+
+    // ===== 동기화 정책 혜택 보정 (#245) =====
+
+    private static Policy youthCenter(String externalId, String name) {
+        return Policy.create(name, "설명", null, null, null, null, PolicyType.HOUSING, null, externalId, "YOUTH_CENTER");
+    }
+
+    @Test
+    void 혜택_보정_대상은_출처_외부ID_정책명이_모두_같을_때만_리소스_값으로_덮는다() {
+        assertThat(catalog.benefitOverrides()).extracting(ManualPolicyCatalog.BenefitOverride::externalId).containsExactly(
+                "20261021005400214208", "20261030005400214649", "20260409005400212654", "20260506005400213155",
+                "20260710005400113256", "20260421005400212823");
+        PolicyBenefit aiResult = PolicyBenefit.builder().type(BenefitType.SERVICE).evidence("AI").promptVersion("v1")
+                .sourceHash("hash").build();
+
+        PolicyBenefit seoulRent = catalog.applyBenefit(youthCenter("20261021005400214208", "2026 청년 월세 지원"), aiResult);
+        assertThat(seoulRent.getType()).isEqualTo(BenefitType.CASH);
+        assertThat(seoulRent.getMonthlyAmount()).isEqualTo(200_000L);
+        assertThat(seoulRent.getBenefitMonths()).isEqualTo(12);
+        assertThat(seoulRent.getMaximum()).isTrue();
+        assertThat(seoulRent.getSourceHash()).isEqualTo("hash");
+
+        PolicyBenefit jobSeeker = catalog.applyBenefit(youthCenter("20260710005400113256", "국민취업지원제도"), aiResult);
+        assertThat(jobSeeker.getMonthlyAmount()).isEqualTo(600_000L);
+        assertThat(jobSeeker.getBenefitMonths()).isEqualTo(6);
+        assertThat(jobSeeker.getMaximum()).isFalse();
+
+        // 정책명이 다르면(외부 ID 재사용 등) 덮지 않는다
+        assertThat(catalog.applyBenefit(youthCenter("20261021005400214208", "다른 정책"), aiResult)).isSameAs(aiResult);
+        // 출처가 다르면 덮지 않는다
+        Policy kinfa = Policy.create("2026 청년 월세 지원", "설명", null, null, null, null, PolicyType.HOUSING, null,
+                "20261021005400214208", "KINFA");
+        assertThat(catalog.applyBenefit(kinfa, aiResult)).isSameAs(aiResult);
+        // 대상이 아닌 정책은 그대로
+        assertThat(catalog.applyBenefit(youthCenter("OTHER", "청년 월세 지원"), aiResult)).isSameAs(aiResult);
+    }
+
+    @Test
+    void 혜택_보정_항목이_잘못되면_기동_시_막는다() {
+        ManualBenefit cash = new ManualBenefit("CASH", 200_000L, 12, null, true, "근거");
+        assertThatThrownBy(() -> new ManualPolicyCatalog(List.of(), List.of(
+                new ManualPolicyCatalog.BenefitOverride("MANUAL", "X", "이름", "이유", cash))))
+                .isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> new ManualPolicyCatalog(List.of(), List.of(
+                new ManualPolicyCatalog.BenefitOverride("YOUTH_CENTER", "X", "이름", "이유", cash),
+                new ManualPolicyCatalog.BenefitOverride("YOUTH_CENTER", "X", "이름2", "이유", cash))))
+                .isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> new ManualPolicyCatalog(List.of(), List.of(
+                new ManualPolicyCatalog.BenefitOverride("YOUTH_CENTER", "X", "이름", "이유", null))))
+                .isInstanceOf(IllegalStateException.class);
+    }
 }

@@ -205,6 +205,76 @@ class ManualPolicySyncServiceIntegrationTest {
         verify(policyChunkEmbeddingService).refreshPending();
     }
 
+    // ===== 동기화 정책 혜택 보정 (#245) =====
+
+    private Policy saveYouthCenter(String externalId, String name, String supportContent) {
+        return policyRepository.save(Policy.create(name, "설명", 19, 39, null, null, PolicyType.HOUSING, "SEOUL", externalId,
+                "YOUTH_CENTER", PolicyText.builder().supportContent(supportContent).build()));
+    }
+
+    @Test
+    void 혜택_보정_대상_동기화_정책은_출처는_그대로_두고_혜택만_리소스_값으로_바꾸고_다른_정책은_그대로다() {
+        saveYouthCenter("20261021005400214208", "2026 청년 월세 지원", "월 임차료 지원(최대 20만원/서울시 12개월, 국토부 24개월)");
+        saveYouthCenter("YC-OTHER", "다른 월세 정책", "월 최대 10만원 지원");
+
+        ManualPolicySyncResult result = service.sync();
+
+        Policy rent = policyRepository.findByExternalIdAndSource("20261021005400214208", "YOUTH_CENTER").orElseThrow();
+        assertThat(rent.getSource()).isEqualTo("YOUTH_CENTER");
+        assertThat(rent.getBenefit().getType()).isEqualTo(BenefitType.CASH);
+        assertThat(rent.getBenefit().getMonthlyAmount()).isEqualTo(200_000L);
+        assertThat(rent.getBenefit().getBenefitMonths()).isEqualTo(12);
+        assertThat(rent.hasBenefitForSimulation()).isTrue();
+        Policy other = policyRepository.findByExternalIdAndSource("YC-OTHER", "YOUTH_CENTER").orElseThrow();
+        assertThat(other.getBenefit().getType()).isEqualTo(BenefitType.SERVICE);
+
+        assertThat(result.benefitOverrides()).hasSize(6);
+        assertThat(result.benefitOverrides()).filteredOn(o -> o.externalId().equals("20261021005400214208"))
+                .singleElement().satisfies(o -> {
+                    assertThat(o.found()).isTrue();
+                    assertThat(o.nameMatches()).isTrue();
+                    assertThat(o.simulationReflected()).isTrue();
+                });
+        // 이 환경에 없는 외부 ID는 적용하지 않았다고 알린다
+        assertThat(result.benefitOverrides()).filteredOn(o -> o.externalId().equals("20260710005400113256"))
+                .singleElement().satisfies(o -> assertThat(o.found()).isFalse());
+    }
+
+    @Test
+    void 동기화로_원문이_바뀌어_혜택을_다시_추출해도_보정_값이_유지된다() {
+        saveYouthCenter("20261021005400214208", "2026 청년 월세 지원", "월 임차료 지원(최대 20만원/서울시 12개월, 국토부 24개월)");
+        service.sync();
+
+        // 03:00 동기화가 원문을 바꿔 원문 해시가 달라짐 → 다음 혜택 추출 대상
+        Policy fetched = Policy.create("2026 청년 월세 지원", "설명", 19, 39, null, null, PolicyType.HOUSING, "SEOUL",
+                "20261021005400214208", "YOUTH_CENTER",
+                PolicyText.builder().supportContent("월 임차료 지원(최대 20만원/서울시 12개월, 국토부 24개월) 수정").build());
+        transactionTemplate.executeWithoutResult(status -> policySyncWriter.apply("YOUTH_CENTER", List.of(fetched)));
+        assertThat(benefitExtractionService.extractPending().targetCount()).isEqualTo(1);
+        benefitExtractionService.extractAll();
+
+        Policy rent = policyRepository.findByExternalIdAndSource("20261021005400214208", "YOUTH_CENTER").orElseThrow();
+        assertThat(rent.getText().getSupportContent()).endsWith("수정");
+        assertThat(rent.getBenefit().getType()).isEqualTo(BenefitType.CASH);
+        assertThat(rent.getBenefit().getMonthlyAmount()).isEqualTo(200_000L);
+    }
+
+    @Test
+    void 정책명이_다르면_혜택_보정을_적용하지_않는다() {
+        saveYouthCenter("20261021005400214208", "이름이 바뀐 정책", "월 10만원");
+
+        ManualPolicySyncResult result = service.sync();
+
+        Policy policy = policyRepository.findByExternalIdAndSource("20261021005400214208", "YOUTH_CENTER").orElseThrow();
+        assertThat(policy.getBenefit().getType()).isEqualTo(BenefitType.SERVICE);
+        assertThat(result.benefitOverrides()).filteredOn(o -> o.externalId().equals("20261021005400214208"))
+                .singleElement().satisfies(o -> {
+                    assertThat(o.found()).isTrue();
+                    assertThat(o.nameMatches()).isFalse();
+                    assertThat(o.simulationReflected()).isFalse();
+                });
+    }
+
     @Autowired
     private PolicyChunkRepository chunkRepository;
 
