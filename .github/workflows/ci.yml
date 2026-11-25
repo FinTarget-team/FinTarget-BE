@@ -29,7 +29,12 @@ jobs:
           distribution: temurin
           java-version: '25'
 
+      # 저장소 기본 브랜치가 main이라 setup-gradle은 기본값으로 dev에서 캐시를 저장하지 않는다.
+      # 그러면 실행마다 의존성을 Maven Central에서 다시 받다가 429(Too Many Requests)로 실패한다 (#250).
+      # dev 푸시에서만 캐시를 저장하고, PR은 dev 캐시를 읽기만 한다
       - uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/dev' }}
 
       - name: 테스트
         run: ./gradlew test --no-daemon
@@ -60,6 +65,7 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           build-root-directory: mock-bank
+          cache-read-only: ${{ github.ref != 'refs/heads/dev' }}
 
       - name: 테스트
         run: ./gradlew test --no-daemon
