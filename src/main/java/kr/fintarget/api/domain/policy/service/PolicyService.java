@@ -15,6 +15,7 @@ import kr.fintarget.api.domain.simulation.repository.SimulationRepository;
 import kr.fintarget.api.domain.user.entity.User;
 import kr.fintarget.api.domain.user.repository.UserRepository;
 import kr.fintarget.api.domain.user.validation.BirthYearValidator;
+import kr.fintarget.api.domain.policy.manual.ManualPolicyPinner;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -31,6 +32,7 @@ public class PolicyService {
     private final UserPolicyRepository userPolicyRepository;
     private final UserRepository userRepository;
     private final PolicyRecommendationSelector recommendationSelector;
+    private final ManualPolicyPinner manualPolicyPinner;
     private final SimulationRepository simulationRepository;
 
     /**
@@ -44,8 +46,9 @@ public class PolicyService {
         User user = findUser(userId);
         LocalDate today = LocalDate.now(BirthYearValidator.ZONE);
         List<Policy> sorted = sortedCandidatePolicies(user, policyType, today);
+        // 직접 등록 정책 고정 노출(#245)은 유형 필터 없는 추천 목록에만, 최종 결과에 덧입힌다 (리랭킹·캐시는 그대로)
         List<Policy> selected = parsePolicyType(policyType) == null
-                ? recommendationSelector.select(user, sorted, today)
+                ? manualPolicyPinner.pin(user, sorted, recommendationSelector.select(user, sorted, today))
                 : recommendationSelector.selectWithinType(user, sorted, today);
         return selected.stream()
                 .map(PolicyResponse::from)

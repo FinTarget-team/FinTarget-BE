@@ -28,7 +28,7 @@ import java.util.regex.Pattern;
  * 통합 답변 질문을 정책 검색용 짧은 문장으로 바꾼다 (#241). 기본 모델(openai.model.default)을 쓴다.
  * 바꾸는 규칙은 프롬프트 {@link PolicyRagQueryRewritePrompt}에 있다 (구어체·은어를 표준어로, 질문에 없는 조건은 넣지 않음, 관계없는 질문은 빈 출력).
  *
- * <p>요청 경로라 짧게 기다린다(policy.rag.query-rewrite.timeout, 기본 3초). 실패·시간 초과·빈 출력이면 결과로 알리고 예외를 던지지 않는다.
+ * <p>요청 경로라 짧게 기다린다(policy.rag.query-rewrite.timeout, 기본 5초). 실패·시간 초과·빈 출력이면 결과로 알리고 예외를 던지지 않는다.
  * 검색은 원래 질문만으로 진행된다 ({@link kr.fintarget.api.domain.policy.search.PolicySearchService#searchForAnswer(List, String, AnswerQueryRewriter)}).
  */
 @Slf4j
@@ -60,7 +60,7 @@ public class PolicyRagQueryRewriter implements AnswerQueryRewriter {
     public PolicyRagQueryRewriter(AiTextClient aiTextClient, PolicyRagQueryRewritePrompt prompt,
                                   @Value("${policy.rag.query-rewrite.enabled:true}") boolean enabled,
                                   @Value("${policy.rag.query-rewrite.skip-distance:" + DEFAULT_SKIP_DISTANCE + "}") double skipDistance,
-                                  @Value("${policy.rag.query-rewrite.timeout:3s}") Duration timeout,
+                                  @Value("${policy.rag.query-rewrite.timeout:5s}") Duration timeout,
                                   @Value("${policy.rag.query-rewrite.max-output-tokens:" + DEFAULT_MAX_OUTPUT_TOKENS + "}") int maxOutputTokens) {
         this(aiTextClient, prompt, enabled, skipDistance, timeout, maxOutputTokens, Executors.newVirtualThreadPerTaskExecutor());
     }

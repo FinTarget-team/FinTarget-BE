@@ -1,6 +1,8 @@
 package kr.fintarget.api.domain.policy.rag.eval;
 
 import kr.fintarget.api.domain.ai.client.AiTextClient;
+import kr.fintarget.api.domain.policy.manual.ManualPolicyCatalog;
+import kr.fintarget.api.domain.policy.manual.ManualPolicyPinner;
 import kr.fintarget.api.domain.policy.rag.PolicyRagPrompt;
 import kr.fintarget.api.domain.policy.rag.eval.PolicyRagEvalRunner.Prepared;
 import kr.fintarget.api.domain.policy.rag.eval.PolicyRagEvalRunner.Result;
@@ -41,7 +43,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 @Slf4j
 @DataJpaTest
-@Import({PolicyService.class, RuleBasedPolicyRecommendationSelector.class})
+@Import({PolicyService.class, RuleBasedPolicyRecommendationSelector.class, ManualPolicyPinner.class, ManualPolicyCatalog.class})
 @EnabledIfEnvironmentVariable(named = PolicySearchSnapshot.ENV_DIR, matches = ".+")
 @EnabledIfEnvironmentVariable(named = "OPENAI_API_KEY", matches = ".+")
 @EnabledIfEnvironmentVariable(named = "RUN_AI_EVAL", matches = "true")

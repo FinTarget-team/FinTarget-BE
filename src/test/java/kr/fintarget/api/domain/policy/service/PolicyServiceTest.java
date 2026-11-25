@@ -13,6 +13,7 @@ import kr.fintarget.api.domain.policy.entity.PolicyType;
 import kr.fintarget.api.domain.policy.entity.UserPolicy;
 import kr.fintarget.api.domain.policy.recommend.PolicyRecommendationSelector;
 import kr.fintarget.api.domain.policy.recommend.RuleBasedPolicyRecommendationSelector;
+import kr.fintarget.api.domain.policy.manual.ManualPolicyPinner;
 import kr.fintarget.api.domain.policy.repository.PolicyRepository;
 import kr.fintarget.api.domain.policy.repository.UserPolicyRepository;
 import kr.fintarget.api.domain.user.entity.User;
@@ -58,6 +59,10 @@ class PolicyServiceTest {
     // 상위 N 선택(#225)은 실제 규칙 구현을 쓴다 (기본 10건, 제외 키워드 없음)
     @Spy
     private PolicyRecommendationSelector recommendationSelector = new RuleBasedPolicyRecommendationSelector(10, List.of());
+
+    // 직접 등록 정책 고정 노출(#245)은 ManualPolicyPinnerTest에서 검증한다. 여기서는 끈 상태로 기존 동작만 본다
+    @Spy
+    private ManualPolicyPinner manualPolicyPinner = ManualPolicyPinner.disabled();
 
     @Mock
     private SimulationRepository simulationRepository;

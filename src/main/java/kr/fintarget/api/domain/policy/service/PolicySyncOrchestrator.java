@@ -1,5 +1,6 @@
 package kr.fintarget.api.domain.policy.service;
 
+import kr.fintarget.api.domain.policy.manual.ManualPolicyTextCorrector;
 import kr.fintarget.api.domain.policy.benefit.BenefitExtractionInProgressException;
 import kr.fintarget.api.domain.policy.benefit.PolicyBenefitExtractionService;
 import kr.fintarget.api.domain.policy.condition.ConditionExtractionInProgressException;
@@ -20,7 +21,7 @@ import java.util.function.IntSupplier;
  * 온통청년/KINFA 정책 동기화를 순차 실행한다. 스케줄러와 수동 트리거 API가 공유한다.
  * 한쪽 API 장애가 다른 쪽 동기화를 막지 않도록 각각 격리해서 실행한다.
  * 같은 정책을 중복 저장하지 않도록 동시에 하나의 동기화만 실행하며, 실행 중 요청은 PolicySyncInProgressException으로 거절한다.
- * 동기화 후 검색용 청크 갱신(#180), 혜택 추출(#162), 조건 추출(#220), 추천 리랭킹 미리 계산 예약(#229), 청크 임베딩(#181)을 차례로 실행한다.
+ * 동기화 후 리소스 원문 보정 재적용(#245), 검색용 청크 갱신(#180), 혜택 추출(#162), 조건 추출(#220), 추천 리랭킹 미리 계산 예약(#229), 청크 임베딩(#181)을 차례로 실행한다.
  * 청크 백필과 임베딩 백필(관리자 API)도 같은 잠금을 써서, 동기화가 지우는 정책의 청크를 다시 만들거나
  * 지워지는 청크를 임베딩하는 경합을 막는다.
  */
@@ -36,6 +37,7 @@ public class PolicySyncOrchestrator {
     private final PolicyChunkService policyChunkService;
     private final PolicyChunkEmbeddingService policyChunkEmbeddingService;
     private final PolicyRerankPrecomputer policyRerankPrecomputer;
+    private final ManualPolicyTextCorrector manualPolicyTextCorrector;
     private final AtomicBoolean running = new AtomicBoolean(false);
 
     public PolicySyncResult syncAll() {
@@ -44,6 +46,7 @@ public class PolicySyncOrchestrator {
         }
         try {
             PolicySyncResult result = doSyncAll();
+            correctTexts();
             refreshChunks();
             extractBenefits();
             extractConditions();
@@ -84,6 +87,16 @@ public class PolicySyncOrchestrator {
             return all ? policyChunkEmbeddingService.refreshAll() : policyChunkEmbeddingService.refreshPending();
         } finally {
             running.set(false);
+        }
+    }
+
+    // 동기화가 소스 값으로 되돌린 원문에 리소스 원문 보정을 다시 적용한다 (#245). 청크·추출보다 먼저 해야
+    // 보정한 원문 기준 해시가 유지돼 매일 다시 추출하지 않는다. 부가 작업이라 실패해도 동기화 결과에 영향을 주지 않는다
+    private void correctTexts() {
+        try {
+            manualPolicyTextCorrector.apply();
+        } catch (Exception e) {
+            log.error("동기화 후 정책 원문 보정 실패", e);
         }
     }
 

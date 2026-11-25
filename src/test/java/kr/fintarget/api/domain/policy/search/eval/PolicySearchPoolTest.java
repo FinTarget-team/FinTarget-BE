@@ -1,5 +1,7 @@
 package kr.fintarget.api.domain.policy.search.eval;
 
+import kr.fintarget.api.domain.policy.manual.ManualPolicyCatalog;
+import kr.fintarget.api.domain.policy.manual.ManualPolicyPinner;
 import kr.fintarget.api.domain.policy.repository.PolicyRepository;
 import kr.fintarget.api.domain.policy.search.eval.PolicySearchEvalSet.CaseType;
 import kr.fintarget.api.domain.policy.search.eval.PolicySearchEvalSet.Profile;
@@ -31,7 +33,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * <p>서울 25세 후보: 월세(R-1), 전세 대출(KINFA). 부산 이사비(R-2)는 후보가 아니다.
  */
 @DataJpaTest
-@Import({PolicyService.class, RuleBasedPolicyRecommendationSelector.class})
+@Import({PolicyService.class, RuleBasedPolicyRecommendationSelector.class, ManualPolicyPinner.class, ManualPolicyCatalog.class})
 class PolicySearchPoolTest {
 
     private static final PolicyKey SEOUL_RENT = new PolicyKey("YOUTH_CENTER", "R-1");

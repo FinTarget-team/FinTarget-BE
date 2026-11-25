@@ -1,5 +1,7 @@
 package kr.fintarget.api.domain.policy.search.eval;
 
+import kr.fintarget.api.domain.policy.manual.ManualPolicyCatalog;
+import kr.fintarget.api.domain.policy.manual.ManualPolicyPinner;
 import kr.fintarget.api.domain.policy.repository.PolicyRepository;
 import kr.fintarget.api.domain.policy.search.eval.PolicySearchEvalSet.CaseType;
 import kr.fintarget.api.domain.policy.search.eval.PolicySearchEvalSet.Profile;
@@ -35,7 +37,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * 청크를 k×5개만 조회하면 50건을 채우지 못한다.
  */
 @DataJpaTest
-@Import({PolicyService.class, RuleBasedPolicyRecommendationSelector.class})
+@Import({PolicyService.class, RuleBasedPolicyRecommendationSelector.class, ManualPolicyPinner.class, ManualPolicyCatalog.class})
 class PolicySearchPoolVectorTopTest {
 
     private static final int CHUNKS_PER_POLICY = 6;

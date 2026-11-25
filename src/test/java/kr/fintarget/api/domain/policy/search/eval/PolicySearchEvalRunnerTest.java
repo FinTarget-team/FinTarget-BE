@@ -2,6 +2,8 @@ package kr.fintarget.api.domain.policy.search.eval;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import kr.fintarget.api.domain.policy.manual.ManualPolicyCatalog;
+import kr.fintarget.api.domain.policy.manual.ManualPolicyPinner;
 import kr.fintarget.api.domain.policy.repository.PolicyRepository;
 import kr.fintarget.api.domain.policy.search.LoanIntent;
 import kr.fintarget.api.domain.policy.search.eval.PolicySearchEvalRunner.ConfigResult;
@@ -36,7 +38,7 @@ import static org.assertj.core.api.Assertions.within;
  * <p>서울 25세 후보: 월세(R-1, 청크 [1,0,0]·[0.8,0.6,0]), 전세 대출(KINFA, [0,1,0]). 부산 이사비(R-2)는 지역으로 빠진다.
  */
 @DataJpaTest
-@Import({PolicyService.class, RuleBasedPolicyRecommendationSelector.class})
+@Import({PolicyService.class, RuleBasedPolicyRecommendationSelector.class, ManualPolicyPinner.class, ManualPolicyCatalog.class})
 class PolicySearchEvalRunnerTest {
 
     private static final PolicyKey SEOUL_RENT = new PolicyKey("YOUTH_CENTER", "R-1");

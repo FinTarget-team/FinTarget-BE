@@ -220,6 +220,14 @@ public class Policy {
      * 재동기화마다 추출 결과가 사라진다. 혜택 갱신은 updateBenefit으로만 한다 (#163).
      * 신청 조건(condition)도 같은 이유로 덮지 않는다. 조건 갱신은 updateCondition으로만 한다 (#220)
      */
+    /**
+     * 리소스의 원문 보정 값으로 원문을 바꾼다 (#245, 온통청년 신청 기간이 실제 접수 기간과 다른 정책 등).
+     * 동기화(updateFrom)가 원문을 소스 값으로 되돌리므로, 동기화 뒤마다 다시 적용한다 (ManualPolicyTextCorrector)
+     */
+    public void correctText(PolicyText corrected) {
+        this.text = corrected;
+    }
+
     public void updateFrom(Policy fetched) {
         this.name = fetched.name;
         this.description = fetched.description;
