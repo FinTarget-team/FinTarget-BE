@@ -1,6 +1,35 @@
 {
-  "description": "공공 API(온통청년, KINFA)로 수집되지 않는 정책을 직접 등록한다 (#245). POST /api/admin/policy/manual/sync가 externalId로 upsert하고, benefit 값은 AI 혜택 추출 결과보다 우선한다. 내용은 sources에 적은 공식 출처와 보도 범위 안에서만 쓴다. benefitOverrides는 동기화 정책(온통청년 등) 중 혜택 분류가 틀린 정책의 시뮬레이션 혜택 값만 출처·외부 정책 ID로 지정해 덮는다 (정책명이 같을 때만).",
+  "description": "공공 API(온통청년, KINFA)로 수집되지 않는 정책을 직접 등록한다 (#245). POST /api/admin/policy/manual/sync가 externalId로 upsert하고, benefit 값은 AI 혜택 추출 결과보다 우선한다. 내용은 sources에 적은 공식 출처와 보도 범위 안에서만 쓴다. benefitOverrides는 동기화 정책(온통청년 등) 중 혜택 분류가 틀린 정책의 시뮬레이션 혜택 값만 출처·외부 정책 ID로 지정해 덮는다 (정책명이 같을 때만). policies의 순서는 추천 목록 고정 노출 순서이고, recommendFor는 고정 노출할 직업 유형(EmploymentType)이다.",
   "policies": [
+    {
+      "externalId": "MANUAL-NATIONAL-SCHOLARSHIP-1-2026",
+      "name": "2026 국가장학금 I유형",
+      "policyType": "FINANCE_WELFARE",
+      "region": null,
+      "minAge": null,
+      "maxAge": null,
+      "description": "학자금 지원구간에 따라 대학생 등록금을 연간 정해진 금액까지 지원하는 국가장학금",
+      "supportContent": "학자금 지원구간에 따라 연간 지원합니다. 기초·차상위 대학생은 등록금 전액, 1~3구간 600만원, 4~6구간 440만원, 7~8구간 360만원, 9구간 100만원입니다.",
+      "eligibilityDetail": "국내 대학 재학생 중 학자금 지원구간 9구간 이하인 대학생.",
+      "incomeCondition": "학자금 지원구간 9구간 이하 (구간은 한국장학재단이 가구 소득·재산으로 산정).",
+      "applyMethod": "학기마다 한국장학재단 누리집(kosaf.go.kr) 또는 앱에서 신청",
+      "applyPeriod": "학기마다 한국장학재단 누리집·앱에서 신청",
+      "applyUrl": "https://www.kosaf.go.kr",
+      "referenceUrl": "https://www.nocutnews.co.kr/news/6431466",
+      "contactInfo": "한국장학재단 1599-2000",
+      "etcNote": "주관: 교육부·한국장학재단.",
+      "recommendFor": [
+        "STUDENT"
+      ],
+      "benefit": {
+        "type": "CASH",
+        "monthlyAmount": null,
+        "months": null,
+        "oneTimeAmount": 1000000,
+        "maximum": false,
+        "evidence": "기초·차상위 대학생은 등록금 전액, 1~3구간 600만원, 4~6구간 440만원, 7~8구간 360만원, 9구간 100만원입니다."
+      }
+    },
     {
       "externalId": "MANUAL-HOPE-DOUBLE-2026",
       "name": "2026 희망두배 청년통장",
@@ -18,6 +47,10 @@
       "referenceUrl": "https://news.seoul.go.kr/welfare/archives/48102",
       "contactInfo": "서울시 복지정책과 02-2133-7753",
       "etcNote": "주관: 서울시. 2026년 모집은 종료되었습니다.",
+      "recommendFor": [
+        "STUDENT",
+        "EMPLOYED"
+      ],
       "benefit": {
         "type": "CASH",
         "monthlyAmount": 150000,
@@ -42,6 +75,11 @@
       "applyPeriod": "1차 2026.6.22 ~ 2026.7.3 (종료), 매년 6월·12월 신규 모집 예정",
       "referenceUrl": "https://news.mtn.co.kr/news-detail/2026042214513425181",
       "etcNote": "주관: 금융위원회. 참고: https://www.hankyung.com/article/2026031888571",
+      "recommendFor": [
+        "STUDENT",
+        "EMPLOYED",
+        "UNEMPLOYED"
+      ],
       "benefit": {
         "type": "CASH",
         "monthlyAmount": 30000,
@@ -49,32 +87,6 @@
         "oneTimeAmount": null,
         "maximum": true,
         "evidence": "월 최대 50만원까지 납입할 수 있습니다. 정부기여금은 일반형 납입액의 6%"
-      }
-    },
-    {
-      "externalId": "MANUAL-NATIONAL-SCHOLARSHIP-1-2026",
-      "name": "2026 국가장학금 I유형",
-      "policyType": "FINANCE_WELFARE",
-      "region": null,
-      "minAge": null,
-      "maxAge": null,
-      "description": "학자금 지원구간에 따라 대학생 등록금을 연간 정해진 금액까지 지원하는 국가장학금",
-      "supportContent": "학자금 지원구간에 따라 연간 지원합니다. 기초·차상위 대학생은 등록금 전액, 1~3구간 600만원, 4~6구간 440만원, 7~8구간 360만원, 9구간 100만원입니다.",
-      "eligibilityDetail": "국내 대학 재학생 중 학자금 지원구간 9구간 이하인 대학생.",
-      "incomeCondition": "학자금 지원구간 9구간 이하 (구간은 한국장학재단이 가구 소득·재산으로 산정).",
-      "applyMethod": "학기마다 한국장학재단 누리집(kosaf.go.kr) 또는 앱에서 신청",
-      "applyPeriod": "학기마다 한국장학재단 누리집·앱에서 신청",
-      "applyUrl": "https://www.kosaf.go.kr",
-      "referenceUrl": "https://www.nocutnews.co.kr/news/6431466",
-      "contactInfo": "한국장학재단 1599-2000",
-      "etcNote": "주관: 교육부·한국장학재단.",
-      "benefit": {
-        "type": "CASH",
-        "monthlyAmount": null,
-        "months": null,
-        "oneTimeAmount": 1000000,
-        "maximum": false,
-        "evidence": "기초·차상위 대학생은 등록금 전액, 1~3구간 600만원, 4~6구간 440만원, 7~8구간 360만원, 9구간 100만원입니다."
       }
     },
     {
@@ -94,6 +106,9 @@
       "referenceUrl": "https://mediahub.seoul.go.kr/archives/2017342",
       "contactInfo": "청년수당 콜센터 1566-3344",
       "etcNote": "주관: 서울시. 2026년 모집은 모두 종료되었습니다. 참고: https://news.seoul.go.kr/gov/archives/578136",
+      "recommendFor": [
+        "UNEMPLOYED"
+      ],
       "benefit": {
         "type": "CASH",
         "monthlyAmount": 500000,

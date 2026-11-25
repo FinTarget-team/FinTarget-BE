@@ -7,6 +7,7 @@ import kr.fintarget.api.domain.policy.entity.Policy;
 import kr.fintarget.api.domain.policy.entity.PolicyBenefit;
 import kr.fintarget.api.domain.policy.entity.PolicyText;
 import kr.fintarget.api.domain.policy.entity.PolicyType;
+import kr.fintarget.api.domain.user.code.EmploymentType;
 import kr.fintarget.api.domain.user.code.Region;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.io.ClassPathResource;
@@ -28,6 +29,9 @@ import java.util.Set;
  * <p>출처(source)를 {@link #SOURCE}로 저장해, 온통청년·KINFA 동기화의 삭제·갱신 대상(같은 출처만)에서 빠진다
  * ({@link kr.fintarget.api.domain.policy.service.PolicySyncWriter}).
  * 시뮬레이션 혜택 값(benefit)은 AI 혜택 추출보다 리소스 값을 우선한다 ({@link #applyBenefit}).
+ *
+ * <p>policies의 순서는 추천 목록 고정 노출 순서다. recommendFor에 사용자의 직업 유형이 있으면 맨 앞에 고정 노출한다
+ * ({@link ManualPolicyPinner}).
  *
  * <p>혜택 보정(benefitOverrides): 온통청년처럼 동기화되는 정책 중 혜택 분류가 틀린 정책은 출처와 외부 정책 ID로 지정해
  * 시뮬레이션 혜택 값만 리소스 값으로 덮는다. 정책 원문·조건은 동기화 결과를 그대로 쓴다.
@@ -177,7 +181,16 @@ public class ManualPolicyCatalog {
     public record ManualPolicy(String externalId, String name, String policyType, String region, Integer minAge, Integer maxAge,
                                String description, String supportContent, String eligibilityDetail, String incomeCondition,
                                String applyMethod, String applyPeriod, String applyUrl, String referenceUrl, String contactInfo,
-                               String etcNote, ManualBenefit benefit) {
+                               String etcNote, List<String> recommendFor, ManualBenefit benefit) {
+
+        public ManualPolicy {
+            recommendFor = recommendFor == null ? List.of() : List.copyOf(recommendFor);
+        }
+
+        /** 이 직업 유형 사용자의 추천 목록에 고정 노출하는지 (#245) */
+        public boolean recommendedFor(EmploymentType employmentType) {
+            return employmentType != null && recommendFor.contains(employmentType.name());
+        }
 
         void validate() {
             if (externalId == null || !externalId.startsWith("MANUAL-")) {
@@ -194,6 +207,11 @@ public class ManualPolicyCatalog {
                 throw new IllegalStateException("직접 등록 정책 시뮬레이션 혜택 값이 없습니다: " + externalId);
             }
             benefit.validate(externalId);
+            for (String type : recommendFor) {
+                if (EmploymentType.fromCode(type) == null) {
+                    throw new IllegalStateException("직접 등록 정책 recommendFor 값이 직업 유형이 아닙니다: " + externalId + " " + type);
+                }
+            }
         }
 
         public Policy toPolicy() {

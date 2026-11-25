@@ -23,9 +23,10 @@ class ManualPolicyCatalogTest {
 
     @Test
     void 리소스의_4개_정책은_MANUAL_출처로_만들어지고_원문_칸이_채워진다() {
+        // 순서는 추천 목록 고정 노출 순서
         assertThat(catalog.policies()).extracting(ManualPolicy::externalId).containsExactly(
-                "MANUAL-HOPE-DOUBLE-2026", "MANUAL-YOUTH-FUTURE-SAVINGS-2026",
-                "MANUAL-NATIONAL-SCHOLARSHIP-1-2026", "MANUAL-SEOUL-YOUTH-ALLOWANCE-2026");
+                "MANUAL-NATIONAL-SCHOLARSHIP-1-2026", "MANUAL-HOPE-DOUBLE-2026",
+                "MANUAL-YOUTH-FUTURE-SAVINGS-2026", "MANUAL-SEOUL-YOUTH-ALLOWANCE-2026");
 
         for (ManualPolicy manual : catalog.policies()) {
             Policy policy = manual.toPolicy();
@@ -55,7 +56,8 @@ class ManualPolicyCatalogTest {
         LocalDateTime at = LocalDateTime.of(2026, 11, 25, 12, 0);
         PolicyBenefit aiResult = PolicyBenefit.builder().type(BenefitType.SERVICE).evidence("AI").promptVersion("v1")
                 .sourceHash("hash").extractedAt(at).build();
-        Policy manual = catalog.policies().getFirst().toPolicy();
+        Policy manual = catalog.policies().stream().filter(p -> p.externalId().equals("MANUAL-HOPE-DOUBLE-2026"))
+                .findFirst().orElseThrow().toPolicy();
         Policy youth = Policy.create("2026 희망두배 청년통장", "설명", null, null, null, null, PolicyType.ETC, null,
                 "MANUAL-HOPE-DOUBLE-2026", "YOUTH_CENTER");
 
@@ -91,7 +93,7 @@ class ManualPolicyCatalogTest {
 
     private static ManualPolicy policy(String externalId, String name, String region, ManualBenefit benefit) {
         return new ManualPolicy(externalId, name, "FINANCE_WELFARE", region, 19, 34, "설명", "지원 내용", null, null, null,
-                "상시", null, null, null, null, benefit);
+                "상시", null, null, null, null, List.of(), benefit);
     }
 
     // ===== 동기화 정책 혜택 보정 (#245) =====

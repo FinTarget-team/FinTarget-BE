@@ -72,6 +72,9 @@ policy:
   # 맞춤 정책 목록 (#225, #229). 값을 빼면 코드 기본값을 쓴다
   recommend:
     limit: 10              # 목록 건수 N
+    # 직접 등록 정책(#245)을 직업 유형별로 목록 맨 앞에 고정 노출 (policy/manual-policies.json의 recommendFor). false면 기존 결과 그대로
+    manual-pin:
+      enabled: ${POLICY_RECOMMEND_MANUAL_PIN_ENABLED:true}
     rerank:
       # LLM 리랭킹: 규칙 후보(최대 candidate-limit건) 중 상위 모델(openai.model.premium)이 최종 N건을 고른다. 실패·시간 초과면 규칙 상위 N
       # false면 LLM을 호출하지 않는다. 서버에서는 .env의 POLICY_RECOMMEND_RERANK_ENABLED로 바꾸고, 재시작 없이 끄려면 관리자 API(PUT /api/admin/policy/recommend/rerank/enabled)
