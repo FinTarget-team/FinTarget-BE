@@ -9,12 +9,19 @@ import kr.fintarget.api.domain.auth.KakaoOAuthException;
 import kr.fintarget.api.domain.auth.NaverOAuthException;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.context.request.async.AsyncRequestNotUsableException;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 class GlobalExceptionHandlerTest {
 
     private final GlobalExceptionHandler handler = new GlobalExceptionHandler();
+
+    @Test
+    void 클라이언트_연결_종료는_응답을_쓰지_않고_처리된다() {
+        // void 핸들러라 응답 본문을 쓰지 않는다. 예외 없이 끝나면 처리 완료다 (#246)
+        handler.handleClientDisconnected(new AsyncRequestNotUsableException("ServletResponse failed to flushBuffer"));
+    }
 
     @Test
     void AiChatNotFoundException은_404로_변환된다() {

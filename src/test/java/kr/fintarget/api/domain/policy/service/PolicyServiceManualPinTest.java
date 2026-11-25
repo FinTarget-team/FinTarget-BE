@@ -9,6 +9,7 @@ import kr.fintarget.api.domain.policy.manual.ManualPolicyPinner;
 import kr.fintarget.api.domain.policy.recommend.PolicyRecommendationSelector;
 import kr.fintarget.api.domain.policy.repository.PolicyRepository;
 import kr.fintarget.api.domain.policy.repository.UserPolicyRepository;
+import kr.fintarget.api.domain.simulation.repository.SimulationRepository;
 import kr.fintarget.api.domain.user.code.SocialProvider;
 import kr.fintarget.api.domain.user.entity.User;
 import kr.fintarget.api.domain.user.repository.UserRepository;
@@ -46,7 +47,7 @@ class PolicyServiceManualPinTest {
 
     private PolicyService service(boolean pinEnabled) {
         return new PolicyService(policyRepository, mock(UserPolicyRepository.class), userRepository, selector,
-                new ManualPolicyPinner(catalog, pinEnabled, 10));
+                new ManualPolicyPinner(catalog, pinEnabled, 10), mock(SimulationRepository.class));
     }
 
     private List<Policy> setUp(String employment) {

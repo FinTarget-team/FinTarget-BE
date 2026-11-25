@@ -15,6 +15,7 @@ import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.context.request.async.AsyncRequestNotUsableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
@@ -104,6 +105,15 @@ public class GlobalExceptionHandler {
         log.error("처리되지 않은 예외", e);
         return ResponseEntity.status(500).body(ApiResponse.error(500, INTERNAL_ERROR_MESSAGE));
     }
+    /**
+     * 클라이언트가 먼저 연결을 끊은 경우 (#246). 앱이 백그라운드로 가거나 화면을 나가 SSE 연결이 닫힐 때 생기는 정상 상황이다.
+     * 끊긴 연결에는 응답을 쓸 수 없으므로 아무것도 쓰지 않고, 오류로 기록하지 않는다.
+     */
+    @ExceptionHandler(AsyncRequestNotUsableException.class)
+    public void handleClientDisconnected(AsyncRequestNotUsableException e) {
+        log.debug("클라이언트 연결 종료: {}", e.getMessage());
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<?>> handleException(Exception e) {
         log.error("처리되지 않은 예외", e);
