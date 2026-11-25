@@ -267,7 +267,8 @@
       "rule": "FIXED_RENT",
       "rent": 150000,
       "userRegions": [
-        "SEOUL"
+        "SEOUL",
+        "GYEONGGI"
       ],
       "sourceUrl": "정책 원문(온통청년) 지원 내용: 기숙사비 월 15만원(보증금 15만원)"
     },
@@ -278,7 +279,8 @@
       "rule": "RENT_RATIO",
       "ratio": 0.5,
       "userRegions": [
-        "SEOUL"
+        "SEOUL",
+        "GYEONGGI"
       ],
       "sourceUrl": "https://www.korea.kr/news/policyNewsView.do?newsId=148893980"
     },
@@ -317,7 +319,8 @@
         }
       ],
       "userRegions": [
-        "SEOUL"
+        "SEOUL",
+        "GYEONGGI"
       ],
       "sourceUrl": "https://medigatenews.com/stand/36884"
     },
@@ -345,7 +348,8 @@
         }
       ],
       "userRegions": [
-        "SEOUL"
+        "SEOUL",
+        "GYEONGGI"
       ],
       "sourceUrl": "https://medigatenews.com/stand/36884"
     }

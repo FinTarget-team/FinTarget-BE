@@ -1,6 +1,7 @@
 package kr.fintarget.api.domain.simulation.estimate;
 
 import kr.fintarget.api.domain.policy.recommend.LlmPolicyRecommendationSelector;
+import kr.fintarget.api.domain.user.code.Region;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -29,9 +30,13 @@ class SavingEstimateDefaultsTest {
     }
 
     @Test
-    void 기준_월세_기본값은_62만원이다() {
-        assertThat(estimator.baseRent()).isEqualTo(620_000L);
-        assertThat(SimulationSavingEstimator.DEFAULT_BASE_RENT).isEqualTo(620_000L);
+    void 지역별_기준_월세_기본값은_서울_62만원_경기_45만원이다() {
+        assertThat(estimator.baseRent(Region.SEOUL)).isEqualTo(620_000L);
+        assertThat(estimator.baseRent(Region.GYEONGGI)).isEqualTo(450_000L);
+        // 기준값이 없는 지역은 추정하지 않는다
+        assertThat(estimator.baseRent(Region.BUSAN)).isNull();
+        assertThat(SimulationSavingEstimator.DEFAULT_SEOUL_BASE_RENT).isEqualTo(620_000L);
+        assertThat(SimulationSavingEstimator.DEFAULT_GYEONGGI_BASE_RENT).isEqualTo(450_000L);
     }
 
     @Test

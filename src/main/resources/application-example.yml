@@ -93,5 +93,10 @@ simulation:
     # false면 추천 목록·스크랩 응답의 simulationBenefit에는 넣지 않고 시뮬레이션 실행에서만 반영한다.
     # 앱은 이 값이 있어야 정책 상세에 "목표 달성일 확인하기" 버튼을 보여 주므로 기본은 true
     expose-in-policy-responses: ${SIMULATION_SAVING_ESTIMATE_EXPOSE_IN_POLICY_RESPONSES:true}
-    # 기준 월세(원). 다방, 서울 주요 10개 대학 인근 원룸(보증금 1000만원·전용 33㎡ 이하) 평균 62.2만원 (2026-01 기준)
-    base-rent: ${SIMULATION_SAVING_ESTIMATE_BASE_RENT:620000}
+    # 지역별 기준 월세(원). 기준값이 있는 지역(서울·경기)의 사용자에게만 추정한다
+    base-rent:
+      # 다방, 서울 주요 10개 대학 인근 원룸(보증금 1000만원·전용 33㎡ 이하) 평균 62.2만원 (2026-01). 공식 발표
+      SEOUL: ${SIMULATION_SAVING_ESTIMATE_BASE_RENT_SEOUL:620000}
+      # 공식 발표에 경기 원룸 평균 월세가 없어 민간 집계(국토교통부 전월세 실거래 중앙값, 전용 33㎡ 이하, 보증금 500만원,
+      # 계약일 2025-12~2026-11) 45만원을 쓴다. 공식 통계가 아니라서 basis 문구에 "민간 집계 추정치"임을 밝힌다
+      GYEONGGI: ${SIMULATION_SAVING_ESTIMATE_BASE_RENT_GYEONGGI:450000}

@@ -32,10 +32,12 @@ class SimulationSavingEstimatorTest {
     private static final String INTEGRATED_2 = "20260922005400113532";
     private static final String INTEGRATED_2_NAME = "청년층 대상 공공임대주택 공급(통합공공임대)";
 
-    private final SimulationSavingEstimator estimator = estimator(SimulationSavingEstimator.DEFAULT_BASE_RENT);
+    private final SimulationSavingEstimator estimator = estimator(SimulationSavingEstimator.DEFAULT_SEOUL_BASE_RENT);
 
-    private static SimulationSavingEstimator estimator(long baseRent) {
-        return new SimulationSavingEstimator(new ManualPolicyCatalog(), true, true, baseRent);
+    // 서울 기준 월세만 바꿔 본다 (경기는 기본값)
+    private static SimulationSavingEstimator estimator(long seoulBaseRent) {
+        return new SimulationSavingEstimator(new ManualPolicyCatalog(), true, true, seoulBaseRent,
+                SimulationSavingEstimator.DEFAULT_GYEONGGI_BASE_RENT);
     }
 
     private static Policy policy(String externalId, String name) {
@@ -129,16 +131,24 @@ class SimulationSavingEstimatorTest {
     }
 
     @Test
-    void 서울_밖_사용자에게는_추정하지_않는다() {
-        assertThat(estimate(SAFE_HOUSE, SAFE_HOUSE_NAME, user("GYEONGGI", IncomeBracket.UNDER_150))).isEmpty();
-        assertThat(estimate(SAFE_HOUSE, SAFE_HOUSE_NAME, user("BUSAN", IncomeBracket.UNDER_150))).isEmpty();
-        assertThat(estimate(SAFE_HOUSE, SAFE_HOUSE_NAME, user(null, IncomeBracket.UNDER_150))).isEmpty();
+    void 기준_월세가_없는_지역_사용자에게는_추정하지_않는다() {
+        for (String region : new String[]{"BUSAN", "INCHEON", "JEJU", null}) {
+            assertThat(estimate(DORM_YOUTH_HOUSE, DORM_YOUTH_HOUSE_NAME, user(region, IncomeBracket.UNDER_150)))
+                    .as(String.valueOf(region)).isEmpty();
+        }
+    }
+
+    @Test
+    void 청년안심주택은_서울_전용이라_경기_사용자에게는_추정하지_않는다() {
+        assertThat(estimate(SAFE_HOUSE, SAFE_HOUSE_NAME, seoul(IncomeBracket.UNDER_150))).isPresent();
+        assertThat(estimate(SAFE_HOUSE, SAFE_HOUSE_NAME, gyeonggi(IncomeBracket.UNDER_150))).isEmpty();
     }
 
     @Test
     void 설정을_끄면_추정하지_않는다() {
         SimulationSavingEstimator off = new SimulationSavingEstimator(new ManualPolicyCatalog(), false, true,
-                SimulationSavingEstimator.DEFAULT_BASE_RENT);
+                SimulationSavingEstimator.DEFAULT_SEOUL_BASE_RENT,
+                SimulationSavingEstimator.DEFAULT_GYEONGGI_BASE_RENT);
 
         assertThat(off.estimate(policy(SAFE_HOUSE, SAFE_HOUSE_NAME), seoul(IncomeBracket.UNDER_150))).isEmpty();
         assertThat(off.isEnabled()).isFalse();
@@ -148,7 +158,8 @@ class SimulationSavingEstimatorTest {
     @Test
     void 응답_노출만_끄면_시뮬레이션_계산에는_그대로_쓴다() {
         SimulationSavingEstimator hidden = new SimulationSavingEstimator(new ManualPolicyCatalog(), true, false,
-                SimulationSavingEstimator.DEFAULT_BASE_RENT);
+                SimulationSavingEstimator.DEFAULT_SEOUL_BASE_RENT,
+                SimulationSavingEstimator.DEFAULT_GYEONGGI_BASE_RENT);
         Policy target = policy(SAFE_HOUSE, SAFE_HOUSE_NAME);
 
         assertThat(hidden.estimate(target, seoul(IncomeBracket.UNDER_150))).isPresent();
@@ -203,5 +214,93 @@ class SimulationSavingEstimatorTest {
         assertThat(benefit.effectiveMonths()).isEqualTo(PolicyBenefit.DEFAULT_MONTHS_WHEN_UNSPECIFIED);
         assertThat(benefit.isMaximum()).isFalse();
         assertThat(benefit.getEvidence()).isEqualTo(result.basis());
+    }
+
+    // ===== 경기 사용자 (민간 집계 기준 월세 45만원) =====
+
+    private static User gyeonggi(IncomeBracket bracket) {
+        return user("GYEONGGI", bracket);
+    }
+
+    @Test
+    void 경기_기준_월세는_45만원이고_서울과_따로_주입된다() {
+        assertThat(estimator.baseRent(kr.fintarget.api.domain.user.code.Region.SEOUL)).isEqualTo(620_000L);
+        assertThat(estimator.baseRent(kr.fintarget.api.domain.user.code.Region.GYEONGGI)).isEqualTo(450_000L);
+        assertThat(estimator.baseRent(kr.fintarget.api.domain.user.code.Region.BUSAN)).isNull();
+        assertThat(estimator.baseRent(null)).isNull();
+    }
+
+    @Test
+    void 경기_연합생활관은_45만원에서_기숙사비를_뺀_금액이다() {
+        SavingEstimateResult result = estimate(DORM, DORM_NAME, gyeonggi(IncomeBracket.UNDER_150)).orElseThrow();
+
+        assertThat(result.monthlyAmount()).isEqualTo(300_000L);
+        assertThat(result.basis())
+                .isEqualTo("입주 시 경기 원룸 월세 약 45만원(민간 집계 추정치) 대비 기숙사비 월 15만원으로 계산한 예상 절감액");
+    }
+
+    @Test
+    void 경기_기숙사형_청년주택은_45만원의_50퍼센트다() {
+        SavingEstimateResult result =
+                estimate(DORM_YOUTH_HOUSE, DORM_YOUTH_HOUSE_NAME, gyeonggi(IncomeBracket.UNDER_150)).orElseThrow();
+
+        assertThat(result.monthlyAmount()).isEqualTo(225_000L);
+        assertThat(result.basis())
+                .isEqualTo("입주 시 경기 원룸 월세 약 45만원(민간 집계 추정치)의 50% 수준 임대료로 계산한 예상 절감액");
+    }
+
+    @Test
+    void 경기_통합공공임대는_소득_구간별로_계산하고_같은_문구를_쓴다() {
+        assertThat(estimate(INTEGRATED, INTEGRATED_NAME, gyeonggi(IncomeBracket.UNDER_150)).orElseThrow())
+                .satisfies(result -> {
+                    assertThat(result.monthlyAmount()).isEqualTo(225_000L);
+                    assertThat(result.basis()).isEqualTo(
+                            "입주 시 경기 원룸 월세 약 45만원(민간 집계 추정치)의 50% 수준 임대료로 계산한 예상 절감액");
+                });
+        assertThat(estimate(INTEGRATED, INTEGRATED_NAME, gyeonggi(IncomeBracket.RANGE_150_260)).orElseThrow())
+                .satisfies(result -> {
+                    assertThat(result.monthlyAmount()).isEqualTo(157_500L);
+                    assertThat(result.basis()).isEqualTo(
+                            "입주 시 경기 원룸 월세 약 45만원(민간 집계 추정치)의 65% 수준 임대료로 계산한 예상 절감액");
+                });
+        assertThat(estimate(INTEGRATED, INTEGRATED_NAME, gyeonggi(IncomeBracket.RANGE_260_300)).orElseThrow()
+                .monthlyAmount()).isEqualTo(90_000L);
+        assertThat(estimate(INTEGRATED, INTEGRATED_NAME, gyeonggi(IncomeBracket.OVER_410)).orElseThrow()
+                .monthlyAmount()).isEqualTo(45_000L);
+        assertThat(estimate(INTEGRATED_2, INTEGRATED_2_NAME, gyeonggi(IncomeBracket.RANGE_150_260)).orElseThrow()
+                .monthlyAmount()).isEqualTo(157_500L);
+    }
+
+    @Test
+    void 경기_기준_월세를_바꿔도_서울_결과는_그대로다() {
+        SimulationSavingEstimator cheaperGyeonggi = new SimulationSavingEstimator(new ManualPolicyCatalog(), true, true,
+                SimulationSavingEstimator.DEFAULT_SEOUL_BASE_RENT, 400_000L);
+
+        assertThat(cheaperGyeonggi.estimate(policy(DORM_YOUTH_HOUSE, DORM_YOUTH_HOUSE_NAME), gyeonggi(IncomeBracket.UNDER_150))
+                .orElseThrow().monthlyAmount()).isEqualTo(200_000L);
+        // 서울은 62만원 기준 그대로
+        assertThat(cheaperGyeonggi.estimate(policy(DORM_YOUTH_HOUSE, DORM_YOUTH_HOUSE_NAME), seoul(IncomeBracket.UNDER_150))
+                .orElseThrow().monthlyAmount()).isEqualTo(310_000L);
+    }
+
+    @Test
+    void 경기_기준_월세가_기숙사비_이하면_연합생활관은_추정하지_않는다() {
+        SimulationSavingEstimator tooCheap = new SimulationSavingEstimator(new ManualPolicyCatalog(), true, true,
+                SimulationSavingEstimator.DEFAULT_SEOUL_BASE_RENT, 150_000L);
+
+        assertThat(tooCheap.estimate(policy(DORM, DORM_NAME), gyeonggi(IncomeBracket.UNDER_150))).isEmpty();
+        // 비율 규칙은 그대로 계산된다
+        assertThat(tooCheap.estimate(policy(DORM_YOUTH_HOUSE, DORM_YOUTH_HOUSE_NAME), gyeonggi(IncomeBracket.UNDER_150)))
+                .isPresent();
+    }
+
+    @Test
+    void 지역별_기준_월세_설정이_0_이하면_기동에_실패한다() {
+        assertThatThrownBy(() -> new SimulationSavingEstimator(new ManualPolicyCatalog(), true, true, 0L, 450_000L))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("SEOUL");
+        assertThatThrownBy(() -> new SimulationSavingEstimator(new ManualPolicyCatalog(), true, true, 620_000L, 0L))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("GYEONGGI");
     }
 }

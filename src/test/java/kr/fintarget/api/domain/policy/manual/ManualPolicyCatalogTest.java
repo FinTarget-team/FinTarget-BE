@@ -274,10 +274,13 @@ class ManualPolicyCatalogTest {
         List<SavingEstimate> estimates = catalog.savingEstimates();
 
         assertThat(estimates).hasSize(5);
-        assertThat(estimates).allSatisfy(estimate -> {
-            assertThat(estimate.source()).isEqualTo("YOUTH_CENTER");
-            assertThat(estimate.userRegions()).containsExactly("SEOUL");
-        });
+        assertThat(estimates).allSatisfy(estimate -> assertThat(estimate.source()).isEqualTo("YOUTH_CENTER"));
+        // 기준 월세가 있는 지역만 적용한다. 청년안심주택(매입)은 서울 전용 정책이라 서울만 (#257)
+        assertThat(estimates).filteredOn(estimate -> "20261021005400214219".equals(estimate.externalId()))
+                .singleElement()
+                .satisfies(estimate -> assertThat(estimate.userRegions()).containsExactly("SEOUL"));
+        assertThat(estimates).filteredOn(estimate -> !"20261021005400214219".equals(estimate.externalId()))
+                .allSatisfy(estimate -> assertThat(estimate.userRegions()).containsExactly("SEOUL", "GYEONGGI"));
         assertThat(estimates).extracting(SavingEstimate::externalId).containsExactly(
                 "20260123005400112079", "20260922005400113506", "20261021005400214219",
                 "20260921005400113460", "20260922005400113532");

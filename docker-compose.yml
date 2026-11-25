@@ -76,8 +76,9 @@ services:
       SIMULATION_SAVING_ESTIMATE_ENABLED: ${SIMULATION_SAVING_ESTIMATE_ENABLED:-true}
       # false면 추천 목록·스크랩 응답에는 추정을 넣지 않고 시뮬레이션 실행에서만 반영한다 (앱 버튼 노출에 영향)
       SIMULATION_SAVING_ESTIMATE_EXPOSE_IN_POLICY_RESPONSES: ${SIMULATION_SAVING_ESTIMATE_EXPOSE_IN_POLICY_RESPONSES:-true}
-      # 추정 기준 월세(원). 비우면 620000 (다방 서울 주요 대학가 원룸 평균 월세, 2026-01)
-      SIMULATION_SAVING_ESTIMATE_BASE_RENT: ${SIMULATION_SAVING_ESTIMATE_BASE_RENT:-620000}
+      # 지역별 추정 기준 월세(원). 비우면 서울 620000(다방 대학가 평균, 공식), 경기 450000(민간 집계 추정치)
+      SIMULATION_SAVING_ESTIMATE_BASE_RENT_SEOUL: ${SIMULATION_SAVING_ESTIMATE_BASE_RENT_SEOUL:-620000}
+      SIMULATION_SAVING_ESTIMATE_BASE_RENT_GYEONGGI: ${SIMULATION_SAVING_ESTIMATE_BASE_RENT_GYEONGGI:-450000}
       # 직접 등록 정책 추천 목록 고정 노출 (#245). .env에 없거나 비어 있으면 true. false면 고정 없이 기존 추천 결과 그대로
       POLICY_RECOMMEND_MANUAL_PIN_ENABLED: ${POLICY_RECOMMEND_MANUAL_PIN_ENABLED:-true}
       # 통합 답변·검색의 사용자별 하루 호출 수 (#239). 비우면 0 = 무제한(부스 시연). 다시 걸려면 .env에 20·50처럼 양수를 넣는다

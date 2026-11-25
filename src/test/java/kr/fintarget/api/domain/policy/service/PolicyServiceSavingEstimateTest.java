@@ -68,7 +68,8 @@ class PolicyServiceSavingEstimateTest {
     private PolicyService service(boolean expose) {
         SimulationSavingEstimator estimator =
                 new SimulationSavingEstimator(new ManualPolicyCatalog(), true, expose,
-                        SimulationSavingEstimator.DEFAULT_BASE_RENT);
+                        SimulationSavingEstimator.DEFAULT_SEOUL_BASE_RENT,
+                        SimulationSavingEstimator.DEFAULT_GYEONGGI_BASE_RENT);
         return new PolicyService(policyRepository, userPolicyRepository, userRepository,
                 new RuleBasedPolicyRecommendationSelector(10, List.of()), ManualPolicyPinner.disabled(),
                 mock(SimulationRepository.class), estimator);
@@ -172,15 +173,43 @@ class PolicyServiceSavingEstimateTest {
     }
 
     @Test
-    void 서울_밖_사용자에게는_추정이_들어가지_않는다() {
+    void 경기_사용자에게는_경기_기준_월세로_추정이_들어간다() {
+        stubCandidates();
+        when(userRepository.findById(USER_ID)).thenReturn(Optional.of(gyeonggiUser()));
+
+        PolicyResponse dorm = dormOf(service(true).getMatchingPolicies(USER_ID, null));
+
+        assertThat(dorm.simulationBenefit().estimated()).isTrue();
+        assertThat(dorm.simulationBenefit().monthlyAmount()).isEqualTo(225_000L);
+        assertThat(dorm.simulationBenefit().basis())
+                .isEqualTo("입주 시 경기 원룸 월세 약 45만원(민간 집계 추정치)의 50% 수준 임대료로 계산한 예상 절감액");
+    }
+
+    @Test
+    void 기준_월세가_없는_지역_사용자에게는_추정이_들어가지_않는다() {
         stubCandidates();
         when(userRepository.findById(USER_ID)).thenReturn(Optional.of(User.builder()
                 .id(USER_ID).provider(SocialProvider.KAKAO).providerId("p1")
-                .region("GYEONGGI").birthYear(2003).income(1_000_000L).build()));
+                .region("BUSAN").birthYear(2003).income(1_000_000L).build()));
 
         PolicyResponse dorm = dormOf(service(true).getMatchingPolicies(USER_ID, null));
 
         assertThat(dorm.simulationBenefit()).isNull();
+    }
+
+    @Test
+    void 이전_단일_키_설정은_서울_값으로_쓰인다() {
+        // simulation.saving-estimate.base-rent(단일 키)만 있던 환경에서 서울 결과가 그대로여야 한다
+        SimulationSavingEstimator legacy = new SimulationSavingEstimator(new ManualPolicyCatalog(), true, true,
+                500_000L, SimulationSavingEstimator.DEFAULT_GYEONGGI_BASE_RENT);
+
+        assertThat(legacy.baseRent(kr.fintarget.api.domain.user.code.Region.SEOUL)).isEqualTo(500_000L);
+        assertThat(legacy.estimate(dormPolicy(), seoulUser()).orElseThrow().monthlyAmount()).isEqualTo(250_000L);
+    }
+
+    private static User gyeonggiUser() {
+        return User.builder().id(USER_ID).provider(SocialProvider.KAKAO).providerId("p1")
+                .region("GYEONGGI").birthYear(2003).income(1_000_000L).build();
     }
 
     @Test
@@ -190,7 +219,8 @@ class PolicyServiceSavingEstimateTest {
                 new RuleBasedPolicyRecommendationSelector(10, List.of()), ManualPolicyPinner.disabled(),
                 mock(SimulationRepository.class),
                 new SimulationSavingEstimator(new ManualPolicyCatalog(), false, true,
-                        SimulationSavingEstimator.DEFAULT_BASE_RENT));
+                        SimulationSavingEstimator.DEFAULT_SEOUL_BASE_RENT,
+                        SimulationSavingEstimator.DEFAULT_GYEONGGI_BASE_RENT));
 
         assertThat(dormOf(service.getMatchingPolicies(USER_ID, null)).simulationBenefit()).isNull();
     }
