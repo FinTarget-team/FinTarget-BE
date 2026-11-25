@@ -21,8 +21,13 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import org.mockito.ArgumentCaptor;
+
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -33,6 +38,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -400,5 +406,203 @@ class PolicySearchServiceTest {
     void 통합_답변_검색은_후보가_없으면_임베딩을_호출하지_않는다() {
         assertThat(service(5, 0.65, 3).searchForAnswer(List.of(), "질문")).isEmpty();
         verifyNoInteractions(embeddingClient, searchRepository);
+    }
+
+    // ===== 검색 문장 바꿔 쓰기 (#241) =====
+
+    private static final float[] REWRITTEN_VECTOR = {0.9f, 0.8f};
+
+    /** 호출 횟수와 받은 질문을 기록하는 바꿔 쓰기 */
+    private static final class FakeRewriter implements AnswerQueryRewriter {
+        private final boolean enabled;
+        private final QueryRewrite result;
+        private final List<String> questions = new ArrayList<>();
+
+        FakeRewriter(boolean enabled, QueryRewrite result) {
+            this.enabled = enabled;
+            this.result = result;
+        }
+
+        @Override
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        @Override
+        public double skipDistance() {
+            return 0.45;
+        }
+
+        @Override
+        public QueryRewrite rewrite(String question) {
+            questions.add(question);
+            return result;
+        }
+    }
+
+    private static FakeRewriter rewriting(String text) {
+        return new FakeRewriter(true, QueryRewrite.rewritten(text, 10));
+    }
+
+    // 원래 질문과 바꾼 문장을 각각 다른 벡터로 임베딩하고, 벡터마다 거리순 청크를 넘겨받은 정책 안에서 돌려준다
+    private void stubTwoSearches(String question, List<ChunkMatch> original, String rewritten, List<ChunkMatch> rewrittenRanked) {
+        when(embeddingClient.embed(List.of(question))).thenReturn(List.of(VECTOR));
+        when(embeddingClient.embed(List.of(rewritten))).thenReturn(List.of(REWRITTEN_VECTOR));
+        when(searchRepository.search(anyList(), any(), anyInt())).thenAnswer(invocation -> {
+            List<UUID> policyIds = invocation.getArgument(0);
+            float[] vector = invocation.getArgument(1);
+            int limit = invocation.getArgument(2);
+            List<ChunkMatch> ranked = vector == REWRITTEN_VECTOR ? rewrittenRanked : original;
+            return ranked.stream().filter(m -> policyIds.contains(m.policyId())).limit(limit).toList();
+        });
+    }
+
+    @Test
+    void 바꿔_쓰기를_하면_정책별로_더_가까운_거리로_합치고_중복을_없앤다() {
+        Policy kpass = policy("K-패스(K패스)");
+        Policy a = policy("A 정책");
+        Policy b = policy("B 정책");
+        String question = "교통비 아끼는 방법 알려줘 버스 많이타";
+        stubTwoSearches(question,
+                List.of(match(a, "전체", "A 원래", 0.62), match(b, "전체", "B 원래", 0.70), match(kpass, "전체", "K 원래", 0.72)),
+                "청년 대중교통비 환급 지원",
+                List.of(match(kpass, "지원 내용", "K 바꾼", 0.40), match(a, "전체", "A 바꾼", 0.64), match(b, "전체", "B 바꾼", 0.66)));
+        FakeRewriter rewriter = rewriting("청년 대중교통비 환급 지원");
+
+        List<PolicySearchHit> hits = service(5, 0.65, 3).searchForAnswer(List.of(kpass, a, b), question, rewriter);
+
+        // K-패스는 바꾼 문장(0.40), A는 원래 질문(0.62)이 더 가깝다. B는 두 거리 모두 하한(0.65)보다 멀어 빠진다
+        assertThat(hits).extracting(PolicySearchHit::policy).containsExactly(kpass, a);
+        assertThat(hits).extracting(PolicySearchHit::content).containsExactly("K 바꾼", "A 원래");
+        assertThat(hits).extracting(PolicySearchHit::distance).containsExactly(0.40, 0.62);
+        assertThat(rewriter.questions).containsExactly(question);
+    }
+
+    @Test
+    void 원래_질문의_가장_가까운_거리가_기준_이하면_바꿔_쓰기를_호출하지_않고_결과가_같다() {
+        Policy rent = policy("청년 월세 지원");
+        Policy a = policy("A 정책");
+        String question = "월세 도움 되는 거 있어?";
+        stubRankedSearch(question, List.of(match(rent, "전체", "월세", 0.366), match(a, "전체", "A", 0.50)));
+        FakeRewriter rewriter = rewriting("바뀌면 안 되는 문장");
+
+        List<PolicySearchHit> withRewriter = service(5, 0.65, 3).searchForAnswer(List.of(rent, a), question, rewriter);
+        List<PolicySearchHit> without = service(5, 0.65, 3).searchForAnswer(List.of(rent, a), question);
+
+        assertThat(rewriter.questions).isEmpty();
+        assertThat(withRewriter).isEqualTo(without);
+        verify(embeddingClient, never()).embed(List.of("바뀌면 안 되는 문장"));
+    }
+
+    @Test
+    void 질문에_정책명이_있으면_거리가_멀어도_바꿔_쓰기를_호출하지_않는다() {
+        Policy stay = policy("머물자리론");
+        Policy a = policy("A 정책");
+        String question = "머물자리론 지금 신청됨?";
+        stubRankedSearch(question, List.of(match(a, "전체", "A", 0.60), match(stay, "전체", "머물자리론 본문", 0.63)));
+        FakeRewriter rewriter = rewriting("청년 임차보증금 대출이자 지원");
+
+        List<PolicySearchHit> hits = service(5, 0.65, 3).searchForAnswer(List.of(stay, a), question, rewriter);
+
+        assertThat(rewriter.questions).isEmpty();
+        assertThat(hits).extracting(PolicySearchHit::policy).containsExactly(stay, a);
+    }
+
+    @Test
+    void 꺼져_있으면_바꿔_쓰기를_호출하지_않는다() {
+        Policy a = policy("A 정책");
+        String question = "알바비로는 생활이 안되ㅠㅠ";
+        stubRankedSearch(question, List.of(match(a, "전체", "A", 0.60)));
+        FakeRewriter rewriter = new FakeRewriter(false, QueryRewrite.rewritten("청년 생활비 지원", 1));
+
+        List<PolicySearchHit> hits = service(5, 0.65, 3).searchForAnswer(List.of(a), question, rewriter);
+
+        assertThat(rewriter.questions).isEmpty();
+        assertThat(hits).extracting(PolicySearchHit::policy).containsExactly(a);
+    }
+
+    @Test
+    void 바꿔_쓰기가_실패하거나_시간_초과거나_빈_문자열이면_원래_질문_결과만_쓴다() {
+        Policy a = policy("A 정책");
+        String question = "기숙사 떨어졌는데 어케함ㅠㅠ";
+        stubRankedSearch(question, List.of(match(a, "전체", "A", 0.60)));
+
+        for (QueryRewrite.Outcome outcome : List.of(QueryRewrite.Outcome.FAILED, QueryRewrite.Outcome.TIMEOUT, QueryRewrite.Outcome.EMPTY)) {
+            FakeRewriter rewriter = new FakeRewriter(true, QueryRewrite.of(outcome, 5));
+
+            List<PolicySearchHit> hits = service(5, 0.65, 3).searchForAnswer(List.of(a), question, rewriter);
+
+            assertThat(rewriter.questions).as(outcome.name()).containsExactly(question);
+            assertThat(hits).as(outcome.name()).extracting(PolicySearchHit::policy).containsExactly(a);
+        }
+        // 원래 질문만 세 번 임베딩했다 (바꾼 문장 검색 없음)
+        verify(embeddingClient, times(3)).embed(anyList());
+    }
+
+    @Test
+    void 바꾼_문장이_원래_질문과_같으면_다시_검색하지_않는다() {
+        Policy a = policy("A 정책");
+        String question = "청년 생활비 지원";
+        stubRankedSearch(question, List.of(match(a, "전체", "A", 0.60)));
+
+        List<PolicySearchHit> hits = service(5, 0.65, 3).searchForAnswer(List.of(a), question, rewriting(" 청년 생활비 지원 "));
+
+        assertThat(hits).extracting(PolicySearchHit::policy).containsExactly(a);
+        verify(embeddingClient, times(1)).embed(anyList());
+    }
+
+    @Test
+    void 바꾼_문장_임베딩이_실패하면_요청을_실패시키지_않고_원래_결과를_쓴다() {
+        Policy a = policy("A 정책");
+        String question = "지하철비 너무 많이나와 할인되는거 없나";
+        stubRankedSearch(question, List.of(match(a, "전체", "A", 0.60)));
+        when(embeddingClient.embed(List.of("청년 대중교통비 할인")))
+                .thenThrow(new AiUnavailableException(AiClientException.Reason.RATE_LIMITED));
+
+        List<PolicySearchHit> hits = service(5, 0.65, 3).searchForAnswer(List.of(a), question, rewriting("청년 대중교통비 할인"));
+
+        assertThat(hits).extracting(PolicySearchHit::policy).containsExactly(a);
+    }
+
+    @Test
+    void 합칠_때_기준_이하인_원래_결과는_바꾼_문장_결과에_밀려나지_않게_앞에_고정한다() {
+        Policy pinned = policy("원래 가까운 정책");
+        Policy x = policy("X");
+        Policy y = policy("Y");
+        Policy z = policy("Z");
+        Map<UUID, Policy> byId = new LinkedHashMap<>();
+        for (Policy p : List.of(pinned, x, y, z)) {
+            byId.put(p.getPolicyId(), p);
+        }
+        List<ChunkMatch> original = List.of(match(pinned, "전체", "원래", 0.44), match(x, "전체", "X 원래", 0.60));
+        List<ChunkMatch> rewritten = List.of(match(x, "전체", "X 바꾼", 0.20), match(y, "전체", "Y", 0.25), match(z, "전체", "Z", 0.30));
+
+        // k=2: 거리만 보면 X(0.20)·Y(0.25)가 차지하지만 기준(0.45) 이하인 원래 결과는 고정된다
+        List<PolicySearchHit> hits = service(2, 0.65, 3).merge(original, rewritten, byId, 0.45);
+
+        assertThat(hits).extracting(PolicySearchHit::policy).containsExactly(pinned, x);
+        assertThat(hits.get(1).content()).isEqualTo("X 바꾼");
+        // 고정할 결과가 없으면 거리순
+        assertThat(service(2, 0.65, 3).merge(original, rewritten, byId, 0.30))
+                .extracting(PolicySearchHit::policy).containsExactly(x, y);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void 대출_제외는_원래_질문으로_판정해_바꾼_문장에_대출이_들어가도_대출_상품을_검색하지_않는다() {
+        Policy plainLoan = withKind(withSource(loan("학자금 대출"), "YOUTH_CENTER"), BenefitKind.LOAN);
+        Policy support = policy("학자금 상환 부담 완화");
+        String question = "등록금 너무 비싼데 지원받을 데 없어?";
+        String rewritten = "학자금 대출 이자 지원";
+        stubTwoSearches(question, List.of(match(support, "전체", "상환", 0.62)), rewritten,
+                List.of(match(plainLoan, "전체", "대출", 0.20), match(support, "전체", "상환 바꾼", 0.35)));
+
+        List<PolicySearchHit> hits = service(5, 0.65, 3).searchForAnswer(List.of(plainLoan, support), question, rewriting(rewritten));
+
+        assertThat(hits).extracting(PolicySearchHit::policy).containsExactly(support);
+        // 두 검색 모두 대출 상품을 뺀 후보로만 조회했다
+        ArgumentCaptor<List<UUID>> ids = ArgumentCaptor.forClass(List.class);
+        verify(searchRepository, times(2)).search(ids.capture(), any(), anyInt());
+        assertThat(ids.getAllValues()).allSatisfy(list -> assertThat(list).containsExactly(support.getPolicyId()));
     }
 }

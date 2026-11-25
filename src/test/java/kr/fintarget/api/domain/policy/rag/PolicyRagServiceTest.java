@@ -14,6 +14,7 @@ import kr.fintarget.api.domain.ai.usage.AiUsageLimiter;
 import kr.fintarget.api.domain.policy.entity.Policy;
 import kr.fintarget.api.domain.policy.entity.PolicyCondition;
 import kr.fintarget.api.domain.policy.entity.PolicyType;
+import kr.fintarget.api.domain.policy.search.AnswerQueryRewriter;
 import kr.fintarget.api.domain.policy.search.PolicySearchHit;
 import kr.fintarget.api.domain.policy.search.PolicySearchService;
 import kr.fintarget.api.domain.policy.service.PolicyService;
@@ -358,5 +359,33 @@ class PolicyRagServiceTest {
                 .contains("찾지 못했어요", "청년 주거·금융·일자리 정책에 대한 질문에 답할 수 있어요")
                 .doesNotContain("습니다");
         assertThat(PolicyRagResult.PROFILE_INCOMPLETE_ANSWER).contains("필요해요").doesNotContain("습니다", "합니다");
+    }
+
+    @Test
+    void 바꿔_쓰기가_있으면_원래_질문으로_후보를_고르고_검색에_넘기며_답변_생성에도_원래_질문을_넣는다() {
+        AnswerQueryRewriter rewriter = org.mockito.Mockito.mock(AnswerQueryRewriter.class);
+        Policy national = policy("청년 월세 지원", null);
+        Policy gokseong = localPolicy("곡성군 일하잡(job)센터 지원사업");
+        String question = "자취방 월세 넘 비싼데 도움받을 수 있는거 잇어?";
+        User user = user(2000, 3_000_000L);
+        when(policyService.findUser(USER_ID)).thenReturn(user);
+        when(policyService.findCandidatePolicies(user, null)).thenReturn(List.of(national, gokseong));
+        when(usageLimiter.acquire(USER_ID, AiUsageFeature.POLICY_RAG, 20)).thenReturn(TICKET);
+        when(searchService.searchForAnswer(List.of(national), question, rewriter)).thenReturn(List.of(hit(national, "정책명: 청년 월세 지원")));
+        when(aiTextClient.generate(any())).thenReturn(aiAnswer("월세 지원 정책을 1개 찾았어요 [1]"));
+
+        PolicyRagResult result = new PolicyRagService(policyService, searchService, aiTextClient, prompt, usageLimiter,
+                rewriter, 20, 1000).answer(USER_ID, question);
+
+        assertThat(result.status()).isEqualTo(PolicyRagStatus.ANSWERED);
+        assertThat(result.sources()).containsExactly(national);
+        // 시·군·구 한정 정책은 원래 질문 기준으로 빠졌다 (곡성 이름 없음)
+        verify(searchService).searchForAnswer(List.of(national), question, rewriter);
+        verify(searchService, never()).searchForAnswer(anyList(), anyString());
+        ArgumentCaptor<AiTextRequest> request = ArgumentCaptor.forClass(AiTextRequest.class);
+        verify(aiTextClient).generate(request.capture());
+        assertThat(request.getValue().messages()).containsExactly(AiMessage.user(question));
+        // 바꿔 쓰기 호출은 검색 서비스가 판단한다 (여기서는 직접 부르지 않음)
+        verifyNoInteractions(rewriter);
     }
 }

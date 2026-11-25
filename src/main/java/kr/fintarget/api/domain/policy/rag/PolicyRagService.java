@@ -13,12 +13,14 @@ import kr.fintarget.api.domain.ai.usage.AiUsageLimiter;
 import kr.fintarget.api.domain.policy.entity.Policy;
 import kr.fintarget.api.domain.policy.entity.PolicyCondition;
 import kr.fintarget.api.domain.policy.recommend.PolicyLocalScope;
+import kr.fintarget.api.domain.policy.search.AnswerQueryRewriter;
 import kr.fintarget.api.domain.policy.search.PolicySearchHit;
 import kr.fintarget.api.domain.policy.search.PolicySearchService;
 import kr.fintarget.api.domain.policy.service.PolicyService;
 import kr.fintarget.api.domain.user.entity.User;
 import kr.fintarget.api.domain.user.validation.BirthYearValidator;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -34,7 +36,8 @@ import java.util.List;
  *   <li>일일 한도(policy.rag.daily-limit) 1회 차감. 이후 임베딩·생성 호출이 실패하면(502/503) 되돌린다.
  *       한도가 0 이하면 무제한이라 차감하지 않는다 (#239)</li>
  *   <li>후보 안에서 검색({@link PolicySearchService#searchForAnswer}: KINFA 대출 상품만 대출 의도가 없을 때 제외,
- *       질문에 정책명이 있으면 그 정책을 앞에, 검색 한도는 차감하지 않음). 결과가 없으면 NO_EVIDENCE</li>
+ *       질문에 정책명이 있으면 그 정책을 앞에, 검색 한도는 차감하지 않음). 결과가 없으면 NO_EVIDENCE.
+ *       원래 질문의 가장 가까운 거리가 멀면 질문을 검색 문장으로 바꿔 한 번 더 검색해 합친다 ({@link PolicyRagQueryRewriter}, #241)</li>
  *   <li>청크를 [1], [2] 번호로 넣어 답을 받고(특정 대상 전용 정책은 "[신청 대상 한정]" 줄을 붙임, 오늘 날짜 포함), 답변의 번호를 근거 정책으로 바꾼다.
  *       유효한 번호가 하나도 없으면 답변을 버리고 NO_EVIDENCE (청크 밖 지식으로 답했을 수 있어 내보내지 않음)</li>
  * </ol>
@@ -58,14 +61,32 @@ public class PolicyRagService {
     private final AiUsageLimiter usageLimiter;
     private final int dailyLimit;
     private final int maxOutputTokens;
+    // null이면 검색 문장 바꿔 쓰기 없이 원래 질문으로만 검색한다 (평가 실행기)
+    private final AnswerQueryRewriter queryRewriter;
 
+    @Autowired
     public PolicyRagService(PolicyService policyService,
                             PolicySearchService searchService,
                             AiTextClient aiTextClient,
                             PolicyRagPrompt prompt,
                             AiUsageLimiter usageLimiter,
+                            PolicyRagQueryRewriter queryRewriter,
                             @Value("${policy.rag.daily-limit:" + DEFAULT_DAILY_LIMIT + "}") int dailyLimit,
                             @Value("${policy.rag.max-output-tokens:" + DEFAULT_MAX_OUTPUT_TOKENS + "}") int maxOutputTokens) {
+        this(policyService, searchService, aiTextClient, prompt, usageLimiter, (AnswerQueryRewriter) queryRewriter,
+                dailyLimit, maxOutputTokens);
+    }
+
+    /** 검색 문장 바꿔 쓰기 없이 만든다 (#184 평가 실행기, 기존 테스트) */
+    public PolicyRagService(PolicyService policyService, PolicySearchService searchService, AiTextClient aiTextClient,
+                            PolicyRagPrompt prompt, AiUsageLimiter usageLimiter, int dailyLimit, int maxOutputTokens) {
+        this(policyService, searchService, aiTextClient, prompt, usageLimiter, (AnswerQueryRewriter) null,
+                dailyLimit, maxOutputTokens);
+    }
+
+    PolicyRagService(PolicyService policyService, PolicySearchService searchService, AiTextClient aiTextClient,
+                     PolicyRagPrompt prompt, AiUsageLimiter usageLimiter, AnswerQueryRewriter queryRewriter,
+                     int dailyLimit, int maxOutputTokens) {
         if (maxOutputTokens < 1) {
             throw new IllegalArgumentException("policy.rag.max-output-tokens는 1 이상이어야 합니다: " + maxOutputTokens);
         }
@@ -76,6 +97,7 @@ public class PolicyRagService {
         this.usageLimiter = usageLimiter;
         this.dailyLimit = dailyLimit;
         this.maxOutputTokens = maxOutputTokens;
+        this.queryRewriter = queryRewriter;
     }
 
     /**
@@ -111,7 +133,11 @@ public class PolicyRagService {
      * @param candidates 사용자 조건에 맞는 후보 정책 ({@link PolicyService#findCandidatePolicies(User, String)})
      */
     public PolicyRagResult answerFrom(User user, List<Policy> candidates, String question) {
-        List<PolicySearchHit> hits = searchService.searchForAnswer(answerable(candidates, question), question);
+        // 시·군·구 이름·대출 의도·정책명은 원래 질문으로 판정하고, 바꾼 문장은 검색에만 쓴다 (#241)
+        List<Policy> answerable = answerable(candidates, question);
+        List<PolicySearchHit> hits = queryRewriter == null
+                ? searchService.searchForAnswer(answerable, question)
+                : searchService.searchForAnswer(answerable, question, queryRewriter);
         if (hits.isEmpty()) {
             log.info("통합 정책 AI 답변 status={} candidates={} hits=0", PolicyRagStatus.NO_EVIDENCE, candidates.size());
             return PolicyRagResult.noEvidence();
@@ -131,6 +157,7 @@ public class PolicyRagService {
             return PolicyRagResult.noEvidence();
         }
         String systemPrompt = prompt.render(hits.stream().map(PolicyRagService::promptText).toList(), profile);
+        // 답변 생성에는 원래 질문을 넣는다 (바꾼 검색 문장은 넣지 않음, #241)
         AiTextResult result = aiTextClient.generate(new AiTextRequest(
                 systemPrompt, List.of(AiMessage.user(question)), AiModelTier.DEFAULT, maxOutputTokens));
 

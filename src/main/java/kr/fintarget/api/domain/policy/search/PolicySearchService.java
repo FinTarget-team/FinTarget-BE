@@ -15,8 +15,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 
@@ -154,6 +156,26 @@ public class PolicySearchService {
      */
     @Transactional(readOnly = true)
     public List<PolicySearchHit> searchForAnswer(List<Policy> candidates, String question) {
+        return searchForAnswer(candidates, question, null);
+    }
+
+    /**
+     * {@link #searchForAnswer(List, String)}에 검색 문장 바꿔 쓰기(#241)를 더한다. 구어체 질문이 정책 문서 표현과 멀어 못 찾는 것을 줄인다.
+     * <ol>
+     *   <li>원래 질문으로 먼저 검색한다 (지금과 같은 검색)</li>
+     *   <li>바꿔 쓰기를 생략하고 원래 결과를 그대로 쓰는 경우: 설정으로 꺼짐, 질문에 정책명이 있음,
+     *       가장 가까운 청크의 거리가 {@link AnswerQueryRewriter#skipDistance()} 이하 (정형 질문은 이미 잘 찾는다)</li>
+     *   <li>그 밖에는 질문을 바꿔 쓴다. 실패·시간 초과·빈 문자열·원래 질문과 같은 문장이면 원래 결과를 쓴다</li>
+     *   <li>바꾼 문장으로 같은 후보를 다시 검색하고, 정책별로 두 검색 중 더 가까운 청크를 써서 합친 뒤 하한·k를 적용한다.
+     *       원래 결과 중 skipDistance 이하인 정책은 맨 앞에 고정한다 (바꾼 문장 결과에 밀려나지 않게)</li>
+     * </ol>
+     * 대출 상품 제외·정책명 일치는 원래 질문으로만 판정한다 (바꾼 문장에 "대출"이 들어가도 대출 상품이 검색되지 않게).
+     *
+     * @param rewriter null이면 바꿔 쓰기 없이 {@link #searchForAnswer(List, String)}와 같다
+     */
+    @Transactional(readOnly = true)
+    public List<PolicySearchHit> searchForAnswer(List<Policy> candidates, String question, AnswerQueryRewriter rewriter) {
+        long started = System.nanoTime();
         List<Policy> named = PolicyNameMatch.find(candidates, question);
         List<Policy> searchable = excludeLoansExceptSupportUnlessAsked(candidates, question);
         if (searchable.isEmpty() && named.isEmpty()) {
@@ -169,8 +191,12 @@ public class PolicySearchService {
             for (Policy policy : searchable) {
                 byId.put(policy.getPolicyId(), policy);
             }
-            matches = searchRepository.search(new ArrayList<>(byId.keySet()), questionVector, k * chunkMultiplier);
+            List<UUID> ids = new ArrayList<>(byId.keySet());
+            matches = searchRepository.search(ids, questionVector, k * chunkMultiplier);
             vectorHits = groupByPolicy(matches, byId);
+            if (rewriter != null) {
+                vectorHits = withRewrite(rewriter, named, question, ids, byId, matches, vectorHits, started);
+            }
         }
         if (named.isEmpty()) {
             return vectorHits;
@@ -197,6 +223,94 @@ public class PolicySearchService {
             result.putIfAbsent(hit.policy().getPolicyId(), hit);
         }
         return List.copyOf(result.values());
+    }
+
+    // 바꿔 쓰기 판단 → 바꾼 문장으로 재검색 → 합치기 (#241). 생략·실패면 원래 결과를 그대로 돌려준다.
+    // 로그에 질문 원문은 남기지 않는다 (바꾼 문장은 정책 검색어라 남긴다)
+    private List<PolicySearchHit> withRewrite(AnswerQueryRewriter rewriter, List<Policy> named, String question,
+                                              List<UUID> ids, Map<UUID, Policy> byId,
+                                              List<ChunkMatch> original, List<PolicySearchHit> originalHits, long started) {
+        Double top = original.isEmpty() ? null : original.getFirst().distance();
+        String skip = null;
+        if (!rewriter.isEnabled()) {
+            skip = "DISABLED";
+        } else if (!named.isEmpty()) {
+            skip = "NAME_MATCH";
+        } else if (top != null && top <= rewriter.skipDistance()) {
+            skip = "CLOSE_MATCH";
+        }
+        if (skip != null) {
+            log.info("통합 답변 검색 rewrite=SKIPPED reason={} topDistance={} originalHits={} totalMs={}",
+                    skip, distanceText(top), originalHits.size(), elapsedMs(started));
+            return originalHits;
+        }
+
+        QueryRewrite rewrite = rewriter.rewrite(question);
+        if (!rewrite.hasText() || rewrite.text().equals(question.strip())) {
+            log.info("통합 답변 검색 rewrite=FALLBACK reason={} topDistance={} originalHits={} rewriteMs={} totalMs={}",
+                    rewrite.hasText() ? "SAME" : rewrite.outcome(), distanceText(top), originalHits.size(),
+                    rewrite.elapsedMs(), elapsedMs(started));
+            return originalHits;
+        }
+
+        List<ChunkMatch> rewritten;
+        try {
+            float[] rewrittenVector = embeddingClient.embed(List.of(rewrite.text())).getFirst();
+            rewritten = searchRepository.search(ids, rewrittenVector, k * chunkMultiplier);
+        } catch (AiClientException e) {
+            // 원래 질문 검색은 이미 성공했으므로 바꾼 문장 임베딩 실패로 요청을 실패시키지 않는다
+            log.warn("통합 답변 검색 rewrite=FALLBACK reason=EMBEDDING_FAILED originalHits={} rewriteMs={} totalMs={} error={}",
+                    originalHits.size(), rewrite.elapsedMs(), elapsedMs(started), e.getClass().getSimpleName());
+            return originalHits;
+        }
+        List<PolicySearchHit> merged = merge(original, rewritten, byId, rewriter.skipDistance());
+        log.info("통합 답변 검색 rewrite=APPLIED rewritten=\"{}\" topDistance={} rewrittenTopDistance={} originalHits={} rewrittenHits={} mergedHits={} rewriteMs={} totalMs={}",
+                rewrite.text(), distanceText(top), distanceText(rewritten.isEmpty() ? null : rewritten.getFirst().distance()),
+                originalHits.size(), groupByPolicy(rewritten, byId).size(), merged.size(), rewrite.elapsedMs(), elapsedMs(started));
+        return merged;
+    }
+
+    /**
+     * 원래 질문과 바꾼 문장의 검색 결과를 합친다 (#241). 같은 정책은 두 검색 중 더 가까운 청크 하나로 묶고, 거리순으로 하한·k를 적용한다.
+     * 원래 결과 중 pinDistance 이하인 정책은 바꾼 문장 결과보다 앞에 고정한다.
+     *
+     * @param original  원래 질문의 청크 (거리순)
+     * @param rewritten 바꾼 문장의 청크 (거리순)
+     */
+    List<PolicySearchHit> merge(List<ChunkMatch> original, List<ChunkMatch> rewritten, Map<UUID, Policy> byId,
+                                double pinDistance) {
+        List<ChunkMatch> combined = new ArrayList<>(original.size() + rewritten.size());
+        combined.addAll(original);
+        combined.addAll(rewritten);
+        // 같은 거리면 원래 질문 쪽이 앞에 온다 (안정 정렬)
+        combined.sort(Comparator.comparingDouble(ChunkMatch::distance));
+        List<PolicySearchHit> combinedHits = groupByPolicy(combined, byId);
+        Map<UUID, PolicySearchHit> closest = new LinkedHashMap<>();
+        for (PolicySearchHit hit : combinedHits) {
+            closest.put(hit.policy().getPolicyId(), hit);
+        }
+
+        Map<UUID, PolicySearchHit> result = new LinkedHashMap<>();
+        for (PolicySearchHit hit : groupByPolicy(original, byId)) {
+            if (hit.distance() <= pinDistance) {
+                result.put(hit.policy().getPolicyId(), closest.getOrDefault(hit.policy().getPolicyId(), hit));
+            }
+        }
+        for (PolicySearchHit hit : combinedHits) {
+            if (result.size() >= k) {
+                break;
+            }
+            result.putIfAbsent(hit.policy().getPolicyId(), hit);
+        }
+        return List.copyOf(result.values());
+    }
+
+    private static String distanceText(Double distance) {
+        return distance == null ? "-" : String.format(Locale.ROOT, "%.3f", distance);
+    }
+
+    private static long elapsedMs(long startedNanos) {
+        return (System.nanoTime() - startedNanos) / 1_000_000;
     }
 
     // 통합 답변용 (#235): 대출 의도가 없으면 대출 상품만 뺀다. 혜택 유형(#162)이 LOAN이어도 온통청년 정책 중
