@@ -21,6 +21,8 @@ import kr.fintarget.api.domain.user.validation.BirthYearValidator;
 import kr.fintarget.api.domain.user.code.IncomeBracket;
 import kr.fintarget.api.domain.user.code.SocialProvider;
 import org.junit.jupiter.api.Test;
+import org.mockito.InOrder;
+import kr.fintarget.api.domain.simulation.repository.SimulationRepository;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
@@ -37,6 +39,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -55,6 +58,9 @@ class PolicyServiceTest {
     // 상위 N 선택(#225)은 실제 규칙 구현을 쓴다 (기본 10건, 제외 키워드 없음)
     @Spy
     private PolicyRecommendationSelector recommendationSelector = new RuleBasedPolicyRecommendationSelector(10, List.of());
+
+    @Mock
+    private SimulationRepository simulationRepository;
 
     @InjectMocks
     private PolicyService policyService;
@@ -285,6 +291,21 @@ class PolicyServiceTest {
     }
 
     @Test
+    void 내_정책을_삭제하면_시뮬레이션_연결을_먼저_끊고_삭제한다() {
+        UUID userId = UUID.randomUUID();
+        UUID userPolicyId = UUID.randomUUID();
+        UserPolicy userPolicy = new UserPolicy(userId, null, UserPolicy.UserPolicyStatus.INTEREST);
+        when(userPolicyRepository.findByUserPolicyIdAndUserId(userPolicyId, userId)).thenReturn(Optional.of(userPolicy));
+
+        policyService.deleteUserPolicy(userId, userPolicyId);
+
+        // 연결을 끊기 전에 지우면 외래 키 때문에 거부된다
+        InOrder order = inOrder(simulationRepository, userPolicyRepository);
+        order.verify(simulationRepository).detachUserPolicy(userPolicy);
+        order.verify(userPolicyRepository).delete(userPolicy);
+    }
+
+    @Test
     void 다른_사용자의_내_정책은_없는_정책과_같은_예외로_삭제를_거부한다() {
         UUID userId = UUID.randomUUID();
         UUID othersUserPolicyId = UUID.randomUUID();
@@ -295,6 +316,7 @@ class PolicyServiceTest {
                 .hasMessage("존재하지 않는 정책입니다.");
 
         verify(userPolicyRepository, never()).delete(any());
+        verify(simulationRepository, never()).detachUserPolicy(any());
     }
 
     // #220: 추출 조건 필터는 기존 지역·나이 필터와 함께 적용되고, 확실히 해당하지 않는 정책만 뺀다

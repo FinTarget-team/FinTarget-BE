@@ -11,6 +11,7 @@ import kr.fintarget.api.domain.policy.recommend.PolicyRecommendationOrder;
 import kr.fintarget.api.domain.policy.recommend.PolicyRecommendationSelector;
 import kr.fintarget.api.domain.policy.repository.PolicyRepository;
 import kr.fintarget.api.domain.policy.repository.UserPolicyRepository;
+import kr.fintarget.api.domain.simulation.repository.SimulationRepository;
 import kr.fintarget.api.domain.user.entity.User;
 import kr.fintarget.api.domain.user.repository.UserRepository;
 import kr.fintarget.api.domain.user.validation.BirthYearValidator;
@@ -30,6 +31,7 @@ public class PolicyService {
     private final UserPolicyRepository userPolicyRepository;
     private final UserRepository userRepository;
     private final PolicyRecommendationSelector recommendationSelector;
+    private final SimulationRepository simulationRepository;
 
     /**
      * 맞춤 정책 목록. 후보 정책({@link #findCandidatePolicies(User, String)})을 추천 순서로 정렬하고(#220),
@@ -147,6 +149,8 @@ public class PolicyService {
         UserPolicy userPolicy = userPolicyRepository.findByUserPolicyIdAndUserId(userPolicyId, userId)
                 .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 정책입니다."));
 
+        // 이 스크랩으로 실행한 시뮬레이션이 있으면 외래 키 때문에 삭제가 거부되어 500이 났다 (#248). 기록은 남기고 연결만 끊는다
+        simulationRepository.detachUserPolicy(userPolicy);
         userPolicyRepository.delete(userPolicy);
     }
 
