@@ -2,9 +2,12 @@ package kr.fintarget.api.domain.policy.recommend.rerank;
 
 import org.junit.jupiter.api.Test;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -86,11 +89,39 @@ class PolicyRerankCacheTest {
 
     @Test
     void 진행_중_표시는_사용자별로_한_번만_얻는다() {
-        assertThat(cache.tryStart(USER)).isTrue();
-        assertThat(cache.tryStart(USER)).isFalse();
+        assertThat(cache.tryStart(USER, HASH)).isTrue();
+        assertThat(cache.tryStart(USER, HASH)).isFalse();
+        assertThat(cache.tryStart(USER, "다른 입력")).isFalse();
 
         cache.finish(USER);
 
-        assertThat(cache.tryStart(USER)).isTrue();
+        assertThat(cache.inFlight(USER)).isEmpty();
+        assertThat(cache.tryStart(USER, HASH)).isTrue();
+    }
+
+    @Test
+    void 진행_중인_계산은_입력_해시와_지난_시간을_알려주고_끝나면_기다리던_쪽을_깨운다() throws Exception {
+        cache.tryStart(USER, HASH);
+        PolicyRerankCache.InFlight inFlight = cache.inFlight(USER).orElseThrow();
+        assertThat(inFlight.inputHash()).isEqualTo(HASH);
+        assertThat(inFlight.elapsed().isNegative()).isFalse();
+
+        // 끝나지 않으면 정한 시간만 기다리고 false
+        long start = System.nanoTime();
+        assertThat(inFlight.await(Duration.ofMillis(100))).isFalse();
+        assertThat((System.nanoTime() - start) / 1_000_000).isLessThan(1_000);
+        assertThat(inFlight.await(Duration.ZERO)).isFalse();
+
+        CompletableFuture<Boolean> waiter = CompletableFuture.supplyAsync(() -> {
+            try {
+                return inFlight.await(Duration.ofSeconds(5));
+            } catch (InterruptedException e) {
+                throw new IllegalStateException(e);
+            }
+        });
+        cache.finish(USER);
+
+        assertThat(waiter.get(2, TimeUnit.SECONDS)).isTrue();
+        assertThat(inFlight.await(Duration.ZERO)).isTrue();
     }
 }

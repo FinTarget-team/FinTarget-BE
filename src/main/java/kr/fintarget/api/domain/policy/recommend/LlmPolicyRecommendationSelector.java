@@ -60,7 +60,9 @@ import java.util.stream.Collectors;
  *   <li>후보 밖·중복·형식 오류 항목은 버리고, N건 미만이면 규칙 순서로 채운다(시·군·구 한정 정책은 맨 마지막). 0건이거나 해석할 수 없으면 규칙 상위 N</li>
  *   <li>결과는 사용자별 메모리 캐시({@link PolicyRerankCache})에 둔다. 입력 해시(사용자 정보 + 후보 정책 ID 목록 + 프롬프트 버전)가 같으면 캐시를 쓴다</li>
  *   <li>캐시가 없으면 동기 호출(policy.recommend.rerank.timeout, 기본 20초). 실패·시간 초과면 규칙 상위 N을 돌려주고 캐시하지 않으며, 비동기로 한 번 다시 계산한다</li>
- *   <li>같은 사용자의 계산이 진행 중이면 기다리지 않고 규칙 상위 N</li>
+ *   <li>같은 사용자의 같은 입력 계산이 진행 중이면(온보딩 6단계 미리 계산 등) 새로 호출하지 않고 그 계산을 기다린다.
+ *       기다리는 시간은 그 계산이 시작된 뒤 지난 시간을 뺀 남은 timeout까지다. 시간 초과·실패면 규칙 상위 N (#243).
+ *       입력이 다른 계산이 진행 중이면 기다리지 않고 규칙 상위 N</li>
  * </ol>
  * 리랭킹이 꺼져 있거나(policy.recommend.rerank.enabled=false, 관리자 API로 실행 중 변경 가능) AI 키가 없으면 LLM을 호출하지 않고 규칙 상위 N이다.
  * 한정 정책을 뺀 후보가 N건 이하면 고를 것이 없어 호출하지 않는다. 정책 유형 필터가 있는 목록은 규칙 결과를 쓴다 ({@link #selectWithinType}).
@@ -184,7 +186,7 @@ public class LlmPolicyRecommendationSelector implements PolicyRecommendationSele
             if (cache.find(user.getId(), input.hash()).isPresent()) {
                 return RefreshOutcome.CACHED;
             }
-            if (!cache.tryStart(user.getId())) {
+            if (!cache.tryStart(user.getId(), input.hash())) {
                 return RefreshOutcome.IN_FLIGHT;
             }
             // 계산 전 세대를 읽어 둔다. 계산 중에 시연 초기화로 캐시가 비워지면 결과를 저장하지 않는다 (#239)
@@ -217,9 +219,8 @@ public class LlmPolicyRecommendationSelector implements PolicyRecommendationSele
         if (cached.isPresent()) {
             return merge(cached.get().policyIds(), allCandidates, fallback, limit);
         }
-        if (!cache.tryStart(userId)) {
-            log.info("추천 리랭킹 대체 userId={} candidates={} fallback=IN_FLIGHT", userId, candidates.size());
-            return fallback;
+        if (!cache.tryStart(userId, input.hash())) {
+            return awaitInFlight(userId, input, allCandidates, candidates.size(), fallback, limit);
         }
 
         // 시간 초과로 포기한 호출이 나중에 끝나도 캐시에 넣지 않도록, 결과를 쓸지 포기할지 한 번만 정한다
@@ -270,11 +271,57 @@ public class LlmPolicyRecommendationSelector implements PolicyRecommendationSele
         }
     }
 
+    /**
+     * 같은 사용자의 계산이 진행 중일 때 (#243). 같은 입력이면 그 계산이 끝나기를 남은 시간(timeout - 그 계산이 시작된 뒤 지난 시간)만큼
+     * 기다렸다가 캐시를 읽는다. LLM을 새로 호출하지 않으므로 동시에 여러 번 조회해도 호출은 진행 중인 1회뿐이다.
+     * 입력이 다르거나, 남은 시간이 없거나, 시간을 넘기거나, 계산이 실패해 캐시가 없으면 규칙 상위 N.
+     */
+    private List<Policy> awaitInFlight(String userId, RerankInput input, List<Policy> allCandidates, int candidateCount,
+                                       List<Policy> fallback, int limit) {
+        Optional<PolicyRerankCache.InFlight> running = cache.inFlight(userId);
+        if (running.isEmpty()) {
+            // tryStart 직후 계산이 끝났다. 결과가 저장됐으면 쓴다
+            return cache.find(userId, input.hash())
+                    .map(entry -> merge(entry.policyIds(), allCandidates, fallback, limit))
+                    .orElseGet(() -> {
+                        log.info("추천 리랭킹 대체 userId={} candidates={} fallback=IN_FLIGHT_ENDED", userId, candidateCount);
+                        return fallback;
+                    });
+        }
+        PolicyRerankCache.InFlight inFlight = running.get();
+        if (!inFlight.inputHash().equals(input.hash())) {
+            log.info("추천 리랭킹 대체 userId={} candidates={} fallback=IN_FLIGHT_OTHER_INPUT", userId, candidateCount);
+            return fallback;
+        }
+        Duration remaining = timeout.minus(inFlight.elapsed());
+        long waitStart = System.currentTimeMillis();
+        boolean done;
+        try {
+            done = inFlight.await(remaining);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return fallback;
+        }
+        long waitedMs = System.currentTimeMillis() - waitStart;
+        if (!done) {
+            log.warn("추천 리랭킹 대체 userId={} candidates={} fallback=WAIT_TIMEOUT waitedMs={} timeoutMs={}",
+                    userId, candidateCount, waitedMs, timeout.toMillis());
+            return fallback;
+        }
+        Optional<PolicyRerankCache.Entry> cached = cache.find(userId, input.hash());
+        if (cached.isEmpty()) {
+            log.warn("추천 리랭킹 대체 userId={} candidates={} fallback=WAIT_FAILED waitedMs={}", userId, candidateCount, waitedMs);
+            return fallback;
+        }
+        log.info("추천 리랭킹 진행 중 계산 결과 사용 userId={} candidates={} waitedMs={}", userId, candidateCount, waitedMs);
+        return merge(cached.get().policyIds(), allCandidates, fallback, limit);
+    }
+
     // 시간 초과 뒤 비동기로 한 번만 다시 계산한다. 재시도도 실패하면 다음 조회·미리 계산 때 다시 시도한다
     private void retryAsync(String userId, RerankInput input, List<Policy> candidates) {
         try {
             retryExecutor.execute(() -> {
-                if (!isAvailable() || cache.find(userId, input.hash()).isPresent() || !cache.tryStart(userId)) {
+                if (!isAvailable() || cache.find(userId, input.hash()).isPresent() || !cache.tryStart(userId, input.hash())) {
                     return;
                 }
                 long generation = cache.generation(userId);

@@ -257,7 +257,7 @@ class LlmPolicyRecommendationSelectorTest {
     }
 
     @Test
-    void 같은_사용자의_계산이_진행_중이면_기다리지_않고_규칙_결과를_돌려주고_LLM은_한_번만_호출한다() throws Exception {
+    void 같은_사용자의_계산이_진행_중이면_그_결과를_기다려_돌려주고_LLM은_한_번만_호출한다() throws Exception {
         CountDownLatch started = new CountDownLatch(1);
         CountDownLatch release = new CountDownLatch(1);
         when(aiTextClient.generate(any())).thenAnswer(invocation -> {
@@ -271,19 +271,23 @@ class LlmPolicyRecommendationSelectorTest {
             Future<List<Policy>> first = pool.submit(() -> selector.select(USER, SORTED, TODAY));
             assertThat(started.await(5, TimeUnit.SECONDS)).isTrue();
 
-            List<Policy> second = selector.select(USER, SORTED, TODAY);
-            assertThat(second).isEqualTo(ruleTopN());
+            // 두 번째 조회는 새로 호출하지 않고 첫 번째 계산을 기다린다 (#243)
+            Future<List<Policy>> second = pool.submit(() -> selector.select(USER, SORTED, TODAY));
+            Thread.sleep(100);
+            assertThat(second.isDone()).isFalse();
 
             release.countDown();
-            assertThat(first.get(5, TimeUnit.SECONDS)).containsExactly(candidates().get(7), candidates().get(6), candidates().get(5));
+            List<Policy> reranked = List.of(candidates().get(7), candidates().get(6), candidates().get(5));
+            assertThat(first.get(5, TimeUnit.SECONDS)).isEqualTo(reranked);
+            assertThat(second.get(5, TimeUnit.SECONDS)).isEqualTo(reranked);
         }
         verify(aiTextClient, times(1)).generate(any());
     }
 
     @Test
-    void 미리_계산도_진행_중인_계산과_겹치지_않는다() {
+    void 미리_계산도_진행_중인_계산과_겹치지_않고_입력이_다른_계산은_기다리지_않는다() {
         LlmPolicyRecommendationSelector selector = selector();
-        cache.tryStart(USER.getId());
+        cache.tryStart(USER.getId(), "다른 입력 해시");
 
         assertThat(selector.refresh(USER, SORTED, TODAY)).isEqualTo(RefreshOutcome.IN_FLIGHT);
         assertThat(selector.select(USER, SORTED, TODAY)).isEqualTo(ruleTopN());
@@ -426,5 +430,147 @@ class LlmPolicyRecommendationSelectorTest {
         assertThat(selector().select(USER, few, TODAY)).isEqualTo(rule.select(USER, few, TODAY));
         assertThat(selector().refresh(USER, few, TODAY)).isEqualTo(RefreshOutcome.NOT_NEEDED);
         verify(aiTextClient, never()).generate(any());
+    }
+
+    // ===== 진행 중인 계산 기다리기 (#243) =====
+
+    // 미리 계산(온보딩 6단계)을 다른 스레드에서 시작하고 LLM 호출에 들어갈 때까지 기다린다
+    private Future<RefreshOutcome> startPrecompute(ExecutorService pool, LlmPolicyRecommendationSelector selector,
+                                                   CountDownLatch started) throws InterruptedException {
+        Future<RefreshOutcome> precompute = pool.submit(() -> selector.refresh(USER, SORTED, TODAY));
+        assertThat(started.await(5, TimeUnit.SECONDS)).isTrue();
+        return precompute;
+    }
+
+    @Test
+    void 미리_계산이_진행_중일_때_조회하면_끝나기를_기다려_리랭킹_결과를_받는다() throws Exception {
+        CountDownLatch started = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        when(aiTextClient.generate(any())).thenAnswer(invocation -> {
+            started.countDown();
+            release.await(5, TimeUnit.SECONDS);
+            return reply(json(8, 5, 2));
+        });
+        LlmPolicyRecommendationSelector selector = selector();
+
+        try (ExecutorService pool = Executors.newVirtualThreadPerTaskExecutor()) {
+            Future<RefreshOutcome> precompute = startPrecompute(pool, selector, started);
+            Future<List<Policy>> listed = pool.submit(() -> selector.select(USER, SORTED, TODAY));
+            Thread.sleep(100);
+            assertThat(listed.isDone()).isFalse();
+
+            release.countDown();
+            assertThat(listed.get(5, TimeUnit.SECONDS))
+                    .containsExactly(candidates().get(7), candidates().get(4), candidates().get(1));
+            assertThat(precompute.get(5, TimeUnit.SECONDS)).isEqualTo(RefreshOutcome.COMPUTED);
+        }
+        verify(aiTextClient, times(1)).generate(any());
+    }
+
+    @Test
+    void 기다리다_시간을_넘기면_규칙_결과를_돌려주고_새로_호출하지_않는다() throws Exception {
+        CountDownLatch started = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        when(aiTextClient.generate(any())).thenAnswer(invocation -> {
+            started.countDown();
+            release.await(5, TimeUnit.SECONDS);
+            return reply(json(8, 5, 2));
+        });
+        LlmPolicyRecommendationSelector selector = selector(true, WITH_KEY, Duration.ofMillis(300));
+
+        try (ExecutorService pool = Executors.newVirtualThreadPerTaskExecutor()) {
+            startPrecompute(pool, selector, started);
+            long start = System.nanoTime();
+            List<Policy> listed = selector.select(USER, SORTED, TODAY);
+            long elapsedMs = (System.nanoTime() - start) / 1_000_000;
+
+            assertThat(listed).isEqualTo(ruleTopN());
+            assertThat(elapsedMs).isLessThan(2_000);
+            release.countDown();
+        }
+        verify(aiTextClient, times(1)).generate(any());
+    }
+
+    @Test
+    void 진행_중인_계산이_시작된_뒤_지난_시간을_빼고_남은_시간만_기다린다() throws Exception {
+        CountDownLatch started = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        when(aiTextClient.generate(any())).thenAnswer(invocation -> {
+            started.countDown();
+            release.await(5, TimeUnit.SECONDS);
+            return reply(json(8, 5, 2));
+        });
+        LlmPolicyRecommendationSelector selector = selector(true, WITH_KEY, Duration.ofMillis(1_000));
+
+        try (ExecutorService pool = Executors.newVirtualThreadPerTaskExecutor()) {
+            startPrecompute(pool, selector, started);
+            Thread.sleep(700);
+            long start = System.nanoTime();
+            List<Policy> listed = selector.select(USER, SORTED, TODAY);
+            long elapsedMs = (System.nanoTime() - start) / 1_000_000;
+
+            // timeout 1초 중 0.7초가 이미 지났으므로 약 0.3초만 기다린다
+            assertThat(listed).isEqualTo(ruleTopN());
+            assertThat(elapsedMs).isLessThan(800);
+            release.countDown();
+        }
+    }
+
+    @Test
+    void 기다리던_계산이_실패하면_규칙_결과를_돌려준다() throws Exception {
+        CountDownLatch started = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        when(aiTextClient.generate(any())).thenAnswer(invocation -> {
+            started.countDown();
+            release.await(5, TimeUnit.SECONDS);
+            throw new AiCallFailedException(AiClientException.Reason.SERVER_ERROR);
+        });
+        LlmPolicyRecommendationSelector selector = selector();
+
+        try (ExecutorService pool = Executors.newVirtualThreadPerTaskExecutor()) {
+            Future<RefreshOutcome> precompute = startPrecompute(pool, selector, started);
+            Future<List<Policy>> listed = pool.submit(() -> selector.select(USER, SORTED, TODAY));
+            Thread.sleep(100);
+
+            release.countDown();
+            long start = System.nanoTime();
+            assertThat(listed.get(5, TimeUnit.SECONDS)).isEqualTo(ruleTopN());
+            // 실패를 timeout(5초)까지 기다리지 않고 바로 알아챈다
+            assertThat((System.nanoTime() - start) / 1_000_000).isLessThan(2_000);
+            assertThat(precompute.get(5, TimeUnit.SECONDS)).isEqualTo(RefreshOutcome.FAILED);
+        }
+        verify(aiTextClient, times(1)).generate(any());
+        assertThat(cache.inFlight(USER.getId())).isEmpty();
+    }
+
+    @Test
+    void 같은_사용자가_동시에_여러_번_조회해도_LLM은_한_번만_호출하고_모두_리랭킹_결과를_받는다() throws Exception {
+        CountDownLatch started = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        AtomicInteger calls = new AtomicInteger();
+        when(aiTextClient.generate(any())).thenAnswer(invocation -> {
+            calls.incrementAndGet();
+            started.countDown();
+            release.await(5, TimeUnit.SECONDS);
+            return reply(json(8, 7, 6));
+        });
+        LlmPolicyRecommendationSelector selector = selector();
+
+        try (ExecutorService pool = Executors.newVirtualThreadPerTaskExecutor()) {
+            List<Future<List<Policy>>> lists = new ArrayList<>();
+            lists.add(pool.submit(() -> selector.select(USER, SORTED, TODAY)));
+            assertThat(started.await(5, TimeUnit.SECONDS)).isTrue();
+            for (int i = 0; i < 5; i++) {
+                lists.add(pool.submit(() -> selector.select(USER, SORTED, TODAY)));
+            }
+            Thread.sleep(100);
+            release.countDown();
+
+            List<Policy> reranked = List.of(candidates().get(7), candidates().get(6), candidates().get(5));
+            for (Future<List<Policy>> listed : lists) {
+                assertThat(listed.get(5, TimeUnit.SECONDS)).isEqualTo(reranked);
+            }
+        }
+        assertThat(calls.get()).isEqualTo(1);
     }
 }
