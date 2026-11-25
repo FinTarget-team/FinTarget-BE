@@ -19,6 +19,7 @@ import kr.fintarget.api.domain.policy.search.eval.QuestionEmbeddingCache;
 import kr.fintarget.api.domain.policy.search.eval.SearchConfig;
 import kr.fintarget.api.domain.policy.recommend.RuleBasedPolicyRecommendationSelector;
 import kr.fintarget.api.domain.policy.service.PolicyService;
+import kr.fintarget.api.domain.simulation.estimate.SimulationSavingEstimator;
 import kr.fintarget.api.domain.user.validation.BirthYearValidator;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -43,7 +44,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * <p>서울 25세 후보: 월세(R-1, 거리 0 / 0.4), 전세 대출(KINFA). 운영 설정(k=5, 하한 0.5)으로 검색한다.
  */
 @DataJpaTest
-@Import({PolicyService.class, RuleBasedPolicyRecommendationSelector.class, ManualPolicyPinner.class, ManualPolicyCatalog.class})
+@Import({PolicyService.class, RuleBasedPolicyRecommendationSelector.class, ManualPolicyPinner.class, ManualPolicyCatalog.class,
+        SimulationSavingEstimator.class})
 class PolicyRagE2eEvalTest {
 
     private static final String RENT = "YOUTH_CENTER:R-1";

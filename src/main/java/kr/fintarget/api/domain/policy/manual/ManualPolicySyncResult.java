@@ -16,6 +16,9 @@ public record ManualPolicySyncResult(
         List<TextOverrideItem> textOverrides,
         @Schema(description = "추천 목록 고정 노출 대상 (목록 순서 = 노출 순서). found·nameMatches가 false면 이 환경에서는 고정하지 않음")
         List<PinItem> pins,
+        @Schema(description = "시뮬레이션 월 절감액 추정 대상 (#257). found·nameMatches가 false면 이 환경에서는 추정하지 않음. "
+                + "추정은 DB에 쓰지 않으므로 이 항목은 외부 ID 확인용이고, 동기화를 해야 적용되는 것은 아님")
+        List<SavingEstimateItem> savingEstimates,
         @Schema(description = "단계별 결과 (textOverride, chunk, benefit, condition, benefitOverride, rerank, embedding). "
                 + "다른 작업과 겹쳐 실행하지 못한 단계는 \"skipped: 사유\"", example = "{\"benefitOverride\": 0, \"rerank\": \"requested\"}")
         Map<String, Object> steps,
@@ -42,6 +45,17 @@ public record ManualPolicySyncResult(
             Integer months,
             Long oneTimeAmount,
             @Schema(description = "시뮬레이션에 반영되는지", example = "true") boolean simulationReflected
+    ) {
+    }
+
+    public record SavingEstimateItem(
+            @Schema(example = "YOUTH_CENTER") String source,
+            @Schema(example = "20260922005400113506") String externalId,
+            @Schema(example = "기숙사형 청년주택 공급") String name,
+            @Schema(description = "추정 규칙", example = "RENT_RATIO") String rule,
+            @Schema(description = "추정을 적용하는 사용자 지역. 빈 배열이면 전 지역", example = "[\"SEOUL\"]") List<String> userRegions,
+            @Schema(description = "이 환경에 대상 정책이 있는지") boolean found,
+            @Schema(description = "저장된 정책명이 리소스와 같은지. 다르면 추정하지 않음") boolean nameMatches
     ) {
     }
 

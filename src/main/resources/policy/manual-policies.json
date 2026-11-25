@@ -258,5 +258,96 @@
       "applyMethodAppend": null,
       "etcNoteAppend": null
     }
+  ],
+  "savingEstimates": [
+    {
+      "source": "YOUTH_CENTER",
+      "externalId": "20260123005400112079",
+      "name": "대학생 연합생활관(은행권,고양)",
+      "rule": "FIXED_RENT",
+      "rent": 150000,
+      "userRegions": [
+        "SEOUL"
+      ],
+      "sourceUrl": "정책 원문(온통청년) 지원 내용: 기숙사비 월 15만원(보증금 15만원)"
+    },
+    {
+      "source": "YOUTH_CENTER",
+      "externalId": "20260922005400113506",
+      "name": "기숙사형 청년주택 공급",
+      "rule": "RENT_RATIO",
+      "ratio": 0.5,
+      "userRegions": [
+        "SEOUL"
+      ],
+      "sourceUrl": "https://www.korea.kr/news/policyNewsView.do?newsId=148893980"
+    },
+    {
+      "source": "YOUTH_CENTER",
+      "externalId": "20261021005400214219",
+      "name": "2026 청년안심주택 공급(매입)",
+      "rule": "RENT_RATIO",
+      "ratio": 0.5,
+      "userRegions": [
+        "SEOUL"
+      ],
+      "sourceUrl": "https://mediahub.seoul.go.kr/archives/2010689"
+    },
+    {
+      "source": "YOUTH_CENTER",
+      "externalId": "20260921005400113460",
+      "name": "청년 맞춤형 공적 임대주택 공급(통합공공임대)",
+      "rule": "INCOME_TIERED_RATIO",
+      "tiers": [
+        {
+          "maxIncomeExclusive": 1500000,
+          "ratio": 0.5
+        },
+        {
+          "maxIncomeExclusive": 2600000,
+          "ratio": 0.65
+        },
+        {
+          "maxIncomeExclusive": 3000000,
+          "ratio": 0.8
+        },
+        {
+          "maxIncomeExclusive": null,
+          "ratio": 0.9
+        }
+      ],
+      "userRegions": [
+        "SEOUL"
+      ],
+      "sourceUrl": "https://medigatenews.com/stand/36884"
+    },
+    {
+      "source": "YOUTH_CENTER",
+      "externalId": "20260922005400113532",
+      "name": "청년층 대상 공공임대주택 공급(통합공공임대)",
+      "rule": "INCOME_TIERED_RATIO",
+      "tiers": [
+        {
+          "maxIncomeExclusive": 1500000,
+          "ratio": 0.5
+        },
+        {
+          "maxIncomeExclusive": 2600000,
+          "ratio": 0.65
+        },
+        {
+          "maxIncomeExclusive": 3000000,
+          "ratio": 0.8
+        },
+        {
+          "maxIncomeExclusive": null,
+          "ratio": 0.9
+        }
+      ],
+      "userRegions": [
+        "SEOUL"
+      ],
+      "sourceUrl": "https://medigatenews.com/stand/36884"
+    }
   ]
 }

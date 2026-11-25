@@ -56,6 +56,7 @@ public class ManualPolicyCatalog {
     private final List<BenefitOverride> overrides;
     private final List<TextOverride> textOverrides;
     private final List<Pin> pins;
+    private final List<SavingEstimate> savingEstimates;
 
     public ManualPolicyCatalog() {
         this(load(RESOURCE));
@@ -63,7 +64,7 @@ public class ManualPolicyCatalog {
 
     private ManualPolicyCatalog(Document document) {
         this(document.policies(), orEmpty(document.benefitOverrides()), orEmpty(document.textOverrides()),
-                orEmpty(document.pins()));
+                orEmpty(document.pins()), orEmpty(document.savingEstimates()));
     }
 
     ManualPolicyCatalog(List<ManualPolicy> policies) {
@@ -80,6 +81,11 @@ public class ManualPolicyCatalog {
 
     ManualPolicyCatalog(List<ManualPolicy> policies, List<BenefitOverride> benefitOverrides,
                         List<TextOverride> textOverrides, List<Pin> pins) {
+        this(policies, benefitOverrides, textOverrides, pins, List.of());
+    }
+
+    ManualPolicyCatalog(List<ManualPolicy> policies, List<BenefitOverride> benefitOverrides,
+                        List<TextOverride> textOverrides, List<Pin> pins, List<SavingEstimate> savingEstimates) {
         Map<String, ManualPolicy> map = new LinkedHashMap<>();
         Set<String> names = new HashSet<>();
         for (ManualPolicy policy : policies) {
@@ -127,6 +133,15 @@ public class ManualPolicyCatalog {
             }
         }
         this.pins = List.copyOf(pins);
+
+        Set<String> estimateKeys = new HashSet<>();
+        for (SavingEstimate estimate : savingEstimates) {
+            estimate.validate();
+            if (!estimateKeys.add(key(estimate.source(), estimate.externalId()))) {
+                throw new IllegalStateException("절감액 추정 대상이 겹칩니다: " + estimate.source() + " " + estimate.externalId());
+            }
+        }
+        this.savingEstimates = List.copyOf(savingEstimates);
     }
 
     private static <T> List<T> orEmpty(List<T> list) {
@@ -154,6 +169,11 @@ public class ManualPolicyCatalog {
     /** 추천 목록 고정 노출 대상 (목록 순서 = 노출 순서) */
     public List<Pin> pins() {
         return pins;
+    }
+
+    /** 시뮬레이션 월 절감액 추정 대상 (#257) */
+    public List<SavingEstimate> savingEstimates() {
+        return savingEstimates;
     }
 
     /** 직접 등록 정책이면 리소스 항목. 다른 출처 정책이면 빈 값 */
@@ -209,7 +229,7 @@ public class ManualPolicyCatalog {
     }
 
     record Document(String description, List<ManualPolicy> policies, List<BenefitOverride> benefitOverrides,
-                    List<TextOverride> textOverrides, List<Pin> pins) {
+                    List<TextOverride> textOverrides, List<Pin> pins, List<SavingEstimate> savingEstimates) {
     }
 
     private static boolean sameTarget(String source, String externalId, String name, Policy policy) {
@@ -331,6 +351,125 @@ public class ManualPolicyCatalog {
                 throw new IllegalStateException("혜택 보정 값이 없습니다: " + externalId);
             }
             benefit.validate(externalId);
+        }
+    }
+
+    /**
+     * 시뮬레이션 월 절감액 추정 대상 1건 (#257). 금액이 없어(SERVICE) 시뮬레이션에 반영되지 않는 주거 정책을
+     * 공식 기준값으로 추정하기 위한 규칙이다. 출처·외부 정책 ID·정책명이 모두 같은 정책에만 적용한다.
+     *
+     * <p>DB에 쓰지 않고 요청 시점에만 계산하므로, 추천 정렬에 쓰이는 {@link Policy#hasBenefitForSimulation()}은 바뀌지 않는다.
+     *
+     * @param rule         FIXED_RENT(기준 월세 − rent), RENT_RATIO(기준 월세 × (1 − ratio)),
+     *                     INCOME_TIERED_RATIO(사용자 소득 구간의 tier 비율로 RENT_RATIO와 같이 계산)
+     * @param rent         FIXED_RENT일 때 실제 임대료(원)
+     * @param ratio        RENT_RATIO일 때 시세 대비 임대료 비율 (0 초과 1 미만)
+     * @param tiers        INCOME_TIERED_RATIO일 때 소득 구간별 비율. 상한 오름차순이고 마지막은 상한 없음(null)
+     * @param months       절감 개월 수. 원문에 거주 기간이 없으면 생략한다 (계산은 기본 12개월)
+     * @param userRegions  이 추정을 적용할 사용자 지역 코드. 기준 월세가 특정 지역 값이라 그 지역 사용자에게만 적용한다
+     * @param sourceUrl    기준값·비율의 공식 출처 (기록용)
+     */
+    public record SavingEstimate(String source, String externalId, String name, String rule, Long rent, Double ratio,
+                                 List<Tier> tiers, Integer months, List<String> userRegions, String sourceUrl) {
+
+        public static final String FIXED_RENT = "FIXED_RENT";
+        public static final String RENT_RATIO = "RENT_RATIO";
+        public static final String INCOME_TIERED_RATIO = "INCOME_TIERED_RATIO";
+
+        public SavingEstimate {
+            tiers = tiers == null ? List.of() : List.copyOf(tiers);
+            userRegions = userRegions == null ? List.of() : List.copyOf(userRegions);
+        }
+
+        public boolean matches(Policy policy) {
+            return sameTarget(source, externalId, name, policy);
+        }
+
+        /** 이 사용자 지역에 적용하는 추정인지. userRegions가 비어 있으면 전 지역 */
+        public boolean appliesTo(String userRegion) {
+            return userRegions.isEmpty() || (userRegion != null && userRegions.contains(userRegion));
+        }
+
+        /** 소득 구간 하한이 들어가는 첫 tier의 비율. INCOME_TIERED_RATIO가 아니거나 찾지 못하면 null */
+        public Double ratioFor(long minIncome) {
+            for (Tier tier : tiers) {
+                if (tier.maxIncomeExclusive() == null || minIncome < tier.maxIncomeExclusive()) {
+                    return tier.ratio();
+                }
+            }
+            return null;
+        }
+
+        void validate() {
+            if (source == null || source.isBlank() || SOURCE.equals(source)) {
+                throw new IllegalStateException("절감액 추정 출처가 비었거나 MANUAL입니다: " + externalId);
+            }
+            if (externalId == null || externalId.isBlank() || name == null || name.isBlank()) {
+                throw new IllegalStateException("절감액 추정 외부 ID·정책명이 비었습니다: " + source);
+            }
+            if (months != null && months < 1) {
+                throw new IllegalStateException("절감액 추정 개월 수가 1보다 작습니다: " + externalId);
+            }
+            for (String region : userRegions) {
+                if (Region.fromCode(region) == null) {
+                    throw new IllegalStateException("절감액 추정 지역 코드가 아닙니다: " + externalId + " " + region);
+                }
+            }
+            switch (rule == null ? "" : rule) {
+                case FIXED_RENT -> validateFixedRent();
+                case RENT_RATIO -> validateRentRatio();
+                case INCOME_TIERED_RATIO -> validateTiers();
+                default -> throw new IllegalStateException("절감액 추정 규칙이 아닙니다: " + externalId + " " + rule);
+            }
+        }
+
+        private void validateFixedRent() {
+            if (rent == null || rent <= 0) {
+                throw new IllegalStateException("FIXED_RENT인데 임대료가 없습니다: " + externalId);
+            }
+            if (ratio != null || !tiers.isEmpty()) {
+                throw new IllegalStateException("FIXED_RENT에 ratio·tiers를 함께 둘 수 없습니다: " + externalId);
+            }
+        }
+
+        private void validateRentRatio() {
+            if (ratio == null || ratio <= 0 || ratio >= 1) {
+                throw new IllegalStateException("RENT_RATIO 비율은 0보다 크고 1보다 작아야 합니다: " + externalId + " " + ratio);
+            }
+            if (rent != null || !tiers.isEmpty()) {
+                throw new IllegalStateException("RENT_RATIO에 rent·tiers를 함께 둘 수 없습니다: " + externalId);
+            }
+        }
+
+        private void validateTiers() {
+            if (tiers.isEmpty()) {
+                throw new IllegalStateException("INCOME_TIERED_RATIO인데 tiers가 없습니다: " + externalId);
+            }
+            if (rent != null || ratio != null) {
+                throw new IllegalStateException("INCOME_TIERED_RATIO에 rent·ratio를 함께 둘 수 없습니다: " + externalId);
+            }
+            long previous = Long.MIN_VALUE;
+            for (int i = 0; i < tiers.size(); i++) {
+                Tier tier = tiers.get(i);
+                if (tier.ratio() == null || tier.ratio() <= 0 || tier.ratio() >= 1) {
+                    throw new IllegalStateException("절감액 추정 tier 비율은 0보다 크고 1보다 작아야 합니다: "
+                            + externalId + " " + tier.ratio());
+                }
+                boolean last = i == tiers.size() - 1;
+                if (last != (tier.maxIncomeExclusive() == null)) {
+                    throw new IllegalStateException("절감액 추정 tier는 마지막 하나만 상한이 없어야 합니다: " + externalId);
+                }
+                if (tier.maxIncomeExclusive() != null) {
+                    if (tier.maxIncomeExclusive() <= previous) {
+                        throw new IllegalStateException("절감액 추정 tier 상한이 오름차순이 아닙니다: " + externalId);
+                    }
+                    previous = tier.maxIncomeExclusive();
+                }
+            }
+        }
+
+        /** 소득 구간별 임대료 비율. maxIncomeExclusive 미만이면 이 비율 (마지막은 null = 상한 없음) */
+        public record Tier(Long maxIncomeExclusive, Double ratio) {
         }
     }
 

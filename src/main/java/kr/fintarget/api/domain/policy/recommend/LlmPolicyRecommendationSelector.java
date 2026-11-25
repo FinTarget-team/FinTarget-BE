@@ -59,7 +59,7 @@ import java.util.stream.Collectors;
  *   <li>상위 모델(openai.model.premium)에 사용자 정보 5개(구간만)와 후보 한 줄 요약을 보내고 최대 N건을 적합한 순서로 받는다</li>
  *   <li>후보 밖·중복·형식 오류 항목은 버리고, N건 미만이면 규칙 순서로 채운다(시·군·구 한정 정책은 맨 마지막). 0건이거나 해석할 수 없으면 규칙 상위 N</li>
  *   <li>결과는 사용자별 메모리 캐시({@link PolicyRerankCache})에 둔다. 입력 해시(사용자 정보 + 후보 정책 ID 목록 + 프롬프트 버전)가 같으면 캐시를 쓴다</li>
- *   <li>캐시가 없으면 동기 호출(policy.recommend.rerank.timeout, 기본 20초). 실패·시간 초과면 규칙 상위 N을 돌려주고 캐시하지 않으며, 비동기로 한 번 다시 계산한다</li>
+ *   <li>캐시가 없으면 동기 호출(policy.recommend.rerank.timeout, 기본 30초). 실패·시간 초과면 규칙 상위 N을 돌려주고 캐시하지 않으며, 비동기로 한 번 다시 계산한다</li>
  *   <li>같은 사용자의 같은 입력 계산이 진행 중이면(온보딩 6단계 미리 계산 등) 새로 호출하지 않고 그 계산을 기다린다.
  *       기다리는 시간은 그 계산이 시작된 뒤 지난 시간을 뺀 남은 timeout까지다. 시간 초과·실패면 규칙 상위 N (#243).
  *       입력이 다른 계산이 진행 중이면 기다리지 않고 규칙 상위 N</li>
@@ -97,7 +97,7 @@ public class LlmPolicyRecommendationSelector implements PolicyRecommendationSele
                                            OpenAiProperties openAiProperties, PolicyRerankPrompt prompt,
                                            PolicyRerankCache cache,
                                            @Value("${policy.recommend.rerank.enabled:true}") boolean enabled,
-                                           @Value("${policy.recommend.rerank.timeout:20s}") Duration timeout,
+                                           @Value("${policy.recommend.rerank.timeout:30s}") Duration timeout,
                                            @Value("${policy.recommend.rerank.max-output-tokens:" + DEFAULT_MAX_OUTPUT_TOKENS + "}") int maxOutputTokens) {
         this(ruleSelector, aiTextClient, openAiProperties, prompt, cache, enabled, timeout, maxOutputTokens,
                 Executors.newVirtualThreadPerTaskExecutor(), null);
@@ -163,6 +163,11 @@ public class LlmPolicyRecommendationSelector implements PolicyRecommendationSele
 
     public String modelId() {
         return openAiProperties.model().idOf(AiModelTier.PREMIUM);
+    }
+
+    /** 목록 조회가 리랭킹을 기다리는 최대 시간 (policy.recommend.rerank.timeout) */
+    public Duration timeout() {
+        return timeout;
     }
 
     public String promptVersion() {

@@ -417,7 +417,9 @@ Authorization: Bearer {accessToken}
         "months": 12,
         "monthsSpecified": true,
         "oneTimeAmount": null,
-        "maximum": true
+        "maximum": true,
+        "estimated": false,
+        "basis": null
       },
       "ageCondition": null,
       "incomeCondition": "중위소득 150% 이하",
@@ -435,7 +437,9 @@ Authorization: Bearer {accessToken}
 | `ageCondition` | 나이 조건 원문 (현재 KINFA 정책만 값이 있음). 원본이 조건 없음을 명시하면 `연령 무관`. 원문이 없으면 `null`. 표시 순서: `minAge`·`maxAge` → `ageCondition` → 둘 다 없으면 "제한 없음" |
 | `incomeLimit` | 소득 상한(원). `null`이면 정형화된 소득 상한이 없다는 뜻이며, 소득 제한이 없다는 뜻은 아님 (현재 모든 정책이 `null`). 소득 조건은 `incomeCondition` 참고 |
 | `benefitAmount` | 지원 금액(원). 현물·서비스처럼 금액으로 환산되지 않는 혜택이거나 원문에서 금액을 읽지 못하면 `null` (온통청년 정책은 항상 `null`). **KINFA 정책도 전부 대출 상품이라 항상 `null`** — 대출 한도는 받는 혜택이 아니라 빌리는 한도이므로 저축액으로 환산하지 않는다. 한도는 `supportContent`의 `대출 한도: ...` 줄 참고 |
-| `simulationBenefit` | 시뮬레이션 정책 반영 달성일에 쓰이는 현금 혜택 (#162). 정책 원문에서 AI로 추출한 값이며, 반영할 혜택이 없으면 `null` (대출·이자 지원·보증료, 현물·바우처·실비 지원, 금액을 알 수 없는 정책, 아직 추출 전인 정책). `monthlyAmount`(월 금액, 원)·`months`(계산에 쓰는 개월 수)·`monthsSpecified`(원문에 기간이 있는지. `false`면 `months`는 기본 12개월)·`oneTimeAmount`(1회 금액, 원, 첫 달 지급으로 계산)·`maximum`(`true`면 "최대 지원 금액 기준 예상" 안내 필요). 이 값이 있는 정책만 시뮬레이션의 `policyCompletionDate`가 계산됨 |
+| `simulationBenefit` | 시뮬레이션 정책 반영 달성일에 쓰이는 현금 혜택 (#162). 정책 원문에서 AI로 추출한 값이며, 반영할 혜택이 없으면 `null` (대출·이자 지원·보증료, 현물·바우처·실비 지원, 금액을 알 수 없는 정책, 아직 추출 전인 정책). `monthlyAmount`(월 금액, 원)·`months`(계산에 쓰는 개월 수)·`monthsSpecified`(원문에 기간이 있는지. `false`면 `months`는 기본 12개월)·`oneTimeAmount`(1회 금액, 원, 첫 달 지급으로 계산)·`maximum`(`true`면 "최대 지원 금액 기준 예상" 안내 필요)·**`estimated`**(주거비 절감 추정값인지, #257)·**`basis`**(추정 근거 문구, `estimated=false`면 `null`). 이 값이 있는 정책만 시뮬레이션의 `policyCompletionDate`가 계산됨 |
+| `simulationBenefit.estimated` | **항상 내려갑니다** (#257). `true`면 실제 지급액이 아니라 공식 기준값으로 계산한 **예상 주거비 절감액**이므로, 금액 앞에 "예상 절감"을 붙이고 받는 금액처럼 쓰지 않습니다. 실제 현금성 지원이면 `false` |
+| `simulationBenefit.basis` | 추정 근거 문구 (#257). `estimated`가 `true`일 때만 값이 있고 `false`면 `null`. 예: `"입주 시 서울 주요 대학가 원룸 평균 월세 62만원의 50% 수준 임대료로 계산한 예상 절감액"` |
 | `incomeCondition` | 소득 조건 원문. 원본이 조건 없음을 명시하면 `소득 무관`, 온통청년 연소득 조건은 `연소득 N만원 이하` 형식. 원문이 없으면 `null`(정보 없음). 숫자 값(`incomeLimit`)이 없을 때 표시용 |
 | `supportContent` | 지원 내용 원문. KINFA 정책은 `대출 한도: ...`, `금리: ...`처럼 "라벨: 값" 줄을 줄바꿈(`\n`)으로 묶은 값. 원문이 없으면 `null`. 숫자 값(`benefitAmount`)이 없을 때 표시용 |
 | `policyType` | `HOUSING`(주거) \| `FINANCE_WELFARE`(금융·복지) \| `STARTUP`(창업) \| `ETC`(기타) |
@@ -713,7 +717,9 @@ Authorization: Bearer {accessToken}
     "pessimisticCompletionDate": "2028-08-01",
     "successProbability": 0.73,
     "policySuccessProbability": 0.91,
-    "createdAt": "2026-10-30T10:00:00"
+    "createdAt": "2026-10-30T10:00:00",
+    "policyBenefitEstimated": false,
+    "policyBenefitBasis": null
   }
 }
 ```
@@ -727,6 +733,8 @@ Authorization: Bearer {accessToken}
 | `policyCompletionDate` | 정책 혜택을 반영한 예상 달성일(중앙값). 지원 기간과 1회 지급을 반영해 한 달씩 계산. 혜택이 없으면 `null` |
 | `successProbability` | 목표 마감일까지 목표 금액을 달성할 확률 (0.0~1.0). **정책 혜택은 반영하지 않은 값** |
 | `policySuccessProbability` | 정책 혜택을 반영한 달성 확률 (0.0~1.0). `policyCompletionDate`와 같은 조건이라 그 값이 `null`이면 이 값도 `null` |
+| `policyBenefitEstimated` | 정책 반영 계산에 **추정 절감액**을 썼는지 (#257). `true`면 주거비 절감 추정값으로 계산했으므로 화면에 "예상"임을 표시해야 하고, 실제 지급액으로 계산했으면 `false`, 정책 반영 계산을 하지 않았으면(`userPolicyId` 없음, 반영할 혜택·추정이 없음) `null`. **기록 조회(목록·목표별)는 저장 칸이 없어 항상 `null`** |
+| `policyBenefitBasis` | 추정 근거 문구 (#257). `policyBenefitEstimated`가 `true`일 때만 값이 있고, 아니면 `null` |
 
 > 목표의 `deadlineDefaulted`가 `true`면 마감일이 사용자가 정한 날짜가 아니므로, `successProbability`는 화면에 노출하지 않는 것을 권장합니다.
 > 낙관·비관 달성일과 성공 확률이 추가되기 전에 저장된 시뮬레이션 기록은 세 값이 `null`일 수 있습니다.
@@ -758,6 +766,24 @@ Authorization: Bearer {accessToken}
 > 프론트는 시뮬레이션 전에 정책 반영 결과가 나올지 미리 알 수 있습니다.
 > 프론트는 `null`일 때 정책 반영 영역을 숨기거나 "이 정책은 저축 달성일에 반영되지 않습니다" 같은 안내로 대체해야 합니다.
 > `simulationBenefit.maximum`이 `true`면 "최대 지원 금액 기준 예상"임을 함께 표시해야 합니다.
+
+> **주거 정책 예상 절감액** (#257): 금액이 정해지지 않아 시뮬레이션에 반영되지 않던 주거 정책 5건은 공식 기준값으로 **월 절감액을 추정**해
+> `simulationBenefit`에 `estimated = true`로 내려갑니다. 추정값은 **받는 돈이 아니라 덜 쓰는 돈**이므로 화면에 "예상 절감"으로 구분해 표시하고,
+> `basis` 문구를 함께 보여 줘야 합니다. 서버 설정으로 끌 수 있습니다 (`SIMULATION_SAVING_ESTIMATE_ENABLED=false` → 모든 응답에서 `estimated=false`, `basis=null`).
+>
+> | 정책 | 규칙 | 서울 사용자 월 절감액 |
+> |---|---|---|
+> | 대학생 연합생활관(은행권,고양) | 기준 월세 − 원문 기숙사비 월 15만원 | 47만원 |
+> | 기숙사형 청년주택 공급 | 기준 월세의 50% 수준 임대료 | 31만원 |
+> | 2026 청년안심주택 공급(매입) | 기준 월세의 50% 수준 임대료 | 31만원 |
+> | 청년 맞춤형 공적 임대주택 공급(통합공공임대) | 소득 구간별 비율 (50/65/80/90%) | 31 / 21.7 / 12.4 / 6.2만원 |
+> | 청년층 대상 공공임대주택 공급(통합공공임대) | 위와 같음 | 위와 같음 |
+>
+> - 기준 월세 62만원: 다방, 서울 주요 10개 대학 인근 원룸(보증금 1000만원·전용 33㎡ 이하) 평균 62.2만원 (2026-01). 설정 `SIMULATION_SAVING_ESTIMATE_BASE_RENT`
+> - **서울 사용자에게만** 적용합니다. 기준 월세가 서울 대학가 값이라 다른 지역은 과대 추정이 되기 때문입니다 (다른 지역 사용자는 `simulationBenefit`이 `null`)
+> - 거주 기간은 원문에 없어 12개월(`monthsSpecified = false`)로 계산합니다
+> - 추정은 **자격을 판단하지 않습니다**. 추천 후보 조회는 기존대로 나이·소득·지역 조건을 거릅니다
+> - DB에 저장하지 않아 **추천 목록 순서는 바뀌지 않습니다** (`simulationBenefit`이 `null`이 아닌 건수만 늘어남)
 
 - 요청 필드 검증 규칙:
 

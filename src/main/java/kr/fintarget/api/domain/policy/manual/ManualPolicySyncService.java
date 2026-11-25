@@ -12,10 +12,12 @@ import kr.fintarget.api.domain.policy.entity.PolicyCondition;
 import kr.fintarget.api.domain.policy.manual.ManualPolicyCatalog.BenefitOverride;
 import kr.fintarget.api.domain.policy.manual.ManualPolicyCatalog.ManualPolicy;
 import kr.fintarget.api.domain.policy.manual.ManualPolicyCatalog.Pin;
+import kr.fintarget.api.domain.policy.manual.ManualPolicyCatalog.SavingEstimate;
 import kr.fintarget.api.domain.policy.manual.ManualPolicyCatalog.TextOverride;
 import kr.fintarget.api.domain.policy.manual.ManualPolicySyncResult.Item;
 import kr.fintarget.api.domain.policy.manual.ManualPolicySyncResult.OverrideItem;
 import kr.fintarget.api.domain.policy.manual.ManualPolicySyncResult.PinItem;
+import kr.fintarget.api.domain.policy.manual.ManualPolicySyncResult.SavingEstimateItem;
 import kr.fintarget.api.domain.policy.manual.ManualPolicySyncResult.TextOverrideItem;
 import kr.fintarget.api.domain.policy.recommend.rerank.PolicyRerankPrecomputer;
 import kr.fintarget.api.domain.policy.repository.PolicyRepository;
@@ -117,9 +119,11 @@ public class ManualPolicySyncService {
         List<OverrideItem> overrides = Objects.requireNonNull(transactionTemplate.execute(status -> overrideItems()));
         List<TextOverrideItem> textOverrides = Objects.requireNonNull(transactionTemplate.execute(status -> textOverrideItems()));
         List<PinItem> pins = Objects.requireNonNull(transactionTemplate.execute(status -> pinItems()));
+        List<SavingEstimateItem> savingEstimates =
+                Objects.requireNonNull(transactionTemplate.execute(status -> savingEstimateItems()));
         long elapsedMs = System.currentTimeMillis() - start;
         log.info("직접 등록 정책 동기화 완료 정책 {}건 {} 혜택 보정 {}건 소요 {}ms", items.size(), statuses, overrides.size(), elapsedMs);
-        return new ManualPolicySyncResult(items, overrides, textOverrides, pins, steps, elapsedMs);
+        return new ManualPolicySyncResult(items, overrides, textOverrides, pins, savingEstimates, steps, elapsedMs);
     }
 
     // externalId → CREATED / UPDATED
@@ -232,6 +236,18 @@ public class ManualPolicySyncService {
         for (Pin pin : catalog.pins()) {
             Policy policy = policyRepository.findByExternalIdAndSource(pin.externalId(), pin.source()).orElse(null);
             items.add(new PinItem(pin.source(), pin.externalId(), pin.name(), pin.recommendFor(), policy != null, pin.matches(policy)));
+        }
+        return items;
+    }
+
+    // 절감액 추정 대상별 확인 결과 (#257). 추정은 DB에 쓰지 않으므로 외부 ID·정책명이 이 환경과 맞는지만 알린다
+    private List<SavingEstimateItem> savingEstimateItems() {
+        entityManager.clear();
+        List<SavingEstimateItem> items = new ArrayList<>();
+        for (SavingEstimate estimate : catalog.savingEstimates()) {
+            Policy policy = policyRepository.findByExternalIdAndSource(estimate.externalId(), estimate.source()).orElse(null);
+            items.add(new SavingEstimateItem(estimate.source(), estimate.externalId(), estimate.name(), estimate.rule(),
+                    estimate.userRegions(), policy != null, estimate.matches(policy)));
         }
         return items;
     }

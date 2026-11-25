@@ -23,6 +23,7 @@ import kr.fintarget.api.domain.user.code.IncomeBracket;
 import kr.fintarget.api.domain.user.code.SocialProvider;
 import org.junit.jupiter.api.Test;
 import org.mockito.InOrder;
+import kr.fintarget.api.domain.simulation.estimate.SimulationSavingEstimator;
 import kr.fintarget.api.domain.simulation.repository.SimulationRepository;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -66,6 +67,10 @@ class PolicyServiceTest {
 
     @Mock
     private SimulationRepository simulationRepository;
+
+    // 주거 정책 절감액 추정(#257)은 PolicyServiceSavingEstimateTest에서 검증한다. 여기서는 끈 상태로 기존 동작만 본다
+    @Spy
+    private SimulationSavingEstimator savingEstimator = SimulationSavingEstimator.disabled();
 
     @InjectMocks
     private PolicyService policyService;

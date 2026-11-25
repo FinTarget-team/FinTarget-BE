@@ -11,6 +11,8 @@ import kr.fintarget.api.domain.policy.recommend.PolicyRecommendationOrder;
 import kr.fintarget.api.domain.policy.recommend.PolicyRecommendationSelector;
 import kr.fintarget.api.domain.policy.repository.PolicyRepository;
 import kr.fintarget.api.domain.policy.repository.UserPolicyRepository;
+import kr.fintarget.api.domain.policy.dto.SimulationBenefitResponse;
+import kr.fintarget.api.domain.simulation.estimate.SimulationSavingEstimator;
 import kr.fintarget.api.domain.simulation.repository.SimulationRepository;
 import kr.fintarget.api.domain.user.entity.User;
 import kr.fintarget.api.domain.user.repository.UserRepository;
@@ -34,6 +36,7 @@ public class PolicyService {
     private final PolicyRecommendationSelector recommendationSelector;
     private final ManualPolicyPinner manualPolicyPinner;
     private final SimulationRepository simulationRepository;
+    private final SimulationSavingEstimator savingEstimator;
 
     /**
      * 맞춤 정책 목록. 후보 정책({@link #findCandidatePolicies(User, String)})을 추천 순서로 정렬하고(#220),
@@ -51,7 +54,7 @@ public class PolicyService {
                 ? manualPolicyPinner.pin(user, sorted, recommendationSelector.select(user, sorted, today))
                 : recommendationSelector.selectWithinType(user, sorted, today);
         return selected.stream()
-                .map(PolicyResponse::from)
+                .map(policy -> PolicyResponse.from(policy, simulationBenefit(policy, user)))
                 .collect(Collectors.toList());
     }
 
@@ -135,15 +138,40 @@ public class PolicyService {
                 status
         );
 
-        return UserPolicyResponse.from(userPolicyRepository.save(userPolicy));
+        UserPolicy saved = userPolicyRepository.save(userPolicy);
+        return UserPolicyResponse.from(saved, simulationBenefit(policy, userId));
     }
 
     @Transactional(readOnly = true)
     public List<UserPolicyResponse> getUserPolicies(UUID userId) {
-        return userPolicyRepository.findByUserId(userId)
-                .stream()
-                .map(UserPolicyResponse::from)
+        List<UserPolicy> userPolicies = userPolicyRepository.findByUserId(userId);
+        // 추정을 넣지 않는 설정이면 사용자를 읽지 않는다 (기존과 같은 쿼리 수)
+        User user = userPolicies.isEmpty() || !savingEstimator.isExposedInPolicyResponses()
+                ? null : userRepository.findById(userId.toString()).orElse(null);
+        return userPolicies.stream()
+                .map(userPolicy -> UserPolicyResponse.from(userPolicy, simulationBenefit(userPolicy.getPolicy(), user)))
                 .collect(Collectors.toList());
+    }
+
+    /**
+     * 응답에 넣을 시뮬레이션 혜택. 실제 지급액이 없는 주거 정책은 추정 절감액을 넣는다 (#257,
+     * simulation.saving-estimate.expose-in-policy-responses). DB와 추천 정렬은 바뀌지 않는다
+     */
+    private SimulationBenefitResponse simulationBenefit(Policy policy, User user) {
+        SimulationBenefitResponse actual = SimulationBenefitResponse.from(policy);
+        if (actual != null || user == null) {
+            return actual;
+        }
+        return savingEstimator.estimateForResponse(policy, user)
+                .map(SimulationBenefitResponse::fromEstimate)
+                .orElse(null);
+    }
+
+    private SimulationBenefitResponse simulationBenefit(Policy policy, UUID userId) {
+        if (!savingEstimator.isExposedInPolicyResponses() || policy.hasBenefitForSimulation()) {
+            return SimulationBenefitResponse.from(policy);
+        }
+        return simulationBenefit(policy, userRepository.findById(userId.toString()).orElse(null));
     }
 
     @Transactional
