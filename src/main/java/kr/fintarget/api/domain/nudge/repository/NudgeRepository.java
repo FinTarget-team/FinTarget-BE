@@ -14,4 +14,6 @@ public interface NudgeRepository extends JpaRepository<Nudge, String> {
     @Modifying
     @Query("delete from Nudge n where n.userId = :userId")
     int deleteByUserId(String userId);
+
+    long countByUserId(String userId);
 }

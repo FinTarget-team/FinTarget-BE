@@ -1,10 +1,14 @@
 package kr.fintarget.api.domain.demo;
 
+import kr.fintarget.api.domain.demo.dto.DemoResetResult;
 import kr.fintarget.api.domain.expense.entity.Expense;
 import kr.fintarget.api.domain.expense.repository.ExpenseRepository;
 import kr.fintarget.api.domain.goal.entity.Goal;
 import kr.fintarget.api.domain.goal.repository.GoalRepository;
 import kr.fintarget.api.domain.nudge.dto.NudgeListResponse;
+import kr.fintarget.api.domain.nudge.dto.NudgeResponse;
+import kr.fintarget.api.domain.nudge.entity.Nudge;
+import kr.fintarget.api.domain.nudge.repository.NudgeRepository;
 import kr.fintarget.api.domain.nudge.service.NudgeService;
 import kr.fintarget.api.domain.onboarding.dto.OnboardingAnswerRequest;
 import kr.fintarget.api.domain.onboarding.service.OnboardingService;
@@ -23,6 +27,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -51,6 +56,8 @@ class DemoResetKeepsExpensesIntegrationTest {
     private ExpenseRepository expenseRepository;
     @Autowired
     private GoalRepository goalRepository;
+    @Autowired
+    private NudgeRepository nudgeRepository;
 
     private String userId;
     private UUID uid;
@@ -114,16 +121,18 @@ class DemoResetKeepsExpensesIntegrationTest {
     }
 
     @Test
-    void 초기화로_지운_이상_지출_넛지는_남은_지출로_다시_생기지만_하루_한_번이다() {
+    void 초기화해도_이상_지출_넛지가_남고_같은_날_다시_만들어지지_않는다() {
         completeOnboarding("지원", "SEOUL", 30_000_000L);
-        assertThat(nudgeService.getNudges(userId).nudges())
-                .anySatisfy(nudge -> assertThat(nudge.getType()).isEqualTo("UNUSUAL_SPENDING"));
+        List<NudgeResponse> before = nudgeService.getNudges(userId).nudges();
+        assertThat(before).anySatisfy(nudge -> assertThat(nudge.getType()).isEqualTo("UNUSUAL_SPENDING"));
 
-        demoResetService.reset(userId);
+        assertThat(demoResetService.reset(userId).keptNudges()).isEqualTo(before.size());
 
-        // 넛지는 지워졌지만 지출이 남아 있어 다시 한 건 만들어진다 (데이터와 어긋나지 않는 동작)
-        long afterFirst = nudgeService.getNudges(userId).nudges().stream()
-                .filter(nudge -> "UNUSUAL_SPENDING".equals(nudge.getType())).count();
+        // 넛지를 남기므로 남은 지출로 같은 날 같은 카테고리 넛지가 다시 생기지 않는다 (#253)
+        List<NudgeResponse> afterReset = nudgeService.getNudges(userId).nudges();
+        assertThat(afterReset).extracting(NudgeResponse::getNudgeId)
+                .containsExactlyInAnyOrderElementsOf(before.stream().map(NudgeResponse::getNudgeId).toList());
+        long afterFirst = afterReset.stream().filter(nudge -> "UNUSUAL_SPENDING".equals(nudge.getType())).count();
         assertThat(afterFirst).isEqualTo(1);
 
         // 여러 번 조회해도 같은 카테고리는 하루 한 번이라 쌓이지 않는다
@@ -132,6 +141,26 @@ class DemoResetKeepsExpensesIntegrationTest {
         long afterRepeat = nudgeService.getNudges(userId).nudges().stream()
                 .filter(nudge -> "UNUSUAL_SPENDING".equals(nudge.getType())).count();
         assertThat(afterRepeat).isEqualTo(1);
+    }
+
+    @Test
+    void 지워진_목표의_넛지가_남은_채로_초기화_온보딩_목표_생성까지_오류가_없다() {
+        completeOnboarding("지원", "SEOUL", 30_000_000L);
+        // 지워질 목표를 가리키는 넛지 (넛지는 목표를 외래키가 아닌 메시지 문구로만 담는다)
+        nudgeRepository.save(Nudge.builder().userId(userId).type("GOAL_DEADLINE")
+                .message("목표 '이전 목표' 마감까지 D-10일 남았습니다.").build());
+        nudgeService.getNudges(userId);
+
+        DemoResetResult result = demoResetService.reset(userId);
+        assertThat(result.deleted().goals()).isPositive();
+        assertThat(result.keptNudges()).isPositive();
+
+        completeOnboarding("민수", "BUSAN", 5_000_000L);
+        assertThat(goalRepository.findActiveByUserId(uid)).get()
+                .satisfies(goal -> assertThat(goal.getTargetAmount()).isEqualTo(5_000_000L));
+
+        NudgeListResponse response = nudgeService.getNudges(userId);
+        assertThat(response.nudges()).anySatisfy(nudge -> assertThat(nudge.getMessage()).contains("이전 목표"));
     }
 
     @Test

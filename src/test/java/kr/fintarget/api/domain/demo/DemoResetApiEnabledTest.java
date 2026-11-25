@@ -73,7 +73,10 @@ class DemoResetApiEnabledTest {
                 .andExpect(jsonPath("$.data.deleted.onboardingAnswers").value(0))
                 // 지출은 지우지 않으므로 deleted에 없고 keptExpenses로 내려간다 (#239)
                 .andExpect(jsonPath("$.data.deleted.expenses").doesNotExist())
-                .andExpect(jsonPath("$.data.keptExpenses").value(0));
+                .andExpect(jsonPath("$.data.keptExpenses").value(0))
+                // 넛지도 지우지 않으므로 deleted에 없고 keptNudges로 내려간다 (#253)
+                .andExpect(jsonPath("$.data.deleted.nudges").doesNotExist())
+                .andExpect(jsonPath("$.data.keptNudges").value(0));
 
         // 다른 사용자는 그대로다 (경로에 사용자 ID가 없어 남의 계정을 초기화할 방법이 없다)
         mockMvc.perform(get("/users/me").header("Authorization", bearer(otherUserId)))
