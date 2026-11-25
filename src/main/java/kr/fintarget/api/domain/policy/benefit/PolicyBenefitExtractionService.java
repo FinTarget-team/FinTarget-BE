@@ -3,8 +3,11 @@ package kr.fintarget.api.domain.policy.benefit;
 import kr.fintarget.api.domain.ai.client.AiClientException;
 import kr.fintarget.api.domain.ai.client.AiUnavailableException;
 import kr.fintarget.api.domain.policy.entity.Policy;
+import kr.fintarget.api.domain.policy.entity.PolicyBenefit;
+import kr.fintarget.api.domain.policy.manual.ManualPolicyCatalog;
 import kr.fintarget.api.domain.policy.repository.PolicyRepository;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -28,6 +31,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
  *   <li>AI 호출은 트랜잭션 밖에서 하고, 정책 1건씩 짧은 트랜잭션으로 저장한다 (AI 응답을 기다리는 동안 DB 커넥션을 잡지 않음)</li>
  *   <li>한 건이 실패해도 나머지는 계속한다. 실패한 정책은 기존 값을 유지하고 다음 실행 때 다시 시도한다</li>
  *   <li>AI를 쓸 수 없는 상태(키 없음, 호출 한도·잔액 초과)면 나머지도 실패할 것이므로 바로 멈춘다</li>
+ *   <li>직접 등록 정책(#245)은 AI 추출 결과 대신 리소스의 시뮬레이션 혜택 값을 저장한다 ({@link ManualPolicyCatalog#applyBenefit}).
+ *       프롬프트를 바꿔 다시 추출하거나 전체 재추출(all=true)해도 리소스 값이 유지된다</li>
  * </ul>
  */
 @Slf4j
@@ -38,15 +43,26 @@ public class PolicyBenefitExtractionService {
     private final PolicyBenefitExtractor extractor;
     private final TransactionTemplate transactionTemplate;
     private final int parallelism;
+    // null이면 직접 등록 정책 덮기 없이 AI 결과만 저장한다 (기존 테스트)
+    private final ManualPolicyCatalog manualPolicies;
     private final AtomicBoolean running = new AtomicBoolean(false);
 
+    @Autowired
     public PolicyBenefitExtractionService(PolicyRepository policyRepository, PolicyBenefitExtractor extractor,
                                           TransactionTemplate transactionTemplate,
-                                          @Value("${policy.benefit.extraction.parallelism:4}") int parallelism) {
+                                          @Value("${policy.benefit.extraction.parallelism:4}") int parallelism,
+                                          ManualPolicyCatalog manualPolicies) {
         this.policyRepository = policyRepository;
         this.extractor = extractor;
         this.transactionTemplate = transactionTemplate;
         this.parallelism = Math.max(1, parallelism);
+        this.manualPolicies = manualPolicies;
+    }
+
+    /** 직접 등록 정책 덮기 없이 만든다 (기존 테스트) */
+    public PolicyBenefitExtractionService(PolicyRepository policyRepository, PolicyBenefitExtractor extractor,
+                                          TransactionTemplate transactionTemplate, int parallelism) {
+        this(policyRepository, extractor, transactionTemplate, parallelism, null);
     }
 
     /** 아직 추출하지 않았거나 원문·프롬프트 버전이 바뀐 정책만 추출한다 */
@@ -140,7 +156,13 @@ public class PolicyBenefitExtractionService {
         // 추출하는 동안 동기화로 삭제됐으면 저장하지 않는다
         Boolean saved = transactionTemplate.execute(status -> policyRepository.findById(target.policyId())
                 .map(policy -> {
-                    policy.updateBenefit(extraction.toPolicyBenefit(version, target.sourceHash(), LocalDateTime.now()));
+                    PolicyBenefit extracted = extraction.toPolicyBenefit(version, target.sourceHash(), LocalDateTime.now());
+                    PolicyBenefit benefit = manualPolicies == null ? extracted : manualPolicies.applyBenefit(policy, extracted);
+                    if (benefit != extracted) {
+                        log.info("직접 등록 정책 혜택은 리소스 값을 저장 policyId={} name={} aiType={} savedType={}",
+                                policy.getPolicyId(), policy.getName(), extraction.type(), benefit.getType());
+                    }
+                    policy.updateBenefit(benefit);
                     return true;
                 })
                 .orElse(false));

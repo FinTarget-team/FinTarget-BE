@@ -1070,6 +1070,81 @@ X-Admin-Key: {ADMIN_API_KEY}
 | `failedCount` | AI 호출·응답 해석에 실패해 기존 값을 유지한 정책 수. 다음 동기화 때 다시 시도 |
 | `skippedCount` | AI를 쓸 수 없는 상태(키 없음, 호출 한도 초과, 인증 실패)여서 중간에 멈춰 시도하지 않은 정책 수 |
 
+- 직접 등록 정책(출처 `MANUAL`, #245)은 AI 추출 결과 대신 리소스 파일의 시뮬레이션 혜택 값을 저장합니다. `all=true`로 다시 추출해도 유지됩니다.
+
+### 직접 등록 정책 동기화 (관리자, 앱에서는 호출하지 않음)
+
+```
+POST /api/admin/policy/manual/sync
+X-Admin-Key: {ADMIN_API_KEY}
+```
+
+- 공공 API(온통청년, KINFA)로 수집되지 않는 정책을 서버 리소스 파일(`src/main/resources/policy/manual-policies.json`)에서 읽어 등록·갱신합니다 (#245).
+- 현재 등록 정책: 2026 희망두배 청년통장, 청년미래적금, 2026 국가장학금 I유형, 2026 서울 청년수당
+- 외부 정책 ID(`MANUAL-...`)로 upsert하므로 여러 번 실행해도 결과가 같습니다. 출처가 `MANUAL`이라 매일 03:00 동기화(온통청년·KINFA)가 지우거나 덮어쓰지 않습니다.
+- 등록 후 정책 동기화와 같은 순서로 청크 분할 → 혜택 추출 → 조건 추출 → 리소스 혜택 값 적용 → 리랭킹 미리 계산 → 임베딩을 실행합니다. 바뀐 것이 없으면 AI를 호출하지 않습니다.
+- 시뮬레이션 혜택 값(유형·월 금액·개월 수·1회 금액·최대 기준)은 AI 추출 결과 대신 리소스 값을 저장합니다.
+- 앱 시작 시 자동 실행하지 않습니다. 다른 작업(03:00 동기화, 관리자 백필)과 겹친 단계는 건너뛰고 `steps`에 `skipped: 사유`를 남깁니다. 이미 실행 중이면 409
+
+**운영 배포 후 실행 절차**
+1. dev 머지 → CD 배포 완료 확인
+2. `POST /api/admin/policy/manual/sync` 1회 호출 (로컬 기준 약 10초)
+3. 응답에서 정책 4건의 `status`(첫 실행 `CREATED`), `chunkCount` 1 이상, `simulationReflected: true` 확인
+4. `steps.embedding.embeddedCount`가 4이면 검색·통합 답변에 바로 나옵니다. 다시 호출하면 `UPDATED`이고 AI 호출 없이 끝납니다
+
+**예상 비용 (첫 실행 1회)**
+- 혜택 추출 4회 + 조건 추출 4회 (기본 모델 `gpt-6-luna`, 정책 1건당 입력 수천 토큰), 임베딩 4청크
+- 리랭킹 미리 계산: 새 정책이 대부분 사용자의 후보에 들어가 입력 해시가 바뀌므로, 온보딩을 마친 사용자마다 상위 모델(`gpt-6.1-sol`) 1회 (1회당 입력 약 1만·출력 약 700토큰, 1명당 약 13초씩 차례로 계산). 비용 대부분이 이 단계입니다
+- 두 번째 실행부터는 바뀐 것이 없으면 AI 호출 없음
+
+```json
+{
+  "status": 200,
+  "message": "OK",
+  "data": {
+    "policies": [
+      {
+        "policyId": "uuid",
+        "externalId": "MANUAL-HOPE-DOUBLE-2026",
+        "name": "2026 희망두배 청년통장",
+        "status": "CREATED",
+        "chunkCount": 1,
+        "minAge": 18,
+        "maxAge": 34,
+        "regions": ["SEOUL"],
+        "incomeBasis": "UNKNOWN",
+        "incomeMaxMonthly": null,
+        "specialTarget": false,
+        "specialTargetGroup": null,
+        "benefitKind": "MONEY",
+        "benefitType": "CASH",
+        "monthlyAmount": 150000,
+        "months": 36,
+        "oneTimeAmount": null,
+        "simulationReflected": true
+      }
+    ],
+    "steps": {
+      "chunk": { "regeneratedCount": 4 },
+      "benefit": { "targetCount": 4 },
+      "condition": { "targetCount": 4, "savedCount": 4 },
+      "benefitOverride": 0,
+      "rerank": "requested",
+      "embedding": { "embeddedCount": 4 }
+    },
+    "elapsedMs": 10900
+  }
+}
+```
+
+| 필드 | 설명 |
+|---|---|
+| `policies[].status` | `CREATED`(새로 등록) / `UPDATED`(이미 있어 리소스 내용으로 갱신) |
+| `policies[].incomeBasis` ~ `benefitKind` | 조건 추출(v3) 결과. 추출 전이거나 실패하면 null |
+| `policies[].benefitType` ~ `oneTimeAmount` | 시뮬레이션 혜택 값 (리소스 값) |
+| `steps.benefitOverride` | 리소스 값과 달라 고친 정책 수. 혜택 추출이 건너뛰어졌거나 리소스 혜택 값만 바꾼 경우 0보다 큼 |
+| `steps.*` | 각 단계 결과(기존 관리자 API 응답과 같은 형식) 또는 `skipped: 사유` |
+
 ### 정책 원문 청크 갱신 (관리자, 앱에서는 호출하지 않음)
 
 ```
