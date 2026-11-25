@@ -62,9 +62,9 @@ class DemoResetIntegrationTest {
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
-    // 초기화로 비워지는 표. 지출(expense)은 남기므로 넣지 않는다 (#239)
+    // 초기화로 비워지는 표. 지출(expense, #239)과 넛지(nudges, #253)는 남기므로 넣지 않는다
     private static final String[] CLEARED_TABLES = {
-            "goal", "onboarding_answer", "nudges", "ai_conversation", "ai_conversation_message", "ai_daily_usage"
+            "goal", "onboarding_answer", "ai_conversation", "ai_conversation_message", "ai_daily_usage"
     };
 
     private String resetUserId;
@@ -176,6 +176,7 @@ class DemoResetIntegrationTest {
             assertThat(count(table, otherUserId)).as(table).isPositive();
         }
         assertThat(count("expense", otherUserId)).isEqualTo(1);
+        assertThat(count("nudges", otherUserId)).isEqualTo(1);
         UserProfileResponse other = userService.getProfile(otherUserId);
         assertThat(other.isOnboardingCompleted()).isTrue();
         assertThat(other.getName()).isEqualTo("지원");
@@ -183,18 +184,21 @@ class DemoResetIntegrationTest {
     }
 
     @Test
-    void 응답에_지운_항목별_건수와_남긴_지출_건수가_담긴다() {
+    void 응답에_지운_항목별_건수와_남긴_지출_넛지_건수가_담긴다() {
         DemoResetResult result = demoResetService.reset(resetUserId);
 
         assertThat(result.deleted().onboardingAnswers()).isEqualTo(2);
         assertThat(result.deleted().goals()).isEqualTo(1);
-        assertThat(result.deleted().nudges()).isEqualTo(1);
         assertThat(result.deleted().aiConversations()).isEqualTo(1);
         assertThat(result.deleted().aiConversationMessages()).isEqualTo(1);
         assertThat(result.deleted().aiUsages()).isEqualTo(1);
         assertThat(result.deleted().simulations()).isZero();
         assertThat(result.deleted().savedPolicies()).isZero();
         assertThat(result.keptExpenses()).isEqualTo(1);
+        // 넛지·알림은 지우지 않고 남긴 건수로 알린다 (#253)
+        assertThat(result.keptNudges()).isEqualTo(1);
+        assertThat(nudgeRepository.findByUserIdOrderByCreatedAtDesc(resetUserId))
+                .singleElement().satisfies(nudge -> assertThat(nudge.getMessage()).isEqualTo("이번 주 식비를 줄여 보세요"));
     }
 
     @Test
@@ -204,8 +208,9 @@ class DemoResetIntegrationTest {
         DemoResetResult second = demoResetService.reset(resetUserId);
         assertThat(second.deleted().onboardingAnswers()).isZero();
         assertThat(second.deleted().goals()).isZero();
-        // 지출은 지우지 않으므로 두 번째에도 그대로 세어진다
+        // 지출·넛지는 지우지 않으므로 두 번째에도 그대로 세어진다
         assertThat(second.keptExpenses()).isEqualTo(1);
+        assertThat(second.keptNudges()).isEqualTo(1);
         assertThat(userRepository.existsById(resetUserId)).isTrue();
     }
 
