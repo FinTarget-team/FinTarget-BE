@@ -13,9 +13,14 @@ public record UserPolicyResponse(
     String status
 ) {
     public static UserPolicyResponse from(UserPolicy userPolicy) {
+        return from(userPolicy, SimulationBenefitResponse.from(userPolicy.getPolicy()));
+    }
+
+    /** 시뮬레이션 혜택만 지정해 만든다 (#257). 주거 정책의 추정 절감액을 넣을 때 쓴다 */
+    public static UserPolicyResponse from(UserPolicy userPolicy, SimulationBenefitResponse simulationBenefit) {
         return new UserPolicyResponse(
             userPolicy.getUserPolicyId(),
-            PolicyResponse.from(userPolicy.getPolicy()),
+            PolicyResponse.from(userPolicy.getPolicy(), simulationBenefit),
             userPolicy.getStatus().name()
         );
     }

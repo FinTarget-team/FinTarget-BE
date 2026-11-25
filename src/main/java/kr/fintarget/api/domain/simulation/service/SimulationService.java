@@ -9,7 +9,11 @@ import kr.fintarget.api.domain.policy.repository.UserPolicyRepository;
 import kr.fintarget.api.domain.simulation.dto.SimulationRequest;
 import kr.fintarget.api.domain.simulation.dto.SimulationResponse;
 import kr.fintarget.api.domain.simulation.entity.Simulation;
+import kr.fintarget.api.domain.simulation.estimate.SavingEstimateResult;
+import kr.fintarget.api.domain.simulation.estimate.SimulationSavingEstimator;
 import kr.fintarget.api.domain.simulation.repository.SimulationRepository;
+import kr.fintarget.api.domain.user.entity.User;
+import kr.fintarget.api.domain.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -39,6 +43,8 @@ public class SimulationService {
     private final GoalRepository goalRepository;
     private final UserPolicyRepository userPolicyRepository;
     private final Random random;
+    private final UserRepository userRepository;
+    private final SimulationSavingEstimator savingEstimator;
 
     @Transactional
     public SimulationResponse runSimulation(UUID userId, SimulationRequest request) {
@@ -72,18 +78,27 @@ public class SimulationService {
         LocalDate policyDate = null;
         Double policySuccessProbability = null;
         UserPolicy userPolicy = null;
+        SavingEstimateResult estimate = null;
 
         if (request.userPolicyId() != null) {
             userPolicy = userPolicyRepository.findByUserPolicyIdAndUserId(request.userPolicyId(), userId)
                     .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 유저 정책입니다."));
 
-            // 금액으로 환산된 혜택이 없는 정책(대출·현물·서비스, 아직 추출되지 않은 정책)은
-            // 정책 반영 계산만 건너뛰고 policyCompletionDate·policySuccessProbability를 null로 둔다
+            // 금액으로 환산된 혜택이 없는 정책(대출·현물·서비스, 아직 추출되지 않은 정책)은 주거비 절감 추정을 시도하고(#257),
+            // 추정 대상도 아니면 정책 반영 계산만 건너뛰고 policyCompletionDate·policySuccessProbability를 null로 둔다
             Policy policy = userPolicy.getPolicy();
+            PolicyBenefit benefit = null;
             if (policy.hasBenefitForSimulation()) {
-                PolicyBenefit benefit = policy.getBenefit();
+                benefit = policy.getBenefit();
+            } else {
+                User user = userRepository.findById(userId.toString()).orElse(null);
+                estimate = user == null ? null : savingEstimator.estimate(policy, user).orElse(null);
+                benefit = estimate == null ? null : estimate.toPolicyBenefit();
+            }
+            if (benefit != null) {
+                PolicyBenefit applied = benefit;
                 MonteCarloResult policyResult = runMonteCarlo(savingSamples, monthsToDeadline,
-                        saving -> monthsNeededWithBenefit(remaining, saving, monthlyRate, benefit));
+                        saving -> monthsNeededWithBenefit(remaining, saving, monthlyRate, applied));
                 policyDate = LocalDate.now().plusMonths(policyResult.p50Months());
                 policySuccessProbability = policyResult.successProbability();
             }
@@ -102,7 +117,7 @@ public class SimulationService {
             policySuccessProbability
         );
 
-        return SimulationResponse.from(simulationRepository.save(simulation));
+        return SimulationResponse.fromRun(simulationRepository.save(simulation), estimate);
     }
 
     // 월 저축액 표본. 기본 계산과 정책 계산이 같은 표본을 써야 "정책을 넣으면 빨라진다"가 흔들림 때문에 뒤집히지 않는다

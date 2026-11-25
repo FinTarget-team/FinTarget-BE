@@ -42,6 +42,15 @@ public record PolicyResponse(
     List<String> regions
 ) {
     public static PolicyResponse from(Policy policy) {
+        return from(policy, SimulationBenefitResponse.from(policy));
+    }
+
+    /**
+     * 시뮬레이션 혜택만 지정해 만든다 (#257). 주거 정책의 추정 절감액을 넣을 때 쓴다.
+     *
+     * @param simulationBenefit 이 정책의 시뮬레이션 혜택. 추정값이면 estimated=true인 값을 넘긴다
+     */
+    public static PolicyResponse from(Policy policy, SimulationBenefitResponse simulationBenefit) {
         // 원문이 없는 정책(테스트 데이터, 원문 저장 전 행)은 text가 null이다
         PolicyText text = policy.getText();
         return new PolicyResponse(
@@ -52,7 +61,7 @@ public record PolicyResponse(
             policy.getMaxAge(),
             policy.getIncomeLimit(),
             policy.getBenefitAmount(),
-            SimulationBenefitResponse.from(policy),
+            simulationBenefit,
             text == null ? null : text.getAgeCondition(),
             text == null ? null : text.getIncomeCondition(),
             text == null ? null : text.getSupportContent(),

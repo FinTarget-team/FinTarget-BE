@@ -6,6 +6,7 @@ import kr.fintarget.api.domain.policy.repository.PolicyRepository;
 import kr.fintarget.api.domain.policy.search.eval.PolicySearchEvalSet.SearchCase;
 import kr.fintarget.api.domain.policy.recommend.RuleBasedPolicyRecommendationSelector;
 import kr.fintarget.api.domain.policy.service.PolicyService;
+import kr.fintarget.api.domain.simulation.estimate.SimulationSavingEstimator;
 import kr.fintarget.api.domain.user.validation.BirthYearValidator;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Test;
@@ -31,7 +32,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 @Slf4j
 @DataJpaTest
-@Import({PolicyService.class, RuleBasedPolicyRecommendationSelector.class, ManualPolicyPinner.class, ManualPolicyCatalog.class})
+@Import({PolicyService.class, RuleBasedPolicyRecommendationSelector.class, ManualPolicyPinner.class, ManualPolicyCatalog.class,
+        SimulationSavingEstimator.class})
 @EnabledIfEnvironmentVariable(named = PolicySearchSnapshot.ENV_DIR, matches = ".+")
 class PolicySearchEvalLiveRun {
 

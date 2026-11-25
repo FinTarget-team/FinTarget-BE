@@ -10,6 +10,7 @@ import kr.fintarget.api.domain.policy.search.PolicySearchHit;
 import kr.fintarget.api.domain.policy.search.PolicySearchService;
 import kr.fintarget.api.domain.policy.recommend.RuleBasedPolicyRecommendationSelector;
 import kr.fintarget.api.domain.policy.service.PolicyService;
+import kr.fintarget.api.domain.simulation.estimate.SimulationSavingEstimator;
 import kr.fintarget.api.domain.user.code.SocialProvider;
 import kr.fintarget.api.domain.user.entity.User;
 import kr.fintarget.api.domain.user.validation.BirthYearValidator;
@@ -31,7 +32,8 @@ import static org.mockito.Mockito.verifyNoInteractions;
  * 질문 임베딩만 고정 벡터로 바꾼다.
  */
 @DataJpaTest
-@Import({PolicyService.class, RuleBasedPolicyRecommendationSelector.class, ManualPolicyPinner.class, ManualPolicyCatalog.class})
+@Import({PolicyService.class, RuleBasedPolicyRecommendationSelector.class, ManualPolicyPinner.class, ManualPolicyCatalog.class,
+        SimulationSavingEstimator.class})
 class PolicySearchSnapshotLoaderTest {
 
     private static final PolicyKey SEOUL_RENT = new PolicyKey("YOUTH_CENTER", "R-1");

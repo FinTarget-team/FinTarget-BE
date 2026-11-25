@@ -13,7 +13,12 @@ import kr.fintarget.api.domain.policy.repository.UserPolicyRepository;
 import kr.fintarget.api.domain.simulation.dto.SimulationRequest;
 import kr.fintarget.api.domain.simulation.dto.SimulationResponse;
 import kr.fintarget.api.domain.simulation.entity.Simulation;
+import kr.fintarget.api.domain.simulation.estimate.SavingEstimateResult;
+import kr.fintarget.api.domain.simulation.estimate.SimulationSavingEstimator;
 import kr.fintarget.api.domain.simulation.repository.SimulationRepository;
+import kr.fintarget.api.domain.user.code.SocialProvider;
+import kr.fintarget.api.domain.user.entity.User;
+import kr.fintarget.api.domain.user.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -32,6 +37,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -46,6 +53,9 @@ class SimulationServiceTest {
     @Mock
     private UserPolicyRepository userPolicyRepository;
 
+    @Mock
+    private UserRepository userRepository;
+
     private SimulationService simulationService;
 
     private static final UUID USER_ID = UUID.randomUUID();
@@ -53,7 +63,8 @@ class SimulationServiceTest {
     @BeforeEach
     void setUp() {
         // 고정 시드: 몬테카를로 결과가 재현 가능하도록
-        simulationService = new SimulationService(simulationRepository, goalRepository, userPolicyRepository, new Random(42L));
+        simulationService = new SimulationService(simulationRepository, goalRepository, userPolicyRepository, new Random(42L),
+                userRepository, SimulationSavingEstimator.disabled());
         lenient().when(simulationRepository.save(any()))
                 .thenAnswer(invocation -> invocation.getArgument(0));
     }
@@ -244,7 +255,8 @@ class SimulationServiceTest {
                 USER_ID, new SimulationRequest(goalId, 100_000L, null, null));
 
         // 같은 시드로 다시 시작해 정책만 추가한다
-        simulationService = new SimulationService(simulationRepository, goalRepository, userPolicyRepository, new Random(42L));
+        simulationService = new SimulationService(simulationRepository, goalRepository, userPolicyRepository, new Random(42L),
+                userRepository, SimulationSavingEstimator.disabled());
         UUID userPolicyId = UUID.randomUUID();
         stubPolicy(userPolicyId, benefit(200_000L, 24, null));
         SimulationResponse withPolicy = simulationService.runSimulation(
@@ -376,5 +388,104 @@ class SimulationServiceTest {
         assertThat(after.getGoalTargetAmount()).isEqualTo(80_000_000L);
         assertThat(after.getGoalCurrentAmount()).isEqualTo(5_000_000L);
         assertThat(after.getGoalDeadline()).isEqualTo(newDeadline);
+    }
+
+    // ===== 주거 정책 월 절감액 추정 (#257) =====
+
+    // 추정 금액별 달성 개월 수. 설계 문서 6.1의 기대값 (목표 500만원, 현재 0원, 월 30만원, 연 3%)
+    @Test
+    void monthsNeededWithBenefit_추정_절감액이_클수록_달성이_빠르다() {
+        double monthlyRate = 0.03 / 12;
+
+        assertThat(SimulationService.monthsNeeded(5_000_000L, 300_000L, monthlyRate)).isEqualTo(17L);
+        // 연합생활관 47만원
+        assertThat(SimulationService.monthsNeededWithBenefit(5_000_000L, 300_000L, monthlyRate,
+                benefit(470_000L, 12, null))).isEqualTo(7L);
+        // 기숙사형·청년안심주택·통합공공임대(150만원 미만) 31만원
+        assertThat(SimulationService.monthsNeededWithBenefit(5_000_000L, 300_000L, monthlyRate,
+                benefit(310_000L, 12, null))).isEqualTo(9L);
+        // 통합공공임대(150~260만원) 21.7만원
+        assertThat(SimulationService.monthsNeededWithBenefit(5_000_000L, 300_000L, monthlyRate,
+                benefit(217_000L, 12, null))).isEqualTo(10L);
+    }
+
+    @Test
+    void 추정_대상_정책이면_정책_완료일이_나오고_추정_여부와_근거를_함께_돌려준다() {
+        SavingEstimateResult estimate = new SavingEstimateResult(310_000L, null, "근거 문구");
+        simulationService = serviceWithEstimate(estimate);
+
+        Goal goal = new Goal(USER_ID, "정책 활용 목표", 5_000_000L, 0L, LocalDate.now().plusMonths(36));
+        when(goalRepository.findByGoalIdAndUserId(any(), eq(USER_ID))).thenReturn(Optional.of(goal));
+        UUID userPolicyId = UUID.randomUUID();
+        stubPolicy(userPolicyId, null);
+        when(userRepository.findById(USER_ID.toString())).thenReturn(Optional.of(seoulUser()));
+
+        SimulationResponse response = simulationService.runSimulation(USER_ID,
+                new SimulationRequest(UUID.randomUUID(), 300_000L, userPolicyId, null));
+
+        assertThat(response.policyCompletionDate()).isNotNull();
+        assertThat(response.policySuccessProbability()).isNotNull();
+        assertThat(response.policyBenefitEstimated()).isTrue();
+        assertThat(response.policyBenefitBasis()).isEqualTo("근거 문구");
+    }
+
+    @Test
+    void 실제_지급액이_있는_정책은_추정기를_부르지_않고_추정_여부가_false다() {
+        SimulationSavingEstimator estimator = mock(SimulationSavingEstimator.class);
+        simulationService = new SimulationService(simulationRepository, goalRepository, userPolicyRepository,
+                new Random(42L), userRepository, estimator);
+
+        Goal goal = new Goal(USER_ID, "정책 활용 목표", 5_000_000L, 0L, LocalDate.now().plusMonths(36));
+        when(goalRepository.findByGoalIdAndUserId(any(), eq(USER_ID))).thenReturn(Optional.of(goal));
+        UUID userPolicyId = UUID.randomUUID();
+        stubPolicy(userPolicyId, benefit(200_000L, 12, null));
+
+        SimulationResponse response = simulationService.runSimulation(USER_ID,
+                new SimulationRequest(UUID.randomUUID(), 300_000L, userPolicyId, null));
+
+        assertThat(response.policyCompletionDate()).isNotNull();
+        assertThat(response.policyBenefitEstimated()).isFalse();
+        assertThat(response.policyBenefitBasis()).isNull();
+        verify(estimator, never()).estimate(any(), any());
+        verify(userRepository, never()).findById(any());
+    }
+
+    @Test
+    void 추정_대상이_아니면_기존처럼_정책_완료일과_추정_필드가_모두_null이다() {
+        Goal goal = new Goal(USER_ID, "정책 활용 목표", 5_000_000L, 0L, LocalDate.now().plusMonths(36));
+        when(goalRepository.findByGoalIdAndUserId(any(), eq(USER_ID))).thenReturn(Optional.of(goal));
+        UUID userPolicyId = UUID.randomUUID();
+        stubPolicy(userPolicyId, null);
+
+        SimulationResponse response = simulationService.runSimulation(USER_ID,
+                new SimulationRequest(UUID.randomUUID(), 300_000L, userPolicyId, null));
+
+        assertThat(response.policyCompletionDate()).isNull();
+        assertThat(response.policyBenefitEstimated()).isNull();
+        assertThat(response.policyBenefitBasis()).isNull();
+    }
+
+    @Test
+    void 정책을_고르지_않으면_추정_필드가_null이다() {
+        Goal goal = new Goal(USER_ID, "목표", 5_000_000L, 0L, LocalDate.now().plusMonths(36));
+        when(goalRepository.findByGoalIdAndUserId(any(), eq(USER_ID))).thenReturn(Optional.of(goal));
+
+        SimulationResponse response = simulationService.runSimulation(USER_ID,
+                new SimulationRequest(UUID.randomUUID(), 300_000L, null, null));
+
+        assertThat(response.policyBenefitEstimated()).isNull();
+        assertThat(response.policyBenefitBasis()).isNull();
+    }
+
+    private SimulationService serviceWithEstimate(SavingEstimateResult estimate) {
+        SimulationSavingEstimator estimator = mock(SimulationSavingEstimator.class);
+        when(estimator.estimate(any(), any())).thenReturn(Optional.of(estimate));
+        return new SimulationService(simulationRepository, goalRepository, userPolicyRepository, new Random(42L),
+                userRepository, estimator);
+    }
+
+    private static User seoulUser() {
+        return User.builder().id(USER_ID.toString()).provider(SocialProvider.KAKAO).providerId("p1")
+                .region("SEOUL").birthYear(2003).income(1_000_000L).build();
     }
 }

@@ -8,6 +8,8 @@ import kr.fintarget.api.domain.policy.entity.PolicyType;
 import kr.fintarget.api.domain.policy.manual.ManualPolicyCatalog.ManualBenefit;
 import kr.fintarget.api.domain.policy.manual.ManualPolicyCatalog.ManualPolicy;
 import kr.fintarget.api.domain.policy.manual.ManualPolicyCatalog.Pin;
+import kr.fintarget.api.domain.policy.manual.ManualPolicyCatalog.SavingEstimate;
+import kr.fintarget.api.domain.policy.manual.ManualPolicyCatalog.SavingEstimate.Tier;
 import kr.fintarget.api.domain.policy.manual.ManualPolicyCatalog.TextOverride;
 import org.junit.jupiter.api.Test;
 
@@ -250,5 +252,130 @@ class ManualPolicyCatalogTest {
                 .isInstanceOf(IllegalStateException.class);
         assertThatThrownBy(() -> new ManualPolicyCatalog(List.of(), List.of(), List.of(rentOverride(), rentOverride())))
                 .isInstanceOf(IllegalStateException.class);
+    }
+
+    // ===== 시뮬레이션 월 절감액 추정 (#257) =====
+
+    private static SavingEstimate ratioEstimate() {
+        return new SavingEstimate("YOUTH_CENTER", "Y9", "기숙사형", SavingEstimate.RENT_RATIO, null, 0.5,
+                null, null, List.of("SEOUL"), "https://x");
+    }
+
+    private static List<SavingEstimate> estimates(SavingEstimate... items) {
+        return List.of(items);
+    }
+
+    private static ManualPolicyCatalog catalogWith(SavingEstimate... items) {
+        return new ManualPolicyCatalog(List.of(), List.of(), List.of(), List.of(), estimates(items));
+    }
+
+    @Test
+    void 리소스의_절감액_추정_5건이_규칙과_지역과_함께_로드된다() {
+        List<SavingEstimate> estimates = catalog.savingEstimates();
+
+        assertThat(estimates).hasSize(5);
+        assertThat(estimates).allSatisfy(estimate -> assertThat(estimate.source()).isEqualTo("YOUTH_CENTER"));
+        // 기준 월세가 있는 지역만 적용한다. 청년안심주택(매입)은 서울 전용 정책이라 서울만 (#257)
+        assertThat(estimates).filteredOn(estimate -> "20261021005400214219".equals(estimate.externalId()))
+                .singleElement()
+                .satisfies(estimate -> assertThat(estimate.userRegions()).containsExactly("SEOUL"));
+        assertThat(estimates).filteredOn(estimate -> !"20261021005400214219".equals(estimate.externalId()))
+                .allSatisfy(estimate -> assertThat(estimate.userRegions()).containsExactly("SEOUL", "GYEONGGI"));
+        assertThat(estimates).extracting(SavingEstimate::externalId).containsExactly(
+                "20260123005400112079", "20260922005400113506", "20261021005400214219",
+                "20260921005400113460", "20260922005400113532");
+        assertThat(estimates).extracting(SavingEstimate::name).containsExactly(
+                "대학생 연합생활관(은행권,고양)", "기숙사형 청년주택 공급", "2026 청년안심주택 공급(매입)",
+                "청년 맞춤형 공적 임대주택 공급(통합공공임대)", "청년층 대상 공공임대주택 공급(통합공공임대)");
+        assertThat(estimates).extracting(SavingEstimate::rule).containsExactly(
+                SavingEstimate.FIXED_RENT, SavingEstimate.RENT_RATIO, SavingEstimate.RENT_RATIO,
+                SavingEstimate.INCOME_TIERED_RATIO, SavingEstimate.INCOME_TIERED_RATIO);
+        // 원문에 거주 기간이 없어 months는 모두 비어 있다 (계산은 기본 12개월)
+        assertThat(estimates).extracting(SavingEstimate::months).containsOnlyNulls();
+        assertThat(estimates.get(0).rent()).isEqualTo(150_000L);
+        assertThat(estimates.get(1).ratio()).isEqualTo(0.5);
+    }
+
+    @Test
+    void 통합공공임대_소득_구간_비율은_50_65_80_90이다() {
+        SavingEstimate integrated = catalog.savingEstimates().get(3);
+
+        assertThat(integrated.tiers()).extracting(Tier::ratio).containsExactly(0.5, 0.65, 0.8, 0.9);
+        assertThat(integrated.tiers()).extracting(Tier::maxIncomeExclusive)
+                .containsExactly(1_500_000L, 2_600_000L, 3_000_000L, null);
+        // IncomeBracket 구간 하한으로 찾는다 (UNDER_150=0, 150_260=150만, 260_300=260만, 300_380=300만)
+        assertThat(integrated.ratioFor(0L)).isEqualTo(0.5);
+        assertThat(integrated.ratioFor(1_500_000L)).isEqualTo(0.65);
+        assertThat(integrated.ratioFor(2_600_000L)).isEqualTo(0.8);
+        assertThat(integrated.ratioFor(3_000_000L)).isEqualTo(0.9);
+        assertThat(integrated.ratioFor(4_100_000L)).isEqualTo(0.9);
+    }
+
+    @Test
+    void 절감액_추정은_출처_외부ID_정책명이_모두_같은_정책에만_맞는다() {
+        SavingEstimate estimate = ratioEstimate();
+        Policy same = Policy.create("기숙사형", "설명", 19, 39, null, null, PolicyType.HOUSING, null, "Y9", "YOUTH_CENTER");
+        Policy renamed = Policy.create("다른 이름", "설명", 19, 39, null, null, PolicyType.HOUSING, null, "Y9", "YOUTH_CENTER");
+        Policy otherSource = Policy.create("기숙사형", "설명", 19, 39, null, null, PolicyType.HOUSING, null, "Y9", "KINFA");
+
+        assertThat(estimate.matches(same)).isTrue();
+        assertThat(estimate.matches(renamed)).isFalse();
+        assertThat(estimate.matches(otherSource)).isFalse();
+        assertThat(estimate.matches(null)).isFalse();
+    }
+
+    @Test
+    void 절감액_추정_지역은_userRegions가_비면_전_지역이다() {
+        assertThat(ratioEstimate().appliesTo("SEOUL")).isTrue();
+        assertThat(ratioEstimate().appliesTo("GYEONGGI")).isFalse();
+        assertThat(ratioEstimate().appliesTo(null)).isFalse();
+
+        SavingEstimate everywhere = new SavingEstimate("YOUTH_CENTER", "Y9", "기숙사형", SavingEstimate.RENT_RATIO,
+                null, 0.5, null, null, null, "https://x");
+        assertThat(everywhere.appliesTo("GYEONGGI")).isTrue();
+        assertThat(everywhere.appliesTo(null)).isTrue();
+    }
+
+    @Test
+    void 절감액_추정_항목이_잘못되면_기동_시_막는다() {
+        // 규칙 이름이 아님
+        assertThatThrownBy(() -> catalogWith(new SavingEstimate("YOUTH_CENTER", "Y9", "A", "OTHER", null, 0.5,
+                null, null, List.of("SEOUL"), "https://x"))).isInstanceOf(IllegalStateException.class);
+        // MANUAL 출처
+        assertThatThrownBy(() -> catalogWith(new SavingEstimate("MANUAL", "Y9", "A", SavingEstimate.RENT_RATIO, null, 0.5,
+                null, null, List.of("SEOUL"), "https://x"))).isInstanceOf(IllegalStateException.class);
+        // 정책명 누락
+        assertThatThrownBy(() -> catalogWith(new SavingEstimate("YOUTH_CENTER", "Y9", " ", SavingEstimate.RENT_RATIO, null, 0.5,
+                null, null, List.of("SEOUL"), "https://x"))).isInstanceOf(IllegalStateException.class);
+        // FIXED_RENT인데 임대료 없음
+        assertThatThrownBy(() -> catalogWith(new SavingEstimate("YOUTH_CENTER", "Y9", "A", SavingEstimate.FIXED_RENT, null, null,
+                null, null, List.of("SEOUL"), "https://x"))).isInstanceOf(IllegalStateException.class);
+        // RENT_RATIO 비율 범위 밖
+        assertThatThrownBy(() -> catalogWith(new SavingEstimate("YOUTH_CENTER", "Y9", "A", SavingEstimate.RENT_RATIO, null, 1.0,
+                null, null, List.of("SEOUL"), "https://x"))).isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> catalogWith(new SavingEstimate("YOUTH_CENTER", "Y9", "A", SavingEstimate.RENT_RATIO, null, 0.0,
+                null, null, List.of("SEOUL"), "https://x"))).isInstanceOf(IllegalStateException.class);
+        // 규칙에 맞지 않는 값을 함께 둠
+        assertThatThrownBy(() -> catalogWith(new SavingEstimate("YOUTH_CENTER", "Y9", "A", SavingEstimate.FIXED_RENT, 150_000L, 0.5,
+                null, null, List.of("SEOUL"), "https://x"))).isInstanceOf(IllegalStateException.class);
+        // tiers 없음
+        assertThatThrownBy(() -> catalogWith(new SavingEstimate("YOUTH_CENTER", "Y9", "A", SavingEstimate.INCOME_TIERED_RATIO,
+                null, null, List.of(), null, List.of("SEOUL"), "https://x"))).isInstanceOf(IllegalStateException.class);
+        // 마지막 tier에 상한이 있음
+        assertThatThrownBy(() -> catalogWith(new SavingEstimate("YOUTH_CENTER", "Y9", "A", SavingEstimate.INCOME_TIERED_RATIO,
+                null, null, List.of(new Tier(1_500_000L, 0.5)), null, List.of("SEOUL"), "https://x")))
+                .isInstanceOf(IllegalStateException.class);
+        // 상한이 오름차순이 아님
+        assertThatThrownBy(() -> catalogWith(new SavingEstimate("YOUTH_CENTER", "Y9", "A", SavingEstimate.INCOME_TIERED_RATIO,
+                null, null, List.of(new Tier(2_600_000L, 0.5), new Tier(1_500_000L, 0.65), new Tier(null, 0.8)),
+                null, List.of("SEOUL"), "https://x"))).isInstanceOf(IllegalStateException.class);
+        // 지역 코드가 아님
+        assertThatThrownBy(() -> catalogWith(new SavingEstimate("YOUTH_CENTER", "Y9", "A", SavingEstimate.RENT_RATIO, null, 0.5,
+                null, null, List.of("서울"), "https://x"))).isInstanceOf(IllegalStateException.class);
+        // 개월 수가 1보다 작음
+        assertThatThrownBy(() -> catalogWith(new SavingEstimate("YOUTH_CENTER", "Y9", "A", SavingEstimate.RENT_RATIO, null, 0.5,
+                null, 0, List.of("SEOUL"), "https://x"))).isInstanceOf(IllegalStateException.class);
+        // 같은 대상 중복
+        assertThatThrownBy(() -> catalogWith(ratioEstimate(), ratioEstimate())).isInstanceOf(IllegalStateException.class);
     }
 }

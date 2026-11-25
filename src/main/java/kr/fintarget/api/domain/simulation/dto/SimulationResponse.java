@@ -2,6 +2,7 @@ package kr.fintarget.api.domain.simulation.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import kr.fintarget.api.domain.simulation.entity.Simulation;
+import kr.fintarget.api.domain.simulation.estimate.SavingEstimateResult;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.UUID;
@@ -48,9 +49,43 @@ public record SimulationResponse(
     )
     Double policySuccessProbability,
     @Schema(description = "시뮬레이션 실행(저장) 시각", example = "2026-08-19T10:00:00")
-    LocalDateTime createdAt
+    LocalDateTime createdAt,
+    @Schema(
+            description = "정책 반영 계산에 추정 절감액을 썼는지 (#257). true면 실제 지급액이 아니라 주거비 절감 추정값으로 "
+                    + "policyCompletionDate를 계산했으므로 화면에 \"예상\"임을 표시해야 합니다. 실제 지급액으로 계산했으면 false, "
+                    + "정책 반영 계산을 하지 않았으면(userPolicyId 없음, 반영할 혜택·추정이 없음) null입니다. "
+                    + "기록 조회(목록·목표별)에는 저장하지 않아 항상 null입니다.",
+            example = "true",
+            types = {"boolean", "null"}
+    )
+    Boolean policyBenefitEstimated,
+    @Schema(
+            description = "추정 근거 문구 (#257). policyBenefitEstimated가 true일 때만 값이 있고, 아니면 null입니다.",
+            example = "입주 시 서울 주요 대학가 원룸 평균 월세 62만원의 50% 수준 임대료로 계산한 예상 절감액",
+            types = {"string", "null"}
+    )
+    String policyBenefitBasis
 ) {
+    /**
+     * 저장된 기록. 추정 여부는 저장하는 칸이 없어 추정 필드 2개가 항상 null이다 (#257).
+     * 실행 응답은 {@link #fromRun(Simulation, SavingEstimateResult)}를 쓴다.
+     */
     public static SimulationResponse from(Simulation simulation) {
+        return create(simulation, null, null);
+    }
+
+    /**
+     * 실행 결과. 정책 반영을 계산했으면 추정값으로 계산했는지와 그 근거를 함께 내려준다 (#257).
+     *
+     * @param estimate 추정으로 계산했을 때의 결과. 실제 지급액으로 계산했거나 정책 반영을 하지 않았으면 null
+     */
+    public static SimulationResponse fromRun(Simulation simulation, SavingEstimateResult estimate) {
+        // 정책 반영 계산을 하지 않았으면(혜택도 추정도 없음) 추정 여부를 알릴 것이 없어 null
+        Boolean estimated = simulation.getPolicyCompletionDate() == null ? null : estimate != null;
+        return create(simulation, estimated, estimate == null ? null : estimate.basis());
+    }
+
+    private static SimulationResponse create(Simulation simulation, Boolean policyBenefitEstimated, String policyBenefitBasis) {
         return new SimulationResponse(
             simulation.getSimulationId(),
             simulation.getGoal().getGoalId(),
@@ -65,7 +100,9 @@ public record SimulationResponse(
             simulation.getPessimisticCompletionDate(),
             simulation.getSuccessProbability(),
             simulation.getPolicySuccessProbability(),
-            simulation.getCreatedAt()
+            simulation.getCreatedAt(),
+            policyBenefitEstimated,
+            policyBenefitBasis
         );
     }
 }
