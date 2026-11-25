@@ -87,4 +87,13 @@ public class PolicyText {
     // 기타 참고 사항
     @Column(name = "etc_note", columnDefinition = "TEXT")
     private String etcNote;
+
+    /**
+     * 신청 기간·신청 방법·기타 참고 사항만 바꾼 사본 (#245 리소스 원문 보정). 나머지 칸은 그대로 복사한다.
+     */
+    public PolicyText withCorrection(String applyPeriod, String applyMethod, String etcNote) {
+        return new PolicyText(supportContent, eligibilityDetail, exclusionCriteria, incomeCondition, ageCondition,
+                applyMethod, screeningMethod, requiredDocuments, applyPeriod, applyPeriodCode, businessPeriod,
+                referenceUrl, applyUrl, contactInfo, etcNote);
+    }
 }

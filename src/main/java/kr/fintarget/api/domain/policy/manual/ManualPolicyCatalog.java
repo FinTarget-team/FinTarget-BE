@@ -20,6 +20,7 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 
@@ -32,6 +33,10 @@ import java.util.Set;
  *
  * <p>policies의 순서는 추천 목록 고정 노출 순서다. recommendFor에 사용자의 직업 유형이 있으면 맨 앞에 고정 노출한다
  * ({@link ManualPolicyPinner}).
+ *
+ * <p>원문 보정(textOverrides): 동기화 정책 중 신청 기간이 실제 접수 기간과 다른 정책 등은 출처·외부 정책 ID·정책명으로 지정해
+ * 신청 기간을 바꾸거나 신청 방법·기타 참고 사항에 문장을 덧붙인다. 공식 출처(sourceUrl)에 있는 내용만 넣는다.
+ * 동기화가 원문을 되돌리므로 동기화 직후와 직접 등록 정책 동기화 때 다시 적용한다 ({@link ManualPolicyTextCorrector}).
  *
  * <p>혜택 보정(benefitOverrides): 온통청년처럼 동기화되는 정책 중 혜택 분류가 틀린 정책은 출처와 외부 정책 ID로 지정해
  * 시뮬레이션 혜택 값만 리소스 값으로 덮는다. 정책 원문·조건은 동기화 결과를 그대로 쓴다.
@@ -49,13 +54,14 @@ public class ManualPolicyCatalog {
     private final List<ManualPolicy> ordered;
     private final Map<String, BenefitOverride> overridesByKey;
     private final List<BenefitOverride> overrides;
+    private final List<TextOverride> textOverrides;
 
     public ManualPolicyCatalog() {
         this(load(RESOURCE));
     }
 
     private ManualPolicyCatalog(Document document) {
-        this(document.policies(), document.benefitOverrides() == null ? List.of() : document.benefitOverrides());
+        this(document.policies(), orEmpty(document.benefitOverrides()), orEmpty(document.textOverrides()));
     }
 
     ManualPolicyCatalog(List<ManualPolicy> policies) {
@@ -63,6 +69,11 @@ public class ManualPolicyCatalog {
     }
 
     ManualPolicyCatalog(List<ManualPolicy> policies, List<BenefitOverride> benefitOverrides) {
+        this(policies, benefitOverrides, List.of());
+    }
+
+    ManualPolicyCatalog(List<ManualPolicy> policies, List<BenefitOverride> benefitOverrides,
+                        List<TextOverride> textOverrides) {
         Map<String, ManualPolicy> map = new LinkedHashMap<>();
         Set<String> names = new HashSet<>();
         for (ManualPolicy policy : policies) {
@@ -86,6 +97,20 @@ public class ManualPolicyCatalog {
         }
         this.overridesByKey = Map.copyOf(overrideMap);
         this.overrides = List.copyOf(overrideMap.values());
+
+        Set<String> textKeys = new HashSet<>();
+        for (TextOverride override : textOverrides) {
+            override.validate();
+            if (!textKeys.add(key(override.source(), override.externalId()))) {
+                throw new IllegalStateException("원문 보정 대상이 겹칩니다: " + override.source() + " " + override.externalId());
+            }
+        }
+        this.textOverrides = List.copyOf(textOverrides);
+
+    }
+
+    private static <T> List<T> orEmpty(List<T> list) {
+        return list == null ? List.of() : list;
     }
 
     private static String key(String source, String externalId) {
@@ -99,6 +124,11 @@ public class ManualPolicyCatalog {
     /** 동기화 정책 혜택 보정 목록 */
     public List<BenefitOverride> benefitOverrides() {
         return overrides;
+    }
+
+    /** 동기화 정책 원문 보정 목록 */
+    public List<TextOverride> textOverrides() {
+        return textOverrides;
     }
 
     /** 직접 등록 정책이면 리소스 항목. 다른 출처 정책이면 빈 값 */
@@ -153,7 +183,74 @@ public class ManualPolicyCatalog {
         }
     }
 
-    record Document(String description, List<ManualPolicy> policies, List<BenefitOverride> benefitOverrides) {
+    record Document(String description, List<ManualPolicy> policies, List<BenefitOverride> benefitOverrides,
+                    List<TextOverride> textOverrides) {
+    }
+
+    private static boolean sameTarget(String source, String externalId, String name, Policy policy) {
+        return policy != null && source.equals(policy.getSource()) && externalId.equals(policy.getExternalId())
+                && name.equals(policy.getName());
+    }
+
+    /**
+     * 동기화 정책 원문 보정 1건. 출처·외부 정책 ID·정책명이 모두 같을 때만 적용한다.
+     *
+     * @param applyPeriod       신청 기간을 이 값으로 바꾼다 (null이면 그대로). 추천 정렬의 신청 가능 판정도 이 값을 쓴다
+     * @param applyMethodAppend 신청 방법 끝에 덧붙일 문장 (null이면 그대로)
+     * @param etcNoteAppend     기타 참고 사항 끝에 덧붙일 문장 (null이면 그대로)
+     * @param sourceUrl         보정 내용의 공식 출처 (기록용)
+     */
+    public record TextOverride(String source, String externalId, String name, String reason, String sourceUrl,
+                               String applyPeriod, String applyMethodAppend, String etcNoteAppend) {
+
+        public boolean matches(Policy policy) {
+            return sameTarget(source, externalId, name, policy);
+        }
+
+        /** 보정한 원문. 이미 보정된 원문이면 같은 값 (덧붙인 문장이 이미 있으면 다시 붙이지 않음) */
+        public PolicyText correct(PolicyText current) {
+            PolicyText base = current == null ? PolicyText.builder().build() : current;
+            return base.withCorrection(
+                    applyPeriod == null ? base.getApplyPeriod() : applyPeriod,
+                    appendOnce(base.getApplyMethod(), applyMethodAppend),
+                    appendOnce(base.getEtcNote(), etcNoteAppend));
+        }
+
+        /** 이 원문에 보정이 이미 들어가 있는지 */
+        public boolean isApplied(PolicyText current) {
+            if (current == null) {
+                return false;
+            }
+            PolicyText corrected = correct(current);
+            return Objects.equals(current.getApplyPeriod(), corrected.getApplyPeriod())
+                    && Objects.equals(current.getApplyMethod(), corrected.getApplyMethod())
+                    && Objects.equals(current.getEtcNote(), corrected.getEtcNote());
+        }
+
+        private static String appendOnce(String base, String sentence) {
+            if (sentence == null || sentence.isBlank()) {
+                return base;
+            }
+            if (base == null || base.isBlank()) {
+                return sentence;
+            }
+            return base.contains(sentence) ? base : base + "\n" + sentence;
+        }
+
+        void validate() {
+            if (source == null || source.isBlank() || SOURCE.equals(source)) {
+                throw new IllegalStateException("원문 보정 출처가 비었거나 MANUAL입니다: " + externalId);
+            }
+            if (externalId == null || externalId.isBlank() || name == null || name.isBlank()) {
+                throw new IllegalStateException("원문 보정 외부 ID·정책명이 비었습니다: " + source);
+            }
+            if (sourceUrl == null || sourceUrl.isBlank()) {
+                throw new IllegalStateException("원문 보정의 공식 출처가 비었습니다: " + externalId);
+            }
+            if (applyPeriod == null && applyMethodAppend == null && etcNoteAppend == null) {
+                throw new IllegalStateException("원문 보정 값이 없습니다: " + externalId);
+            }
+        }
     }
 
     /**

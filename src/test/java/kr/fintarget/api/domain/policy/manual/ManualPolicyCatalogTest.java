@@ -3,9 +3,11 @@ package kr.fintarget.api.domain.policy.manual;
 import kr.fintarget.api.domain.policy.benefit.BenefitType;
 import kr.fintarget.api.domain.policy.entity.Policy;
 import kr.fintarget.api.domain.policy.entity.PolicyBenefit;
+import kr.fintarget.api.domain.policy.entity.PolicyText;
 import kr.fintarget.api.domain.policy.entity.PolicyType;
 import kr.fintarget.api.domain.policy.manual.ManualPolicyCatalog.ManualBenefit;
 import kr.fintarget.api.domain.policy.manual.ManualPolicyCatalog.ManualPolicy;
+import kr.fintarget.api.domain.policy.manual.ManualPolicyCatalog.TextOverride;
 import org.junit.jupiter.api.Test;
 
 import java.time.LocalDateTime;
@@ -144,6 +146,75 @@ class ManualPolicyCatalogTest {
                 .isInstanceOf(IllegalStateException.class);
         assertThatThrownBy(() -> new ManualPolicyCatalog(List.of(), List.of(
                 new ManualPolicyCatalog.BenefitOverride("YOUTH_CENTER", "X", "이름", "이유", null))))
+                .isInstanceOf(IllegalStateException.class);
+    }
+
+    // ===== 동기화 정책 원문 보정 (#245) =====
+
+    private static TextOverride rentOverride() {
+        return new TextOverride("YOUTH_CENTER", "Y1", "월세 지원", "이유", "https://example.org", "20260506 ~ 20260519",
+                "신청 마감 안내", "비고 안내");
+    }
+
+    @Test
+    void 리소스의_원문_보정은_서울_월세와_국민취업지원제도이고_공식_출처가_있다() {
+        assertThat(catalog.textOverrides()).extracting(TextOverride::externalId)
+                .containsExactly("20261021005400214208", "20260710005400113256");
+        assertThat(catalog.textOverrides()).allSatisfy(o -> {
+            assertThat(o.source()).isEqualTo("YOUTH_CENTER");
+            assertThat(o.sourceUrl()).startsWith("https://");
+        });
+        assertThat(catalog.textOverrides().get(0).applyPeriod()).isEqualTo("20260506 ~ 20260519");
+        assertThat(catalog.textOverrides().get(1).applyPeriod()).isEqualTo("상시");
+    }
+
+    @Test
+    void 원문_보정은_신청_기간을_바꾸고_문장을_한_번만_덧붙이며_나머지_칸은_그대로다() {
+        TextOverride override = rentOverride();
+        PolicyText original = PolicyText.builder().supportContent("지원 내용").applyPeriod("20260101 ~ 20261231")
+                .applyPeriodCode("0057001").businessPeriod("20260101 ~ 20261231").applyMethod("모집 공고 후 신청")
+                .applyUrl("https://apply").build();
+        assertThat(override.isApplied(original)).isFalse();
+
+        PolicyText corrected = override.correct(original);
+
+        assertThat(corrected.getApplyPeriod()).isEqualTo("20260506 ~ 20260519");
+        assertThat(corrected.getApplyMethod()).isEqualTo("모집 공고 후 신청\n신청 마감 안내");
+        assertThat(corrected.getEtcNote()).isEqualTo("비고 안내");
+        assertThat(corrected.getSupportContent()).isEqualTo("지원 내용");
+        assertThat(corrected.getApplyPeriodCode()).isEqualTo("0057001");
+        assertThat(corrected.getBusinessPeriod()).isEqualTo("20260101 ~ 20261231");
+        assertThat(corrected.getApplyUrl()).isEqualTo("https://apply");
+        assertThat(override.isApplied(corrected)).isTrue();
+        // 이미 보정한 원문에 다시 적용해도 같다
+        assertThat(override.correct(corrected).getApplyMethod()).isEqualTo(corrected.getApplyMethod());
+    }
+
+    @Test
+    void 원문_보정은_출처_외부ID_정책명이_모두_같은_정책에만_맞는다() {
+        TextOverride override = rentOverride();
+        Policy same = Policy.create("월세 지원", "설명", 19, 39, null, null, PolicyType.HOUSING, "SEOUL", "Y1", "YOUTH_CENTER");
+        Policy renamed = Policy.create("다른 이름", "설명", 19, 39, null, null, PolicyType.HOUSING, "SEOUL", "Y1", "YOUTH_CENTER");
+        Policy otherSource = Policy.create("월세 지원", "설명", 19, 39, null, null, PolicyType.HOUSING, "SEOUL", "Y1", "KINFA");
+
+        assertThat(override.matches(same)).isTrue();
+        assertThat(override.matches(renamed)).isFalse();
+        assertThat(override.matches(otherSource)).isFalse();
+        assertThat(override.matches(null)).isFalse();
+    }
+
+    @Test
+    void 원문_보정_항목이_잘못되면_기동_시_막는다() {
+        assertThatThrownBy(() -> new ManualPolicyCatalog(List.of(), List.of(), List.of(
+                new TextOverride("YOUTH_CENTER", "Y1", "월세", "이유", null, "상시", null, null))))
+                .isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> new ManualPolicyCatalog(List.of(), List.of(), List.of(
+                new TextOverride("MANUAL", "Y1", "월세", "이유", "https://x", "상시", null, null))))
+                .isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> new ManualPolicyCatalog(List.of(), List.of(), List.of(
+                new TextOverride("YOUTH_CENTER", "Y1", "월세", "이유", "https://x", null, null, null))))
+                .isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> new ManualPolicyCatalog(List.of(), List.of(), List.of(rentOverride(), rentOverride())))
                 .isInstanceOf(IllegalStateException.class);
     }
 }

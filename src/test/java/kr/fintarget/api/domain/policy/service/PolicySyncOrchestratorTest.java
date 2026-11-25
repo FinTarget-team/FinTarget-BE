@@ -1,5 +1,6 @@
 package kr.fintarget.api.domain.policy.service;
 
+import kr.fintarget.api.domain.policy.manual.ManualPolicyTextCorrector;
 import kr.fintarget.api.domain.policy.benefit.BenefitExtractionInProgressException;
 import kr.fintarget.api.domain.policy.benefit.PolicyBenefitExtractionService;
 import kr.fintarget.api.domain.policy.condition.ConditionExtractionInProgressException;
@@ -50,6 +51,9 @@ class PolicySyncOrchestratorTest {
 
     @Mock
     private PolicyRerankPrecomputer policyRerankPrecomputer;
+
+    @Mock
+    private ManualPolicyTextCorrector manualPolicyTextCorrector;
 
     @InjectMocks
     private PolicySyncOrchestrator policySyncOrchestrator;
@@ -124,6 +128,32 @@ class PolicySyncOrchestratorTest {
         PolicySyncResult second = policySyncOrchestrator.syncAll();
 
         assertThat(second.kinfaSavedCount()).isEqualTo(2);
+    }
+
+    @Test
+    void 동기화가_끝나면_청크_갱신_전에_리소스_원문_보정을_다시_적용한다() {
+        policySyncOrchestrator.syncAll();
+
+        InOrder inOrder = inOrder(youthCenterPolicySyncService, kinfaPolicySyncService, manualPolicyTextCorrector,
+                policyChunkService, policyBenefitExtractionService, policyConditionExtractionService);
+        inOrder.verify(youthCenterPolicySyncService).sync();
+        inOrder.verify(kinfaPolicySyncService).sync();
+        inOrder.verify(manualPolicyTextCorrector).apply();
+        inOrder.verify(policyChunkService).refreshPending();
+        inOrder.verify(policyBenefitExtractionService).extractPending();
+        inOrder.verify(policyConditionExtractionService).extractPending();
+    }
+
+    @Test
+    void 원문_보정이_실패해도_청크_갱신과_동기화_결과는_그대로_진행된다() {
+        when(kinfaPolicySyncService.sync()).thenReturn(2);
+        when(manualPolicyTextCorrector.apply()).thenThrow(new RuntimeException("DB 오류"));
+
+        PolicySyncResult result = policySyncOrchestrator.syncAll();
+
+        assertThat(result.kinfaSavedCount()).isEqualTo(2);
+        verify(policyChunkService).refreshPending();
+        verify(policyChunkEmbeddingService).refreshPending();
     }
 
     @Test

@@ -1,5 +1,5 @@
 {
-  "description": "공공 API(온통청년, KINFA)로 수집되지 않는 정책을 직접 등록한다 (#245). POST /api/admin/policy/manual/sync가 externalId로 upsert하고, benefit 값은 AI 혜택 추출 결과보다 우선한다. 내용은 sources에 적은 공식 출처와 보도 범위 안에서만 쓴다. benefitOverrides는 동기화 정책(온통청년 등) 중 혜택 분류가 틀린 정책의 시뮬레이션 혜택 값만 출처·외부 정책 ID로 지정해 덮는다 (정책명이 같을 때만). policies의 순서는 추천 목록 고정 노출 순서이고, recommendFor는 고정 노출할 직업 유형(EmploymentType)이다.",
+  "description": "공공 API(온통청년, KINFA)로 수집되지 않는 정책을 직접 등록한다 (#245). POST /api/admin/policy/manual/sync가 externalId로 upsert하고, benefit 값은 AI 혜택 추출 결과보다 우선한다. 내용은 sources에 적은 공식 출처와 보도 범위 안에서만 쓴다. benefitOverrides는 동기화 정책(온통청년 등) 중 혜택 분류가 틀린 정책의 시뮬레이션 혜택 값만 출처·외부 정책 ID로 지정해 덮는다 (정책명이 같을 때만). policies의 순서는 추천 목록 고정 노출 순서이고, recommendFor는 고정 노출할 직업 유형(EmploymentType)이다. textOverrides는 동기화 정책의 신청 기간·신청 방법·기타 참고 사항 보정으로, 공식 출처(sourceUrl)에 있는 내용만 넣는다.",
   "policies": [
     {
       "externalId": "MANUAL-NATIONAL-SCHOLARSHIP-1-2026",
@@ -203,6 +203,28 @@
         "maximum": false,
         "evidence": "취업활동계획에 따른 구직활동 이행시 월 60~100만원*, 6개월 지원"
       }
+    }
+  ],
+  "textOverrides": [
+    {
+      "source": "YOUTH_CENTER",
+      "externalId": "20261021005400214208",
+      "name": "2026 청년 월세 지원",
+      "reason": "온통청년 신청 기간(20260101 ~ 20261231)이 사업 기간과 같아 '지금 신청 가능'으로 안내·추천됨. 실제 2026년 접수는 2026.5.6 10:00 ~ 5.19 18:00 서울주거포털 온라인 접수로 마감",
+      "sourceUrl": "https://mediahub.seoul.go.kr/archives/2018004",
+      "applyPeriod": "20260506 ~ 20260519",
+      "applyMethodAppend": "2026년 신청 접수는 5월 6일~5월 19일 서울주거포털에서 온라인으로 받았고 마감됐어요. 지원은 월 최대 20만원, 12개월이에요.",
+      "etcNoteAppend": "2026년 신청 접수는 5월 6일~5월 19일 서울주거포털에서 온라인으로 받았고 마감됐어요. 지원은 월 최대 20만원, 12개월이에요."
+    },
+    {
+      "source": "YOUTH_CENTER",
+      "externalId": "20260710005400113256",
+      "name": "국민취업지원제도",
+      "reason": "원문 사업 기간은 '상시'인데 신청 기간이 비어 있어 '신청 기간은 안내에 없음'으로 답함. 정부24 서비스 안내의 신청기간은 '상시신청'",
+      "sourceUrl": "https://www.gov.kr/portal/rcvfvrSvc/dtlEx/149200005007",
+      "applyPeriod": "상시",
+      "applyMethodAppend": null,
+      "etcNoteAppend": null
     }
   ]
 }

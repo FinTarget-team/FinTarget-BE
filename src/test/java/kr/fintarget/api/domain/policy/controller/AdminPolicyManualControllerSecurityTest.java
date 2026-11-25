@@ -51,7 +51,7 @@ class AdminPolicyManualControllerSecurityTest {
         ManualPolicySyncResult.Item item = new ManualPolicySyncResult.Item(UUID.randomUUID(), "MANUAL-HOPE-DOUBLE-2026",
                 "2026 희망두배 청년통장", "CREATED", 3, 18, 34, List.of("SEOUL"), "INDIVIDUAL", 2_550_000L, false, null,
                 "MONEY", "CASH", 150_000L, 36, null, true);
-        when(manualPolicySyncService.sync()).thenReturn(new ManualPolicySyncResult(List.of(item), List.of(), Map.of("rerank", "requested"), 1200L));
+        when(manualPolicySyncService.sync()).thenReturn(new ManualPolicySyncResult(List.of(item), List.of(), List.of(), Map.of("rerank", "requested"), 1200L));
 
         mockMvc.perform(post(URL).header("X-Admin-Key", "test-admin-key"))
                 .andExpect(status().isOk())

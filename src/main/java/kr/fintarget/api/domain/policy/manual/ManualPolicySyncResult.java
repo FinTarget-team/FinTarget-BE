@@ -12,7 +12,9 @@ public record ManualPolicySyncResult(
         List<Item> policies,
         @Schema(description = "동기화 정책 혜택 보정 결과. found=false면 이 환경에 그 외부 ID의 정책이 없어 적용하지 않음")
         List<OverrideItem> benefitOverrides,
-        @Schema(description = "단계별 결과 (chunk, benefit, condition, benefitOverride, rerank, embedding). "
+        @Schema(description = "동기화 정책 원문(신청 기간·신청 방법·기타 참고 사항) 보정 결과. found=false거나 nameMatches=false면 적용하지 않음")
+        List<TextOverrideItem> textOverrides,
+        @Schema(description = "단계별 결과 (textOverride, chunk, benefit, condition, benefitOverride, rerank, embedding). "
                 + "다른 작업과 겹쳐 실행하지 못한 단계는 \"skipped: 사유\"", example = "{\"benefitOverride\": 0, \"rerank\": \"requested\"}")
         Map<String, Object> steps,
         @Schema(description = "소요 시간(ms)", example = "45000")
@@ -38,6 +40,17 @@ public record ManualPolicySyncResult(
             Integer months,
             Long oneTimeAmount,
             @Schema(description = "시뮬레이션에 반영되는지", example = "true") boolean simulationReflected
+    ) {
+    }
+
+    public record TextOverrideItem(
+            @Schema(example = "YOUTH_CENTER") String source,
+            @Schema(example = "20261021005400214208") String externalId,
+            @Schema(example = "2026 청년 월세 지원") String name,
+            @Schema(description = "이 환경에 대상 정책이 있는지") boolean found,
+            @Schema(description = "저장된 정책명이 리소스와 같은지. 다르면 보정하지 않음") boolean nameMatches,
+            @Schema(description = "저장된 원문에 보정이 들어가 있는지") boolean applied,
+            @Schema(description = "저장된 신청 기간", example = "20260506 ~ 20260519") String applyPeriod
     ) {
     }
 

@@ -2,6 +2,8 @@ package kr.fintarget.api.domain.policy.manual;
 
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityManagerFactory;
+import kr.fintarget.api.domain.policy.recommend.ApplyPeriodClassifier;
+import kr.fintarget.api.domain.policy.recommend.ApplyPeriodStatus;
 import kr.fintarget.api.domain.policy.benefit.BenefitExtraction;
 import kr.fintarget.api.domain.policy.benefit.BenefitExtractionInProgressException;
 import kr.fintarget.api.domain.policy.benefit.BenefitType;
@@ -33,6 +35,7 @@ import org.springframework.orm.jpa.EntityManagerHolder;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 
@@ -194,7 +197,7 @@ class ManualPolicySyncServiceIntegrationTest {
         when(busy.extractPending()).thenThrow(new BenefitExtractionInProgressException());
         ManualPolicySyncService withBusyExtraction = new ManualPolicySyncService(new ManualPolicyCatalog(), policyRepository,
                 chunkRepository, transactionTemplate, policyChunkService, busy, policyConditionExtractionService,
-                policyChunkEmbeddingService, policyRerankPrecomputer, entityManager);
+                policyChunkEmbeddingService, policyRerankPrecomputer, textCorrector, entityManager);
 
         ManualPolicySyncResult result = withBusyExtraction.sync();
 
@@ -275,6 +278,112 @@ class ManualPolicySyncServiceIntegrationTest {
                 });
     }
 
+    // ===== 동기화 정책 원문 보정 (#245) =====
+
+    private static final String RENT = "20261021005400214208";
+    private static final String EMPLOYMENT = "20260710005400113256";
+    private static final String RENT_NOTE = "2026년 신청 접수는 5월 6일~5월 19일 서울주거포털에서 온라인으로 받았고 마감됐어요.";
+    private static final LocalDate TODAY = LocalDate.of(2026, 11, 25);
+
+    private static Policy youthCenter(String externalId, String name, String applyPeriod, String businessPeriod, String applyMethod) {
+        return Policy.create(name, "설명", 19, 39, null, null, PolicyType.HOUSING, "SEOUL", externalId, "YOUTH_CENTER",
+                PolicyText.builder().supportContent("월 임차료 지원").applyPeriod(applyPeriod).applyPeriodCode("0057001")
+                        .businessPeriod(businessPeriod).applyMethod(applyMethod).build());
+    }
+
+    private Policy youth(String externalId) {
+        return policyRepository.findByExternalIdAndSource(externalId, "YOUTH_CENTER").orElseThrow();
+    }
+
+    @Test
+    void 원문_보정_대상은_신청_기간을_바꾸고_문장을_덧붙여_신청_가능_판정이_마감으로_바뀌고_다른_정책은_그대로다() {
+        policyRepository.save(youthCenter(RENT, "2026 청년 월세 지원", "20260101 ~ 20261231", "20260101 ~ 20261231", "모집 공고 후 신청"));
+        policyRepository.save(youthCenter("YC-OTHER", "다른 월세 정책", "20260101 ~ 20261231", null, "온라인 신청"));
+        assertThat(ApplyPeriodClassifier.classify(youth(RENT).getText(), TODAY)).isEqualTo(ApplyPeriodStatus.OPEN);
+
+        ManualPolicySyncResult result = service.sync();
+
+        Policy rent = youth(RENT);
+        assertThat(rent.getSource()).isEqualTo("YOUTH_CENTER");
+        assertThat(rent.getText().getApplyPeriod()).isEqualTo("20260506 ~ 20260519");
+        assertThat(rent.getText().getApplyMethod()).startsWith("모집 공고 후 신청\n").contains(RENT_NOTE);
+        assertThat(rent.getText().getEtcNote()).startsWith(RENT_NOTE);
+        assertThat(rent.getText().getSupportContent()).isEqualTo("월 임차료 지원");
+        assertThat(rent.getText().getBusinessPeriod()).isEqualTo("20260101 ~ 20261231");
+        assertThat(rent.getText().getApplyPeriodCode()).isEqualTo("0057001");
+        assertThat(ApplyPeriodClassifier.classify(rent.getText(), TODAY)).isEqualTo(ApplyPeriodStatus.NOT_OPEN);
+        assertThat(result.steps()).containsEntry("textOverride", 1);
+
+        Policy other = youth("YC-OTHER");
+        assertThat(other.getText().getApplyPeriod()).isEqualTo("20260101 ~ 20261231");
+        assertThat(other.getText().getApplyMethod()).isEqualTo("온라인 신청");
+        assertThat(other.getText().getEtcNote()).isNull();
+
+        assertThat(result.textOverrides()).filteredOn(o -> o.externalId().equals(RENT)).singleElement().satisfies(o -> {
+            assertThat(o.found()).isTrue();
+            assertThat(o.nameMatches()).isTrue();
+            assertThat(o.applied()).isTrue();
+            assertThat(o.applyPeriod()).isEqualTo("20260506 ~ 20260519");
+        });
+        // 이 환경에 없는 외부 ID는 적용하지 않았다고 알린다
+        assertThat(result.textOverrides()).filteredOn(o -> o.externalId().equals(EMPLOYMENT)).singleElement()
+                .satisfies(o -> assertThat(o.found()).isFalse());
+
+        // 다시 실행해도 문장을 두 번 붙이지 않는다
+        ManualPolicySyncResult again = service.sync();
+        assertThat(again.steps()).containsEntry("textOverride", 0);
+        assertThat(youth(RENT).getText().getApplyMethod()).isEqualTo(rent.getText().getApplyMethod());
+    }
+
+    @Test
+    void 동기화가_원문을_되돌려도_원문_보정을_다시_적용한다() {
+        policyRepository.save(youthCenter(RENT, "2026 청년 월세 지원", "20260101 ~ 20261231", "20260101 ~ 20261231", "모집 공고 후 신청"));
+        service.sync();
+        String correctedMethod = youth(RENT).getText().getApplyMethod();
+
+        // 03:00 동기화(updateFrom)가 소스 원문으로 되돌림
+        Policy fetched = youthCenter(RENT, "2026 청년 월세 지원", "20260101 ~ 20261231", "20260101 ~ 20261231", "모집 공고 후 신청");
+        transactionTemplate.executeWithoutResult(status -> policySyncWriter.apply("YOUTH_CENTER", List.of(fetched)));
+        assertThat(youth(RENT).getText().getApplyPeriod()).isEqualTo("20260101 ~ 20261231");
+
+        // 동기화 직후 단계(PolicySyncOrchestrator)에서 다시 적용
+        assertThat(textCorrector.apply()).isEqualTo(1);
+        assertThat(youth(RENT).getText().getApplyPeriod()).isEqualTo("20260506 ~ 20260519");
+        assertThat(youth(RENT).getText().getApplyMethod()).isEqualTo(correctedMethod);
+        assertThat(textCorrector.apply()).isZero();
+    }
+
+    @Test
+    void 사업_기간이_상시인_국민취업지원제도는_신청_기간을_상시로_보정한다() {
+        policyRepository.save(Policy.create("국민취업지원제도", "설명", 15, 69, null, null, PolicyType.HOUSING, null, EMPLOYMENT,
+                "YOUTH_CENTER", PolicyText.builder().applyPeriodCode("0057002").businessPeriod("상시").applyMethod("고용센터 방문").build()));
+
+        service.sync();
+
+        Policy saved = youth(EMPLOYMENT);
+        assertThat(saved.getText().getApplyPeriod()).isEqualTo("상시");
+        assertThat(saved.getText().getApplyMethod()).isEqualTo("고용센터 방문");
+        assertThat(ApplyPeriodClassifier.classify(saved.getText(), TODAY)).isEqualTo(ApplyPeriodStatus.OPEN);
+    }
+
+    @Test
+    void 정책명이_다르면_원문_보정을_적용하지_않는다() {
+        policyRepository.save(youthCenter(RENT, "이름이 바뀐 정책", "20260101 ~ 20261231", null, "온라인 신청"));
+
+        ManualPolicySyncResult result = service.sync();
+
+        assertThat(youth(RENT).getText().getApplyPeriod()).isEqualTo("20260101 ~ 20261231");
+        assertThat(youth(RENT).getText().getApplyMethod()).isEqualTo("온라인 신청");
+        assertThat(result.textOverrides()).filteredOn(o -> o.externalId().equals(RENT)).singleElement().satisfies(o -> {
+            assertThat(o.found()).isTrue();
+            assertThat(o.nameMatches()).isFalse();
+            assertThat(o.applied()).isFalse();
+        });
+    }
+
+    @Autowired
+    private ManualPolicyTextCorrector textCorrector;
+
     @Autowired
     private PolicyChunkRepository chunkRepository;
 
@@ -318,10 +427,17 @@ class ManualPolicySyncServiceIntegrationTest {
                                                         PolicyConditionExtractionService policyConditionExtractionService,
                                                         PolicyChunkEmbeddingService policyChunkEmbeddingService,
                                                         PolicyRerankPrecomputer policyRerankPrecomputer,
+                                                        ManualPolicyTextCorrector textCorrector,
                                                         EntityManager entityManager) {
             return new ManualPolicySyncService(catalog, policyRepository, policyChunkRepository, transactionTemplate,
                     policyChunkService, policyBenefitExtractionService, policyConditionExtractionService,
-                    policyChunkEmbeddingService, policyRerankPrecomputer, entityManager);
+                    policyChunkEmbeddingService, policyRerankPrecomputer, textCorrector, entityManager);
+        }
+
+        @Bean
+        ManualPolicyTextCorrector manualPolicyTextCorrector(ManualPolicyCatalog catalog, PolicyRepository policyRepository,
+                                                            TransactionTemplate transactionTemplate, EntityManager entityManager) {
+            return new ManualPolicyTextCorrector(catalog, policyRepository, transactionTemplate, entityManager);
         }
     }
 }

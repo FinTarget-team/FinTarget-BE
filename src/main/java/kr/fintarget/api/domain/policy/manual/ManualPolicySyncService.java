@@ -11,8 +11,10 @@ import kr.fintarget.api.domain.policy.entity.PolicyBenefit;
 import kr.fintarget.api.domain.policy.entity.PolicyCondition;
 import kr.fintarget.api.domain.policy.manual.ManualPolicyCatalog.BenefitOverride;
 import kr.fintarget.api.domain.policy.manual.ManualPolicyCatalog.ManualPolicy;
+import kr.fintarget.api.domain.policy.manual.ManualPolicyCatalog.TextOverride;
 import kr.fintarget.api.domain.policy.manual.ManualPolicySyncResult.Item;
 import kr.fintarget.api.domain.policy.manual.ManualPolicySyncResult.OverrideItem;
+import kr.fintarget.api.domain.policy.manual.ManualPolicySyncResult.TextOverrideItem;
 import kr.fintarget.api.domain.policy.recommend.rerank.PolicyRerankPrecomputer;
 import kr.fintarget.api.domain.policy.repository.PolicyRepository;
 import lombok.extern.slf4j.Slf4j;
@@ -32,6 +34,7 @@ import java.util.function.Supplier;
  * 직접 등록 정책 동기화 (#245). 리소스의 정책을 externalId로 upsert한 뒤, 정책 동기화(PolicySyncOrchestrator)와 같은 순서로
  * 청크 → 혜택 추출 → 조건 추출 → (리소스 혜택 값 적용) → 리랭킹 미리 계산 → 임베딩을 실행한다. 여러 번 실행해도 결과가 같다.
  * 리소스 혜택 값 적용 단계는 동기화 정책 혜택 보정(benefitOverrides)도 함께 적용한다 (출처는 그대로, 혜택 값만).
+ * 동기화 정책 원문 보정(textOverrides)은 upsert 직후, 청크보다 먼저 적용한다 ({@link ManualPolicyTextCorrector}).
  *
  * <p>출처를 {@link ManualPolicyCatalog#SOURCE}로 저장하므로 03:00 동기화(온통청년·KINFA)는 이 정책을 지우거나 덮어쓰지 않는다
  * (PolicySyncWriter는 같은 출처 정책만 갱신·삭제).
@@ -56,6 +59,7 @@ public class ManualPolicySyncService {
     private final PolicyConditionExtractionService policyConditionExtractionService;
     private final PolicyChunkEmbeddingService policyChunkEmbeddingService;
     private final PolicyRerankPrecomputer policyRerankPrecomputer;
+    private final ManualPolicyTextCorrector textCorrector;
     private final EntityManager entityManager;
     private final AtomicBoolean running = new AtomicBoolean(false);
 
@@ -65,7 +69,8 @@ public class ManualPolicySyncService {
                                    PolicyBenefitExtractionService policyBenefitExtractionService,
                                    PolicyConditionExtractionService policyConditionExtractionService,
                                    PolicyChunkEmbeddingService policyChunkEmbeddingService,
-                                   PolicyRerankPrecomputer policyRerankPrecomputer, EntityManager entityManager) {
+                                   PolicyRerankPrecomputer policyRerankPrecomputer, ManualPolicyTextCorrector textCorrector,
+                                   EntityManager entityManager) {
         this.catalog = catalog;
         this.policyRepository = policyRepository;
         this.policyChunkRepository = policyChunkRepository;
@@ -75,6 +80,7 @@ public class ManualPolicySyncService {
         this.policyConditionExtractionService = policyConditionExtractionService;
         this.policyChunkEmbeddingService = policyChunkEmbeddingService;
         this.policyRerankPrecomputer = policyRerankPrecomputer;
+        this.textCorrector = textCorrector;
         this.entityManager = entityManager;
     }
 
@@ -95,6 +101,8 @@ public class ManualPolicySyncService {
         Map<String, String> statuses = Objects.requireNonNull(transactionTemplate.execute(status -> upsertAll()));
 
         Map<String, Object> steps = new LinkedHashMap<>();
+        // 동기화 정책 원문 보정은 청크·추출 전에 적용해, 보정한 원문으로 청크·임베딩·조건·혜택을 다시 만든다
+        steps.put("textOverride", step(textCorrector::apply));
         steps.put("chunk", step(policyChunkService::refreshPending));
         steps.put("benefit", step(policyBenefitExtractionService::extractPending));
         steps.put("condition", step(policyConditionExtractionService::extractPending));
@@ -105,9 +113,10 @@ public class ManualPolicySyncService {
 
         List<Item> items = Objects.requireNonNull(transactionTemplate.execute(status -> items(statuses)));
         List<OverrideItem> overrides = Objects.requireNonNull(transactionTemplate.execute(status -> overrideItems()));
+        List<TextOverrideItem> textOverrides = Objects.requireNonNull(transactionTemplate.execute(status -> textOverrideItems()));
         long elapsedMs = System.currentTimeMillis() - start;
         log.info("직접 등록 정책 동기화 완료 정책 {}건 {} 혜택 보정 {}건 소요 {}ms", items.size(), statuses, overrides.size(), elapsedMs);
-        return new ManualPolicySyncResult(items, overrides, steps, elapsedMs);
+        return new ManualPolicySyncResult(items, overrides, textOverrides, steps, elapsedMs);
     }
 
     // externalId → CREATED / UPDATED
@@ -195,6 +204,20 @@ public class ManualPolicySyncService {
                     benefit == null ? null : benefit.getBenefitMonths(),
                     benefit == null ? null : benefit.getOneTimeAmount(),
                     policy != null && policy.hasBenefitForSimulation()));
+        }
+        return items;
+    }
+
+    // 원문 보정 대상별 결과. 대상 정책이 없거나(외부 ID가 다른 환경) 정책명이 다르면 적용하지 않은 것으로 알린다
+    private List<TextOverrideItem> textOverrideItems() {
+        entityManager.clear();
+        List<TextOverrideItem> items = new ArrayList<>();
+        for (TextOverride override : catalog.textOverrides()) {
+            Policy policy = policyRepository.findByExternalIdAndSource(override.externalId(), override.source()).orElse(null);
+            boolean matches = override.matches(policy);
+            items.add(new TextOverrideItem(override.source(), override.externalId(), override.name(), policy != null, matches,
+                    matches && override.isApplied(policy.getText()),
+                    policy == null || policy.getText() == null ? null : policy.getText().getApplyPeriod()));
         }
         return items;
     }
