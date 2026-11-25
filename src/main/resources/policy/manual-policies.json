@@ -1,5 +1,5 @@
 {
-  "description": "공공 API(온통청년, KINFA)로 수집되지 않는 정책을 직접 등록한다 (#245). POST /api/admin/policy/manual/sync가 externalId로 upsert하고, benefit 값은 AI 혜택 추출 결과보다 우선한다. 내용은 sources에 적은 공식 출처와 보도 범위 안에서만 쓴다. benefitOverrides는 동기화 정책(온통청년 등) 중 혜택 분류가 틀린 정책의 시뮬레이션 혜택 값만 출처·외부 정책 ID로 지정해 덮는다 (정책명이 같을 때만). policies의 순서는 추천 목록 고정 노출 순서이고, recommendFor는 고정 노출할 직업 유형(EmploymentType)이다. textOverrides는 동기화 정책의 신청 기간·신청 방법·기타 참고 사항 보정으로, 공식 출처(sourceUrl)에 있는 내용만 넣는다.",
+  "description": "공공 API(온통청년, KINFA)로 수집되지 않는 정책을 직접 등록한다 (#245). POST /api/admin/policy/manual/sync가 externalId로 upsert하고, benefit 값은 AI 혜택 추출 결과보다 우선한다. 내용은 sources에 적은 공식 출처와 보도 범위 안에서만 쓴다. benefitOverrides는 동기화 정책(온통청년 등) 중 혜택 분류가 틀린 정책의 시뮬레이션 혜택 값만 출처·외부 정책 ID로 지정해 덮는다 (정책명이 같을 때만). pins는 추천 목록 고정 노출 대상(출처·외부 ID·정책명)으로, 목록 순서가 노출 순서이고 recommendFor는 고정 노출할 직업 유형(EmploymentType)이다. textOverrides는 동기화 정책의 신청 기간·신청 방법·기타 참고 사항 보정으로, 공식 출처(sourceUrl)에 있는 내용만 넣는다.",
   "policies": [
     {
       "externalId": "MANUAL-NATIONAL-SCHOLARSHIP-1-2026",
@@ -18,9 +18,6 @@
       "referenceUrl": "https://www.nocutnews.co.kr/news/6431466",
       "contactInfo": "한국장학재단 1599-2000",
       "etcNote": "주관: 교육부·한국장학재단.",
-      "recommendFor": [
-        "STUDENT"
-      ],
       "benefit": {
         "type": "CASH",
         "monthlyAmount": null,
@@ -37,7 +34,7 @@
       "region": "SEOUL",
       "minAge": 18,
       "maxAge": 34,
-      "description": "서울시 근로 청년이 매월 15만원을 저축하면 서울시가 같은 금액을 매칭 적립해 주는 자산형성 지원 통장",
+      "description": "서울시 근로 청년이 매월 15만원을 저축하면 서울시가 같은 금액을 매칭 적립해 주는 자산형성 지원 통장. 청년이 매달 저축하면 서울시가 같은 금액을 더 적립해 주는 청년 적금 매칭 지원이에요.",
       "supportContent": "매월 15만원을 2년 또는 3년간 저축하면 저축한 금액과 같은 금액을 서울시가 매칭해 적립합니다. 2년 저축 시 720만원, 3년 저축 시 1,080만원의 최종 적립금을 받습니다(이자 별도).",
       "eligibilityDetail": "서울시에 거주하는 만 18~34세 근로 청년. 최근 1년 중 3개월 이상 근로한 청년.",
       "incomeCondition": "본인 근로소득 세전 월 255만원 이하. 부양의무자(부모·배우자) 소득 연 1억원 미만, 재산 9억원 미만.",
@@ -47,10 +44,6 @@
       "referenceUrl": "https://news.seoul.go.kr/welfare/archives/48102",
       "contactInfo": "서울시 복지정책과 02-2133-7753",
       "etcNote": "주관: 서울시. 2026년 모집은 종료되었습니다.",
-      "recommendFor": [
-        "STUDENT",
-        "EMPLOYED"
-      ],
       "benefit": {
         "type": "CASH",
         "monthlyAmount": 150000,
@@ -72,14 +65,9 @@
       "eligibilityDetail": "만 19~34세 청년(병역 이행 기간은 최대 6년까지 나이 계산에서 제외). 직전연도 소득 확인이 필요합니다.",
       "incomeCondition": "일반형: 총급여 6,000만원 이하 등. 우대형: 총급여 3,600만원 이하 중소기업 재직자 등. 가구 중위소득 200% 이하.",
       "applyMethod": "취급 금융기관 앱을 통해 비대면으로 가입 신청",
-      "applyPeriod": "1차 2026.6.22 ~ 2026.7.3 (종료), 매년 6월·12월 신규 모집 예정",
-      "referenceUrl": "https://news.mtn.co.kr/news-detail/2026042214513425181",
-      "etcNote": "주관: 금융위원회. 참고: https://www.hankyung.com/article/2026031888571",
-      "recommendFor": [
-        "STUDENT",
-        "EMPLOYED",
-        "UNEMPLOYED"
-      ],
+      "applyPeriod": "2차 2026.10.7 ~ 2026.10.16 (종료). 1차는 2026년 6월 22일부터 모집했고 종료됐어요. 다음 모집 일정은 아직 발표되지 않았어요.",
+      "referenceUrl": "https://www.korea.kr/news/policyNewsView.do?newsId=148971997",
+      "etcNote": "주관: 금융위원회. 1차 모집(2026년 6월)과 2차 모집(2026년 10월 7일~16일)은 종료됐고, 다음 모집 일정은 아직 발표되지 않았어요. 참고: https://www.korea.kr/news/policyNewsView.do?newsId=148971997",
       "benefit": {
         "type": "CASH",
         "monthlyAmount": 30000,
@@ -106,9 +94,6 @@
       "referenceUrl": "https://mediahub.seoul.go.kr/archives/2017342",
       "contactInfo": "청년수당 콜센터 1566-3344",
       "etcNote": "주관: 서울시. 2026년 모집은 모두 종료되었습니다. 참고: https://news.seoul.go.kr/gov/archives/578136",
-      "recommendFor": [
-        "UNEMPLOYED"
-      ],
       "benefit": {
         "type": "CASH",
         "monthlyAmount": 500000,
@@ -117,6 +102,53 @@
         "maximum": false,
         "evidence": "구직 활동비를 매월 50만원씩 최대 6개월 지원합니다."
       }
+    }
+  ],
+  "pins": [
+    {
+      "source": "MANUAL",
+      "externalId": "MANUAL-NATIONAL-SCHOLARSHIP-1-2026",
+      "name": "2026 국가장학금 I유형",
+      "recommendFor": [
+        "STUDENT"
+      ]
+    },
+    {
+      "source": "MANUAL",
+      "externalId": "MANUAL-HOPE-DOUBLE-2026",
+      "name": "2026 희망두배 청년통장",
+      "recommendFor": [
+        "STUDENT",
+        "EMPLOYED"
+      ]
+    },
+    {
+      "source": "MANUAL",
+      "externalId": "MANUAL-YOUTH-FUTURE-SAVINGS-2026",
+      "name": "청년미래적금",
+      "recommendFor": [
+        "STUDENT",
+        "EMPLOYED",
+        "UNEMPLOYED"
+      ]
+    },
+    {
+      "source": "YOUTH_CENTER",
+      "externalId": "20261021005400214208",
+      "name": "2026 청년 월세 지원",
+      "recommendFor": [
+        "STUDENT",
+        "EMPLOYED",
+        "UNEMPLOYED"
+      ]
+    },
+    {
+      "source": "MANUAL",
+      "externalId": "MANUAL-SEOUL-YOUTH-ALLOWANCE-2026",
+      "name": "2026 서울 청년수당",
+      "recommendFor": [
+        "UNEMPLOYED"
+      ]
     }
   ],
   "benefitOverrides": [

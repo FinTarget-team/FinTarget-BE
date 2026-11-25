@@ -7,6 +7,7 @@ import kr.fintarget.api.domain.policy.entity.PolicyText;
 import kr.fintarget.api.domain.policy.entity.PolicyType;
 import kr.fintarget.api.domain.policy.manual.ManualPolicyCatalog.ManualBenefit;
 import kr.fintarget.api.domain.policy.manual.ManualPolicyCatalog.ManualPolicy;
+import kr.fintarget.api.domain.policy.manual.ManualPolicyCatalog.Pin;
 import kr.fintarget.api.domain.policy.manual.ManualPolicyCatalog.TextOverride;
 import org.junit.jupiter.api.Test;
 
@@ -25,7 +26,6 @@ class ManualPolicyCatalogTest {
 
     @Test
     void 리소스의_4개_정책은_MANUAL_출처로_만들어지고_원문_칸이_채워진다() {
-        // 순서는 추천 목록 고정 노출 순서
         assertThat(catalog.policies()).extracting(ManualPolicy::externalId).containsExactly(
                 "MANUAL-NATIONAL-SCHOLARSHIP-1-2026", "MANUAL-HOPE-DOUBLE-2026",
                 "MANUAL-YOUTH-FUTURE-SAVINGS-2026", "MANUAL-SEOUL-YOUTH-ALLOWANCE-2026");
@@ -95,7 +95,7 @@ class ManualPolicyCatalogTest {
 
     private static ManualPolicy policy(String externalId, String name, String region, ManualBenefit benefit) {
         return new ManualPolicy(externalId, name, "FINANCE_WELFARE", region, 19, 34, "설명", "지원 내용", null, null, null,
-                "상시", null, null, null, null, List.of(), benefit);
+                "상시", null, null, null, null, benefit);
     }
 
     // ===== 동기화 정책 혜택 보정 (#245) =====
@@ -146,6 +146,40 @@ class ManualPolicyCatalogTest {
                 .isInstanceOf(IllegalStateException.class);
         assertThatThrownBy(() -> new ManualPolicyCatalog(List.of(), List.of(
                 new ManualPolicyCatalog.BenefitOverride("YOUTH_CENTER", "X", "이름", "이유", null))))
+                .isInstanceOf(IllegalStateException.class);
+    }
+
+    // ===== 추천 목록 고정 노출 (#245) =====
+
+    @Test
+    void 고정_노출_대상은_국가장학금_희망두배_청년미래적금_서울_월세_청년수당_순서다() {
+        assertThat(catalog.pins()).extracting(Pin::name).containsExactly(
+                "2026 국가장학금 I유형", "2026 희망두배 청년통장", "청년미래적금", "2026 청년 월세 지원", "2026 서울 청년수당");
+        assertThat(catalog.pins().get(3)).satisfies(pin -> {
+            assertThat(pin.source()).isEqualTo("YOUTH_CENTER");
+            assertThat(pin.externalId()).isEqualTo("20261021005400214208");
+            assertThat(pin.recommendFor()).containsExactly("STUDENT", "EMPLOYED", "UNEMPLOYED");
+        });
+        assertThat(catalog.pins().get(0).recommendFor()).containsExactly("STUDENT");
+        assertThat(catalog.pins().get(4).recommendFor()).containsExactly("UNEMPLOYED");
+    }
+
+    @Test
+    void 고정_노출_항목이_잘못되면_기동_시_막는다() {
+        ManualBenefit cash = new ManualBenefit("CASH", 100_000L, 12, null, true, "월 10만원");
+        List<ManualPolicy> one = List.of(policy("MANUAL-A", "A", null, cash));
+        assertThatThrownBy(() -> new ManualPolicyCatalog(one, List.of(), List.of(),
+                List.of(new Pin("MANUAL", "MANUAL-A", "A", List.of("WORKER")))))
+                .isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> new ManualPolicyCatalog(one, List.of(), List.of(),
+                List.of(new Pin("MANUAL", "MANUAL-A", "A", List.of()))))
+                .isInstanceOf(IllegalStateException.class);
+        // 직접 등록 정책이면 리소스에 같은 이름으로 있어야 한다
+        assertThatThrownBy(() -> new ManualPolicyCatalog(one, List.of(), List.of(),
+                List.of(new Pin("MANUAL", "MANUAL-A", "다른 이름", List.of("STUDENT")))))
+                .isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> new ManualPolicyCatalog(one, List.of(), List.of(), List.of(
+                new Pin("YOUTH_CENTER", "Y1", "월세", List.of("STUDENT")), new Pin("YOUTH_CENTER", "Y1", "월세", List.of("STUDENT")))))
                 .isInstanceOf(IllegalStateException.class);
     }
 

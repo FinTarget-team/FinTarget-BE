@@ -24,6 +24,7 @@ class ManualPolicyPinnerTest {
     private static final String HOPE = "2026 희망두배 청년통장";
     private static final String FUTURE = "청년미래적금";
     private static final String ALLOWANCE = "2026 서울 청년수당";
+    private static final String RENT = "2026 청년 월세 지원";
 
     private final ManualPolicyCatalog catalog = new ManualPolicyCatalog();
     private final ManualPolicyPinner pinner = new ManualPolicyPinner(catalog, true, 10);
@@ -41,6 +42,15 @@ class ManualPolicyPinnerTest {
     // 직접 등록 정책 4개 (리소스에서 만든 그대로)
     private List<Policy> manualPolicies() {
         return catalog.policies().stream().map(ManualPolicy::toPolicy).map(ManualPolicyPinnerTest::withId).toList();
+    }
+
+    // 신청 기간을 보정한 서울 월세 지원 (온통청년 정책)
+    private static Policy rent(String externalId, String name) {
+        return withId(Policy.create(name, "설명", 19, 39, null, null, PolicyType.HOUSING, "SEOUL", externalId, "YOUTH_CENTER"));
+    }
+
+    private static Policy rent() {
+        return rent("20261021005400214208", RENT);
     }
 
     private static List<Policy> regular(int count) {
@@ -64,14 +74,15 @@ class ManualPolicyPinnerTest {
     void 직업_유형별로_고정_정책을_리소스_순서대로_맨_앞에_넣고_항상_N건을_지킨다() {
         List<Policy> manual = manualPolicies();
         List<Policy> selected = regular(10);
-        List<Policy> candidates = concat(selected, manual);
+        List<Policy> candidates = concat(concat(selected, manual), List.of(rent()));
 
         List<Policy> student = pinner.pin(user("STUDENT"), candidates, selected);
-        assertThat(names(student)).hasSize(10).startsWith(SCHOLARSHIP, HOPE, FUTURE, "정책 1", "정책 2");
-        assertThat(names(student)).doesNotContain(ALLOWANCE, "정책 8", "정책 9", "정책 10");
+        assertThat(names(student)).hasSize(10).startsWith(SCHOLARSHIP, HOPE, FUTURE, RENT, "정책 1", "정책 2");
+        assertThat(names(student)).doesNotContain(ALLOWANCE, "정책 7", "정책 8", "정책 9", "정책 10");
 
-        assertThat(names(pinner.pin(user("EMPLOYED"), candidates, selected))).hasSize(10).startsWith(HOPE, FUTURE, "정책 1");
-        assertThat(names(pinner.pin(user("UNEMPLOYED"), candidates, selected))).hasSize(10).startsWith(FUTURE, ALLOWANCE, "정책 1");
+        assertThat(names(pinner.pin(user("EMPLOYED"), candidates, selected))).hasSize(10).startsWith(HOPE, FUTURE, RENT, "정책 1");
+        assertThat(names(pinner.pin(user("UNEMPLOYED"), candidates, selected))).hasSize(10)
+                .startsWith(FUTURE, RENT, ALLOWANCE, "정책 1");
         // 고정 대상이 없는 직업 유형은 원래 결과 그대로
         assertThat(pinner.pin(user("SELF_EMPLOYED"), candidates, selected)).isEqualTo(selected);
         assertThat(pinner.pin(user(null), candidates, selected)).isEqualTo(selected);
@@ -80,15 +91,30 @@ class ManualPolicyPinnerTest {
     @Test
     void 공통_후보_조회를_통과하지_못한_정책은_넣지_않는다() {
         List<Policy> manual = manualPolicies();
-        // 서울 외 지역 사용자처럼 서울 정책(희망두배·청년수당)이 후보에 없는 경우
+        // 서울 외 지역 사용자처럼 서울 정책(희망두배·서울 월세·청년수당)이 후보에 없는 경우
         List<Policy> nationalOnly = manual.stream().filter(p -> p.getRegion() == null).toList();
         List<Policy> selected = regular(10);
 
         List<Policy> student = pinner.pin(user("STUDENT"), concat(selected, nationalOnly), selected);
-        assertThat(names(student)).startsWith(SCHOLARSHIP, FUTURE, "정책 1").doesNotContain(HOPE);
+        assertThat(names(student)).startsWith(SCHOLARSHIP, FUTURE, "정책 1").doesNotContain(HOPE, RENT);
 
         List<Policy> jobSeeker = pinner.pin(user("UNEMPLOYED"), concat(selected, nationalOnly), selected);
         assertThat(names(jobSeeker)).startsWith(FUTURE, "정책 1").doesNotContain(ALLOWANCE);
+    }
+
+    @Test
+    void 동기화_정책은_출처_외부ID_정책명이_모두_같을_때만_고정한다() {
+        List<Policy> manual = manualPolicies();
+        List<Policy> selected = regular(10);
+
+        // 다른 환경에서 정책번호가 다르거나 이름이 바뀐 경우
+        List<Policy> otherId = concat(concat(selected, manual), List.of(rent("20269999999999999999", RENT)));
+        List<Policy> renamed = concat(concat(selected, manual), List.of(rent("20261021005400214208", "2027 청년 월세 지원")));
+
+        assertThat(names(pinner.pin(user("STUDENT"), otherId, selected))).startsWith(SCHOLARSHIP, HOPE, FUTURE, "정책 1")
+                .doesNotContain(RENT);
+        assertThat(names(pinner.pin(user("STUDENT"), renamed, selected))).startsWith(SCHOLARSHIP, HOPE, FUTURE, "정책 1")
+                .doesNotContain("2027 청년 월세 지원");
     }
 
     @Test

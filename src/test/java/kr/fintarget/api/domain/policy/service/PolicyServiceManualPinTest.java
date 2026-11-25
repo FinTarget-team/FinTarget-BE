@@ -59,6 +59,8 @@ class PolicyServiceManualPinTest {
                 .toList();
         List<Policy> candidates = new ArrayList<>(regular);
         catalog.policies().stream().map(ManualPolicy::toPolicy).map(PolicyServiceManualPinTest::withId).forEach(candidates::add);
+        candidates.add(withId(Policy.create("2026 청년 월세 지원", "설명", 19, 39, null, null, PolicyType.HOUSING, "SEOUL",
+                "20261021005400214208", "YOUTH_CENTER")));
         when(policyRepository.findMatchingPolicies(any(), any(), any(), any())).thenReturn(candidates);
         return regular;
     }
@@ -75,8 +77,9 @@ class PolicyServiceManualPinTest {
 
         List<String> result = names(service(true).getMatchingPolicies("u1", null));
 
-        assertThat(result).hasSize(10).startsWith("2026 국가장학금 I유형", "2026 희망두배 청년통장", "청년미래적금", "정책 1");
-        assertThat(result).doesNotContain("2026 서울 청년수당", "정책 8");
+        assertThat(result).hasSize(10)
+                .startsWith("2026 국가장학금 I유형", "2026 희망두배 청년통장", "청년미래적금", "2026 청년 월세 지원", "정책 1");
+        assertThat(result).doesNotContain("2026 서울 청년수당", "정책 7");
     }
 
     @Test

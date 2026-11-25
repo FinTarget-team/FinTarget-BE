@@ -329,6 +329,15 @@ class ManualPolicySyncServiceIntegrationTest {
         assertThat(result.textOverrides()).filteredOn(o -> o.externalId().equals(EMPLOYMENT)).singleElement()
                 .satisfies(o -> assertThat(o.found()).isFalse());
 
+        // 고정 노출 대상: 이 환경에 있는 정책은 found·nameMatches가 true
+        assertThat(result.pins()).extracting(ManualPolicySyncResult.PinItem::externalId).containsExactly(
+                "MANUAL-NATIONAL-SCHOLARSHIP-1-2026", HOPE, "MANUAL-YOUTH-FUTURE-SAVINGS-2026", RENT,
+                "MANUAL-SEOUL-YOUTH-ALLOWANCE-2026");
+        assertThat(result.pins()).allSatisfy(pin -> {
+            assertThat(pin.found()).isTrue();
+            assertThat(pin.nameMatches()).isTrue();
+        });
+
         // 다시 실행해도 문장을 두 번 붙이지 않는다
         ManualPolicySyncResult again = service.sync();
         assertThat(again.steps()).containsEntry("textOverride", 0);
@@ -378,6 +387,11 @@ class ManualPolicySyncServiceIntegrationTest {
             assertThat(o.found()).isTrue();
             assertThat(o.nameMatches()).isFalse();
             assertThat(o.applied()).isFalse();
+        });
+        // 고정 노출도 하지 않는다고 알린다
+        assertThat(result.pins()).filteredOn(pin -> pin.externalId().equals(RENT)).singleElement().satisfies(pin -> {
+            assertThat(pin.found()).isTrue();
+            assertThat(pin.nameMatches()).isFalse();
         });
     }
 

@@ -14,6 +14,8 @@ public record ManualPolicySyncResult(
         List<OverrideItem> benefitOverrides,
         @Schema(description = "동기화 정책 원문(신청 기간·신청 방법·기타 참고 사항) 보정 결과. found=false거나 nameMatches=false면 적용하지 않음")
         List<TextOverrideItem> textOverrides,
+        @Schema(description = "추천 목록 고정 노출 대상 (목록 순서 = 노출 순서). found·nameMatches가 false면 이 환경에서는 고정하지 않음")
+        List<PinItem> pins,
         @Schema(description = "단계별 결과 (textOverride, chunk, benefit, condition, benefitOverride, rerank, embedding). "
                 + "다른 작업과 겹쳐 실행하지 못한 단계는 \"skipped: 사유\"", example = "{\"benefitOverride\": 0, \"rerank\": \"requested\"}")
         Map<String, Object> steps,
@@ -40,6 +42,16 @@ public record ManualPolicySyncResult(
             Integer months,
             Long oneTimeAmount,
             @Schema(description = "시뮬레이션에 반영되는지", example = "true") boolean simulationReflected
+    ) {
+    }
+
+    public record PinItem(
+            @Schema(example = "YOUTH_CENTER") String source,
+            @Schema(example = "20261021005400214208") String externalId,
+            @Schema(example = "2026 청년 월세 지원") String name,
+            @Schema(description = "고정 노출할 직업 유형", example = "[\"STUDENT\", \"EMPLOYED\", \"UNEMPLOYED\"]") List<String> recommendFor,
+            @Schema(description = "이 환경에 대상 정책이 있는지") boolean found,
+            @Schema(description = "저장된 정책명이 리소스와 같은지. 다르면 고정하지 않음") boolean nameMatches
     ) {
     }
 

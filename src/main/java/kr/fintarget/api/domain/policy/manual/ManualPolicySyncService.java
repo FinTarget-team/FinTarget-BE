@@ -11,9 +11,11 @@ import kr.fintarget.api.domain.policy.entity.PolicyBenefit;
 import kr.fintarget.api.domain.policy.entity.PolicyCondition;
 import kr.fintarget.api.domain.policy.manual.ManualPolicyCatalog.BenefitOverride;
 import kr.fintarget.api.domain.policy.manual.ManualPolicyCatalog.ManualPolicy;
+import kr.fintarget.api.domain.policy.manual.ManualPolicyCatalog.Pin;
 import kr.fintarget.api.domain.policy.manual.ManualPolicyCatalog.TextOverride;
 import kr.fintarget.api.domain.policy.manual.ManualPolicySyncResult.Item;
 import kr.fintarget.api.domain.policy.manual.ManualPolicySyncResult.OverrideItem;
+import kr.fintarget.api.domain.policy.manual.ManualPolicySyncResult.PinItem;
 import kr.fintarget.api.domain.policy.manual.ManualPolicySyncResult.TextOverrideItem;
 import kr.fintarget.api.domain.policy.recommend.rerank.PolicyRerankPrecomputer;
 import kr.fintarget.api.domain.policy.repository.PolicyRepository;
@@ -114,9 +116,10 @@ public class ManualPolicySyncService {
         List<Item> items = Objects.requireNonNull(transactionTemplate.execute(status -> items(statuses)));
         List<OverrideItem> overrides = Objects.requireNonNull(transactionTemplate.execute(status -> overrideItems()));
         List<TextOverrideItem> textOverrides = Objects.requireNonNull(transactionTemplate.execute(status -> textOverrideItems()));
+        List<PinItem> pins = Objects.requireNonNull(transactionTemplate.execute(status -> pinItems()));
         long elapsedMs = System.currentTimeMillis() - start;
         log.info("직접 등록 정책 동기화 완료 정책 {}건 {} 혜택 보정 {}건 소요 {}ms", items.size(), statuses, overrides.size(), elapsedMs);
-        return new ManualPolicySyncResult(items, overrides, textOverrides, steps, elapsedMs);
+        return new ManualPolicySyncResult(items, overrides, textOverrides, pins, steps, elapsedMs);
     }
 
     // externalId → CREATED / UPDATED
@@ -218,6 +221,17 @@ public class ManualPolicySyncService {
             items.add(new TextOverrideItem(override.source(), override.externalId(), override.name(), policy != null, matches,
                     matches && override.isApplied(policy.getText()),
                     policy == null || policy.getText() == null ? null : policy.getText().getApplyPeriod()));
+        }
+        return items;
+    }
+
+    // 고정 노출 대상별 결과. 대상 정책이 없거나(외부 ID가 다른 환경) 정책명이 다르면 추천 목록에 고정하지 않는다
+    private List<PinItem> pinItems() {
+        entityManager.clear();
+        List<PinItem> items = new ArrayList<>();
+        for (Pin pin : catalog.pins()) {
+            Policy policy = policyRepository.findByExternalIdAndSource(pin.externalId(), pin.source()).orElse(null);
+            items.add(new PinItem(pin.source(), pin.externalId(), pin.name(), pin.recommendFor(), policy != null, pin.matches(policy)));
         }
         return items;
     }

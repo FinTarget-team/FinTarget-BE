@@ -31,8 +31,8 @@ import java.util.Set;
  * ({@link kr.fintarget.api.domain.policy.service.PolicySyncWriter}).
  * 시뮬레이션 혜택 값(benefit)은 AI 혜택 추출보다 리소스 값을 우선한다 ({@link #applyBenefit}).
  *
- * <p>policies의 순서는 추천 목록 고정 노출 순서다. recommendFor에 사용자의 직업 유형이 있으면 맨 앞에 고정 노출한다
- * ({@link ManualPolicyPinner}).
+ * <p>고정 노출(pins): 출처·외부 정책 ID·정책명으로 지정한 정책을 목록 순서대로, recommendFor에 사용자의 직업 유형이 있으면
+ * 추천 목록 맨 앞에 고정 노출한다 ({@link ManualPolicyPinner}). 직접 등록 정책과 동기화 정책을 함께 지정할 수 있다.
  *
  * <p>원문 보정(textOverrides): 동기화 정책 중 신청 기간이 실제 접수 기간과 다른 정책 등은 출처·외부 정책 ID·정책명으로 지정해
  * 신청 기간을 바꾸거나 신청 방법·기타 참고 사항에 문장을 덧붙인다. 공식 출처(sourceUrl)에 있는 내용만 넣는다.
@@ -55,13 +55,15 @@ public class ManualPolicyCatalog {
     private final Map<String, BenefitOverride> overridesByKey;
     private final List<BenefitOverride> overrides;
     private final List<TextOverride> textOverrides;
+    private final List<Pin> pins;
 
     public ManualPolicyCatalog() {
         this(load(RESOURCE));
     }
 
     private ManualPolicyCatalog(Document document) {
-        this(document.policies(), orEmpty(document.benefitOverrides()), orEmpty(document.textOverrides()));
+        this(document.policies(), orEmpty(document.benefitOverrides()), orEmpty(document.textOverrides()),
+                orEmpty(document.pins()));
     }
 
     ManualPolicyCatalog(List<ManualPolicy> policies) {
@@ -69,11 +71,15 @@ public class ManualPolicyCatalog {
     }
 
     ManualPolicyCatalog(List<ManualPolicy> policies, List<BenefitOverride> benefitOverrides) {
-        this(policies, benefitOverrides, List.of());
+        this(policies, benefitOverrides, List.of(), List.of());
+    }
+
+    ManualPolicyCatalog(List<ManualPolicy> policies, List<BenefitOverride> benefitOverrides, List<TextOverride> textOverrides) {
+        this(policies, benefitOverrides, textOverrides, List.of());
     }
 
     ManualPolicyCatalog(List<ManualPolicy> policies, List<BenefitOverride> benefitOverrides,
-                        List<TextOverride> textOverrides) {
+                        List<TextOverride> textOverrides, List<Pin> pins) {
         Map<String, ManualPolicy> map = new LinkedHashMap<>();
         Set<String> names = new HashSet<>();
         for (ManualPolicy policy : policies) {
@@ -107,6 +113,20 @@ public class ManualPolicyCatalog {
         }
         this.textOverrides = List.copyOf(textOverrides);
 
+        Set<String> pinKeys = new HashSet<>();
+        for (Pin pin : pins) {
+            pin.validate();
+            if (!pinKeys.add(key(pin.source(), pin.externalId()))) {
+                throw new IllegalStateException("고정 노출 대상이 겹칩니다: " + pin.source() + " " + pin.externalId());
+            }
+            if (SOURCE.equals(pin.source())) {
+                ManualPolicy manual = map.get(pin.externalId());
+                if (manual == null || !manual.name().equals(pin.name())) {
+                    throw new IllegalStateException("고정 노출 대상이 직접 등록 정책에 없거나 이름이 다릅니다: " + pin.externalId());
+                }
+            }
+        }
+        this.pins = List.copyOf(pins);
     }
 
     private static <T> List<T> orEmpty(List<T> list) {
@@ -129,6 +149,11 @@ public class ManualPolicyCatalog {
     /** 동기화 정책 원문 보정 목록 */
     public List<TextOverride> textOverrides() {
         return textOverrides;
+    }
+
+    /** 추천 목록 고정 노출 대상 (목록 순서 = 노출 순서) */
+    public List<Pin> pins() {
+        return pins;
     }
 
     /** 직접 등록 정책이면 리소스 항목. 다른 출처 정책이면 빈 값 */
@@ -184,12 +209,47 @@ public class ManualPolicyCatalog {
     }
 
     record Document(String description, List<ManualPolicy> policies, List<BenefitOverride> benefitOverrides,
-                    List<TextOverride> textOverrides) {
+                    List<TextOverride> textOverrides, List<Pin> pins) {
     }
 
     private static boolean sameTarget(String source, String externalId, String name, Policy policy) {
         return policy != null && source.equals(policy.getSource()) && externalId.equals(policy.getExternalId())
                 && name.equals(policy.getName());
+    }
+
+    /**
+     * 추천 목록 고정 노출 대상 1건. 출처·외부 정책 ID·정책명이 모두 같은 정책만 고정한다 (다른 환경에서 정책번호가 다르면 고정하지 않음).
+     *
+     * @param recommendFor 고정 노출할 직업 유형 (EmploymentType 코드)
+     */
+    public record Pin(String source, String externalId, String name, List<String> recommendFor) {
+
+        public Pin {
+            recommendFor = recommendFor == null ? List.of() : List.copyOf(recommendFor);
+        }
+
+        public boolean matches(Policy policy) {
+            return sameTarget(source, externalId, name, policy);
+        }
+
+        public boolean recommendedFor(EmploymentType employmentType) {
+            return employmentType != null && recommendFor.contains(employmentType.name());
+        }
+
+        void validate() {
+            if (source == null || source.isBlank() || externalId == null || externalId.isBlank()
+                    || name == null || name.isBlank()) {
+                throw new IllegalStateException("고정 노출 대상의 출처·외부 ID·정책명이 비었습니다: " + externalId);
+            }
+            if (recommendFor.isEmpty()) {
+                throw new IllegalStateException("고정 노출 대상의 recommendFor가 비었습니다: " + externalId);
+            }
+            for (String type : recommendFor) {
+                if (EmploymentType.fromCode(type) == null) {
+                    throw new IllegalStateException("고정 노출 recommendFor 값이 직업 유형이 아닙니다: " + externalId + " " + type);
+                }
+            }
+        }
     }
 
     /**
@@ -278,16 +338,7 @@ public class ManualPolicyCatalog {
     public record ManualPolicy(String externalId, String name, String policyType, String region, Integer minAge, Integer maxAge,
                                String description, String supportContent, String eligibilityDetail, String incomeCondition,
                                String applyMethod, String applyPeriod, String applyUrl, String referenceUrl, String contactInfo,
-                               String etcNote, List<String> recommendFor, ManualBenefit benefit) {
-
-        public ManualPolicy {
-            recommendFor = recommendFor == null ? List.of() : List.copyOf(recommendFor);
-        }
-
-        /** 이 직업 유형 사용자의 추천 목록에 고정 노출하는지 (#245) */
-        public boolean recommendedFor(EmploymentType employmentType) {
-            return employmentType != null && recommendFor.contains(employmentType.name());
-        }
+                               String etcNote, ManualBenefit benefit) {
 
         void validate() {
             if (externalId == null || !externalId.startsWith("MANUAL-")) {
@@ -304,11 +355,6 @@ public class ManualPolicyCatalog {
                 throw new IllegalStateException("직접 등록 정책 시뮬레이션 혜택 값이 없습니다: " + externalId);
             }
             benefit.validate(externalId);
-            for (String type : recommendFor) {
-                if (EmploymentType.fromCode(type) == null) {
-                    throw new IllegalStateException("직접 등록 정책 recommendFor 값이 직업 유형이 아닙니다: " + externalId + " " + type);
-                }
-            }
         }
 
         public Policy toPolicy() {
