@@ -2,18 +2,23 @@ package kr.fintarget.api.domain.policy.recommend.rerank;
 
 import org.springframework.stereotype.Component;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 /**
  * 사용자별 리랭킹 결과 메모리 캐시 (#229). DB에 저장하지 않으므로 배포(재시작) 때 비고, 앱 시작 후 미리 계산으로 다시 채운다.
  * 사용자당 1건(전체 유형 추천 목록)만 둔다. 입력 해시가 다르면 쓰지 않는다.
- * 같은 사용자의 계산이 동시에 두 번 돌지 않도록 진행 중 표시도 함께 관리한다.
+ * 같은 사용자의 계산이 동시에 두 번 돌지 않도록 진행 중 표시도 함께 관리한다. 진행 중 표시에는 계산하는 입력 해시와 시작 시각이 있고,
+ * 끝날 때까지 기다릴 수 있다 ({@link InFlight#await}, #243).
  *
  * <p>사용자별로 세대(generation)를 함께 센다. {@link #evict}가 세대를 올리므로, 계산을 시작할 때 읽어 둔 세대로
  * {@link #putIfUnchanged}를 호출하면 그 사이에 비워진(시연 초기화된, #239) 사용자의 결과는 저장되지 않는다.
@@ -22,7 +27,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class PolicyRerankCache {
 
     private final Map<String, Slot> slots = new ConcurrentHashMap<>();
-    private final Set<String> inFlight = ConcurrentHashMap.newKeySet();
+    private final Map<String, InFlight> inFlight = new ConcurrentHashMap<>();
 
     /** 입력 해시가 같은 캐시만 돌려준다 */
     public Optional<Entry> find(String userId, String inputHash) {
@@ -69,13 +74,60 @@ public class PolicyRerankCache {
     private record Slot(long generation, Entry entry) {
     }
 
-    /** 계산을 시작한다. 같은 사용자의 계산이 이미 진행 중이면 false */
-    public boolean tryStart(String userId) {
-        return inFlight.add(userId);
+    /**
+     * 계산을 시작한다. 같은 사용자의 계산이 이미 진행 중이면 false.
+     *
+     * @param inputHash 이 계산의 입력 해시. 같은 입력을 조회하는 요청이 이 계산을 기다릴지 판단할 때 쓴다 (#243)
+     */
+    public boolean tryStart(String userId, String inputHash) {
+        return inFlight.putIfAbsent(userId, new InFlight(inputHash, System.nanoTime(), new CompletableFuture<>())) == null;
     }
 
+    /** 진행 중인 계산. 없으면 빈 값 (방금 끝났을 수도 있으므로 캐시를 다시 확인한다) */
+    public Optional<InFlight> inFlight(String userId) {
+        return Optional.ofNullable(inFlight.get(userId));
+    }
+
+    /** 진행 중 표시를 지우고, 이 계산을 기다리던 요청을 깨운다. 결과는 캐시에서 읽는다 (성공·실패 모두 같은 신호) */
     public void finish(String userId) {
-        inFlight.remove(userId);
+        InFlight removed = inFlight.remove(userId);
+        if (removed != null) {
+            removed.done().complete(null);
+        }
+    }
+
+    /**
+     * 진행 중인 계산 (#243).
+     *
+     * @param inputHash    계산하는 입력 해시
+     * @param startedNanos 시작 시각 ({@link System#nanoTime()})
+     * @param done         {@link #finish}가 완료시키는 신호
+     */
+    public record InFlight(String inputHash, long startedNanos, CompletableFuture<Void> done) {
+
+        /** 시작 후 지난 시간 */
+        public Duration elapsed() {
+            return Duration.ofNanos(System.nanoTime() - startedNanos);
+        }
+
+        /**
+         * 끝날 때까지 최대 maxWait만 기다린다. 끝나면 true, 시간을 넘기면 false.
+         * 호출한 스레드를 maxWait보다 오래 붙잡지 않는다.
+         */
+        public boolean await(Duration maxWait) throws InterruptedException {
+            if (maxWait.isNegative() || maxWait.isZero()) {
+                return done.isDone();
+            }
+            try {
+                done.get(maxWait.toNanos(), TimeUnit.NANOSECONDS);
+                return true;
+            } catch (TimeoutException e) {
+                return false;
+            } catch (ExecutionException e) {
+                // finish는 정상 완료만 하므로 발생하지 않는다. 끝난 것으로 보고 캐시를 확인하게 한다
+                return true;
+            }
+        }
     }
 
     /**
